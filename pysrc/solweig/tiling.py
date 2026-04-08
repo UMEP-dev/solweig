@@ -625,17 +625,17 @@ def generate_tiles(
             col_start = j * tile_size
             col_end = min((j + 1) * tile_size, cols)
 
-            # Calculate overlaps (bounded by raster edges)
-            overlap_top = overlap if i > 0 else 0
-            overlap_bottom = overlap if row_end < rows else 0
-            overlap_left = overlap if j > 0 else 0
-            overlap_right = overlap if col_end < cols else 0
+            # Full tile bounds with overlap (clamped to raster edges)
+            row_start_full = max(0, row_start - overlap) if i > 0 else row_start
+            row_end_full = min(rows, row_end + overlap) if row_end < rows else row_end
+            col_start_full = max(0, col_start - overlap) if j > 0 else col_start
+            col_end_full = min(cols, col_end + overlap) if col_end < cols else col_end
 
-            # Full tile bounds with overlap
-            row_start_full = max(0, row_start - overlap_top)
-            row_end_full = min(rows, row_end + overlap_bottom)
-            col_start_full = max(0, col_start - overlap_left)
-            col_end_full = min(cols, col_end + overlap_right)
+            # Actual overlaps after clamping to raster edges
+            overlap_top = row_start - row_start_full
+            overlap_bottom = row_end_full - row_end
+            overlap_left = col_start - col_start_full
+            overlap_right = col_end_full - col_end
 
             tiles.append(
                 TileSpec(

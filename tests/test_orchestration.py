@@ -586,3 +586,23 @@ class TestGenerateTiles:
         """Raster exactly matching tile size creates exactly 1 tile."""
         tiles = generate_tiles(256, 256, tile_size=256, overlap=50)
         assert len(tiles) == 1
+
+    def test_core_slice_within_full_shape(self):
+        """core_slice must always fit within the tile's full_shape."""
+        # Regression: when overlap > tile_size, clamped bounds and stored
+        # overlap diverged, producing core_slice coordinates beyond the tile.
+        for rows, cols, tile_size, overlap in [
+            (500, 500, 256, 50),   # normal case
+            (512, 1144, 256, 1000),  # overlap >> tile_size (tall buildings)
+            (300, 300, 100, 200),  # overlap = 2x tile_size
+        ]:
+            tiles = generate_tiles(rows, cols, tile_size, overlap)
+            for tile in tiles:
+                fs = tile.full_shape
+                cs = tile.core_slice
+                assert cs[0].stop <= fs[0], (
+                    f"core row {cs[0].stop} exceeds tile height {fs[0]}"
+                )
+                assert cs[1].stop <= fs[1], (
+                    f"core col {cs[1].stop} exceeds tile width {fs[1]}"
+                )

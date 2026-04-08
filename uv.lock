@@ -2588,7 +2588,7 @@ wheels = [
 
 [[package]]
 name = "solweig"
-version = "0.1.0b79"
+version = "0.1.0b81"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -2606,6 +2606,7 @@ geo = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "geopandas" },
     { name = "ipykernel" },
     { name = "jupyter" },
     { name = "jupyterlab" },
@@ -2648,6 +2649,7 @@ provides-extras = ["geo"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "geopandas", specifier = ">=1.1.2" },
     { name = "ipykernel", specifier = ">=6.31.0" },
     { name = "jupyter", specifier = ">=1.0.0" },
     { name = "jupyterlab", specifier = ">=3.5.2" },

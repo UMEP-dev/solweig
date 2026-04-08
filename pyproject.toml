@@ -1,6 +1,6 @@
 [project]
 name = "solweig"
-version = "0.1.0b80"
+version = "0.1.0b81"
 description = "High-performance SOLWEIG urban microclimate model (Rust + Python)"
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -86,6 +86,7 @@ dev = [
     "matplotlib>=3.7.0",
     "ipykernel>=6.31.0",
     "scipy>=1.17.0",
+    "geopandas>=1.1.2",
 ]
 # QGIS 4 compatibility: minimal deps + system GDAL, no rasterio/scipy/geopandas
 # CI: uv sync --group qgis-compat && uv pip install gdal==$(gdal-config --version)

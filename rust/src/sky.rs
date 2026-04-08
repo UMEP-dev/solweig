@@ -613,31 +613,6 @@ pub(crate) fn anisotropic_sky_pure(
     }
 }
 
-/// Pure-ndarray weighted patch sum, callable from pipeline.rs.
-pub(crate) fn weighted_patch_sum_pure(
-    patches: ArrayView3<f32>,
-    weights: ArrayView1<f32>,
-) -> Array2<f32> {
-    let rows = patches.shape()[0];
-    let cols = patches.shape()[1];
-    let n_patches = patches.shape()[2];
-
-    let pixel_results: Vec<f32> = (0..rows * cols)
-        .into_par_iter()
-        .map(|idx| {
-            let r = idx / cols;
-            let c = idx % cols;
-            let mut sum = 0.0f32;
-            for i in 0..n_patches {
-                sum += patches[[r, c, i]] * weights[[i]];
-            }
-            sum
-        })
-        .collect();
-
-    Array2::from_shape_vec((rows, cols), pixel_results).unwrap()
-}
-
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 #[allow(non_snake_case)]

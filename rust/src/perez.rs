@@ -218,13 +218,6 @@ pub(crate) fn patch_alt_azi_steradians_for_patch_option(
 
 /// Cached steradians for a patch layout option.
 ///
-/// Steradians depend only on patch geometry, which is fixed per `patch_option`.
-/// Caching avoids recreating patch geometry and recomputing steradians every timestep.
-pub(crate) fn steradians_for_patch_option(patch_option: i32) -> Array1<f32> {
-    let layout = patch_layout_for_option(patch_option);
-    Array1::from(layout.steradians.as_ref().clone())
-}
-
 /// Perez all-weather sky luminance distribution.
 ///
 /// Returns an Nx3 array: `[altitude_deg, azimuth_deg, luminance]` per patch.
