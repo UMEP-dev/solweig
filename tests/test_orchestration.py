@@ -592,7 +592,7 @@ class TestGenerateTiles:
         # Regression: when overlap > tile_size, clamped bounds and stored
         # overlap diverged, producing core_slice coordinates beyond the tile.
         for rows, cols, tile_size, overlap in [
-            (500, 500, 256, 50),   # normal case
+            (500, 500, 256, 50),  # normal case
             (512, 1144, 256, 1000),  # overlap >> tile_size (tall buildings)
             (300, 300, 100, 200),  # overlap = 2x tile_size
         ]:
@@ -600,9 +600,5 @@ class TestGenerateTiles:
             for tile in tiles:
                 fs = tile.full_shape
                 cs = tile.core_slice
-                assert cs[0].stop <= fs[0], (
-                    f"core row {cs[0].stop} exceeds tile height {fs[0]}"
-                )
-                assert cs[1].stop <= fs[1], (
-                    f"core col {cs[1].stop} exceeds tile width {fs[1]}"
-                )
+                assert cs[0].stop <= fs[0], f"core row {cs[0].stop} exceeds tile height {fs[0]}"
+                assert cs[1].stop <= fs[1], f"core col {cs[1].stop} exceeds tile width {fs[1]}"
