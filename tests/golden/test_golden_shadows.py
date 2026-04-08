@@ -21,6 +21,11 @@ from solweig.rustalgos import shadowing
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _cpu_shadows(cpu_only):
+    """Use CPU path for deterministic golden shadow tests."""
+
+
 @pytest.fixture(scope="module")
 def input_data():
     """Load input data from golden fixtures (shared across all tests in module)."""
@@ -37,7 +42,6 @@ def input_data():
 
 def compute_shadows(input_data, azimuth, altitude):
     """Compute shadows with given sun position."""
-    shadowing.disable_gpu()
     return shadowing.calculate_shadows_wall_ht_25(
         azimuth,
         altitude,

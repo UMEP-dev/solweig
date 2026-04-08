@@ -20,7 +20,6 @@ import pytest
 ndimage = pytest.importorskip("scipy.ndimage", reason="scipy required for golden GVF tests")
 from solweig.constants import SBC  # noqa: E402
 from solweig.rustalgos import gvf as gvf_module  # noqa: E402
-from solweig.rustalgos import shadowing  # noqa: E402
 
 pytestmark = pytest.mark.slow
 
@@ -110,9 +109,8 @@ def gvf_inputs(input_data, shadow_data):
 
 
 @pytest.fixture(scope="module")
-def gvf_result(gvf_inputs):
+def gvf_result(gvf_inputs, cpu_only):
     """Compute GVF result using Rust implementation (computed once per module)."""
-    shadowing.disable_gpu()
 
     params = gvf_module.GvfScalarParams(
         scale=gvf_inputs["scale"],

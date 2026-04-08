@@ -63,6 +63,18 @@ def poi_from_geojson(geojson_path, dsm_path) -> tuple[int, int]:
     return row, col
 
 
+@pytest.fixture(scope="module")
+def cpu_only():
+    """Disable GPU for deterministic CPU-only tests, re-enable on teardown."""
+    from solweig.rustalgos import shadowing
+
+    was_enabled = shadowing.is_gpu_enabled()
+    shadowing.disable_gpu()
+    yield
+    if was_enabled:
+        shadowing.enable_gpu()
+
+
 def make_mock_svf(shape: tuple[int, ...]):
     """Create a mock SvfArrays for tests (fully open sky)."""
     from solweig.models.precomputed import SvfArrays

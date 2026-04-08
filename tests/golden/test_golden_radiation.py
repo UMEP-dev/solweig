@@ -19,9 +19,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 from solweig.constants import SBC
-from solweig.rustalgos import shadowing, vegetation
+from solweig.rustalgos import vegetation
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _cpu_radiation(cpu_only):
+    """Use CPU path for deterministic golden radiation tests."""
+
 
 # Physical constants
 KELVIN_OFFSET = 273.15
@@ -164,8 +170,6 @@ def lside_inputs(svf_data, shadow_data):
 @pytest.fixture(scope="module")
 def kside_result(kside_inputs):
     """Compute Kside result using Rust implementation (computed once per module)."""
-    shadowing.disable_gpu()
-
     return vegetation.kside_veg(
         DEFAULT_RADI,  # radI
         DEFAULT_RADD,  # radD
@@ -203,8 +207,6 @@ def kside_result(kside_inputs):
 @pytest.fixture(scope="module")
 def lside_result(lside_inputs):
     """Compute Lside result using Rust implementation (computed once per module)."""
-    shadowing.disable_gpu()
-
     return vegetation.lside_veg(
         lside_inputs["svf_s"],
         lside_inputs["svf_w"],
@@ -279,8 +281,6 @@ class TestKsideSunPositionDependence:
 
     def test_noon_south_dominates(self, kside_inputs):
         """At solar noon (azimuth=180), south-facing should receive most direct."""
-        shadowing.disable_gpu()
-
         # Test at noon with high sun
         result = vegetation.kside_veg(
             DEFAULT_RADI,
@@ -324,8 +324,6 @@ class TestKsideSunPositionDependence:
 
     def test_morning_east_receives_direct(self, kside_inputs):
         """In morning (azimuth=90), east-facing should receive direct."""
-        shadowing.disable_gpu()
-
         result = vegetation.kside_veg(
             DEFAULT_RADI,
             DEFAULT_RADD,
@@ -447,8 +445,6 @@ class TestRadiationShadowEffects:
 
     def test_shadow_reduces_direct(self, kside_inputs):
         """Shadows should reduce direct shortwave component."""
-        shadowing.disable_gpu()
-
         # Fully sunlit
         kside_inputs_sunlit = kside_inputs.copy()
         kside_inputs_sunlit["shadow"] = np.ones_like(kside_inputs["shadow"])

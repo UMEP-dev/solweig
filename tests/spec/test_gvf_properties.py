@@ -12,7 +12,12 @@ import numpy as np
 import pytest
 from solweig.constants import SBC
 from solweig.rustalgos import gvf as gvf_module
-from solweig.rustalgos import shadowing
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _cpu_gvf(cpu_only):
+    """Use CPU path for deterministic GVF property tests."""
+
 
 # Grid must be large enough for GVF's internal neighbourhood kernel
 GRID_SIZE = (80, 80)
@@ -76,7 +81,6 @@ def _make_gvf_inputs(
 
 def _run_gvf(**kwargs):
     """Run gvf_calc with synthetic inputs. Returns the GvfResult."""
-    shadowing.disable_gpu()
     arrays, params = _make_gvf_inputs(**kwargs)
     return gvf_module.gvf_calc(
         arrays["wallsun"],
@@ -212,7 +216,6 @@ class TestGvfOutputConsistency:
     def test_building_pixels_have_unit_norm(self):
         """Building pixels should have gvf_norm = 1.0."""
         arrays, params = _make_gvf_inputs()
-        shadowing.disable_gpu()
         result = gvf_module.gvf_calc(
             arrays["wallsun"],
             arrays["walls"],

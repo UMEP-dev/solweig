@@ -17,9 +17,8 @@ from solweig import rustalgos
 
 
 @pytest.fixture(autouse=True, scope="module")
-def _disable_shadow_gpu():
+def _disable_shadow_gpu(cpu_only):
     """Use CPU path for deterministic shadow property tests."""
-    rustalgos.shadowing.disable_gpu()
 
 
 def create_flat_dsm(size=(50, 50), elevation=10.0):

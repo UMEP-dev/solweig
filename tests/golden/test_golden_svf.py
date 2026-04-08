@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from solweig.rustalgos import shadowing, skyview
+from solweig.rustalgos import skyview
 
 pytestmark = pytest.mark.slow
 
@@ -65,9 +65,8 @@ def svf_golden():
 
 
 @pytest.fixture(scope="module")
-def svf_result(input_data):
+def svf_result(input_data, cpu_only):
     """Compute current SVF result (computed once per module)."""
-    shadowing.disable_gpu()
     return skyview.calculate_svf(
         input_data["dsm"],
         input_data["cdsm"],
