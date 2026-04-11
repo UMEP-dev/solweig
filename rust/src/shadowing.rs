@@ -319,7 +319,15 @@ pub(crate) fn calculate_shadows_rust(
     let sign_cos_azimuth = cos_azimuth.signum();
     let ds_sin = (1.0 / sin_azimuth).abs();
     let ds_cos = (1.0 / cos_azimuth).abs();
-    let tan_altitude_by_scale = altitude_rad.tan() / scale;
+    // NOTE on `scale`: this convention has been "pixel size in metres" since
+    // the first Rust port — i.e. solweig passes `scale = pixel_size_m`. This
+    // is the *opposite* of UMEP's upstream convention (`scale = 1/px` per
+    // `umep.util.SEBESOLWEIGCommonFiles.shadowingfunction_wallheight_23:53`).
+    // We keep solweig's convention because all spec tests, Python callers,
+    // and the `max_radius_pixels = max_reach_m / scale` formula below depend
+    // on it; only the vertical-drop math needs a compensating `* scale` here
+    // so that `dz = ds*index*tan(α)*pixel_size` is in metres.
+    let tan_altitude_by_scale = altitude_rad.tan() * scale;
     let mut dx: f32 = 0.0;
     let mut dy: f32 = 0.0;
     let mut dz: f32 = 0.0;

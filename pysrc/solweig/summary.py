@@ -559,13 +559,16 @@ class GridAccumulator:
         self._night_thresholds_set = set(heat_thresholds_night)
 
         # Pre-allocated scratch buffers (avoids per-call allocation in update).
-        # Only needed for the non-tiled update() path.
+        # Only needed for the non-tiled update() path; memmap-mode uses
+        # update_tile() which operates directly on memmap slices.
         if memmap_dir is None:
             self._scratch_valid = np.empty(shape, dtype=np.bool_)
             self._scratch_utci_valid = np.empty(shape, dtype=np.bool_)
+            self._scratch_threshold_mask: NDArray[np.bool_] | None = np.empty(shape, dtype=np.bool_)
         else:
             self._scratch_valid = None
             self._scratch_utci_valid = None
+            self._scratch_threshold_mask = None
 
         # Per-timestep tile accumulation state (used by begin_timestep/commit_timestep)
         self._tile_tmrt_sum = 0.0
@@ -619,18 +622,21 @@ class GridAccumulator:
         np.isfinite(tmrt, out=self._scratch_valid)
         valid = self._scratch_valid
         is_day = weather.is_daytime
+        dt = self.timestep_hours
 
         # --- Tmrt stats ---
-        self._tmrt_sum += np.where(valid, tmrt, 0.0)
+        # In-place ufuncs with `where=` avoid allocating a full-grid
+        # temporary per call.
+        np.add(self._tmrt_sum, tmrt, out=self._tmrt_sum, where=valid)
         self._tmrt_count += valid
-        np.fmax(self._tmrt_max, np.where(valid, tmrt, -np.inf), out=self._tmrt_max)
-        np.fmin(self._tmrt_min, np.where(valid, tmrt, np.inf), out=self._tmrt_min)
+        np.fmax(self._tmrt_max, tmrt, out=self._tmrt_max, where=valid)
+        np.fmin(self._tmrt_min, tmrt, out=self._tmrt_min, where=valid)
 
         if is_day:
-            self._tmrt_day_sum += np.where(valid, tmrt, 0.0)
+            np.add(self._tmrt_day_sum, tmrt, out=self._tmrt_day_sum, where=valid)
             self._tmrt_day_count += valid
         else:
-            self._tmrt_night_sum += np.where(valid, tmrt, 0.0)
+            np.add(self._tmrt_night_sum, tmrt, out=self._tmrt_night_sum, where=valid)
             self._tmrt_night_count += valid
 
         # --- UTCI ---
@@ -639,38 +645,51 @@ class GridAccumulator:
         self._scratch_utci_valid &= valid
         utci_valid = self._scratch_utci_valid
 
-        self._utci_sum += np.where(utci_valid, utci, 0.0)
+        np.add(self._utci_sum, utci, out=self._utci_sum, where=utci_valid)
         self._utci_count += utci_valid
-        np.fmax(self._utci_max, np.where(utci_valid, utci, -np.inf), out=self._utci_max)
-        np.fmin(self._utci_min, np.where(utci_valid, utci, np.inf), out=self._utci_min)
+        np.fmax(self._utci_max, utci, out=self._utci_max, where=utci_valid)
+        np.fmin(self._utci_min, utci, out=self._utci_min, where=utci_valid)
 
         if is_day:
-            self._utci_day_sum += np.where(utci_valid, utci, 0.0)
+            np.add(self._utci_day_sum, utci, out=self._utci_day_sum, where=utci_valid)
             self._utci_day_count += utci_valid
         else:
-            self._utci_night_sum += np.where(utci_valid, utci, 0.0)
+            np.add(self._utci_night_sum, utci, out=self._utci_night_sum, where=utci_valid)
             self._utci_night_count += utci_valid
 
         # --- Sun/shade hours ---
+        # `(1.0 - shadow) * dt` kept in allocation form to preserve bit-exact
+        # parity with :meth:`update_tile` (test_grid_accumulators_match_exactly).
         sun_fraction = np.nan
         if result.shadow is not None:
             self._shadow_seen = True
             if is_day:
-                self._sun_hours += np.where(valid, result.shadow * self.timestep_hours, 0.0)
-                self._shade_hours += np.where(valid, (1.0 - result.shadow) * self.timestep_hours, 0.0)
+                self._sun_hours += np.where(valid, result.shadow * dt, 0.0)
+                self._shade_hours += np.where(valid, (1.0 - result.shadow) * dt, 0.0)
                 n_valid = valid.sum()
                 sun_fraction = float(result.shadow[valid].sum() / n_valid) if n_valid > 0 else np.nan
             else:
                 # At night the shadow grid is all-sunlit (no shadows cast) which is
                 # physically meaningless — skip accumulation and report 0 sun fraction.
-                self._shade_hours += np.where(valid, self.timestep_hours, 0.0)
+                self._shade_hours += np.where(valid, dt, 0.0)
                 sun_fraction = 0.0
 
         # --- UTCI threshold exceedance ---
+        # Reuse the scratch mask to hold `utci_valid & (utci > threshold)`
+        # per threshold without allocating two new bool grids per iteration.
         active_thresholds = self._day_thresholds_set if is_day else self._night_thresholds_set
+        scratch_mask = self._scratch_threshold_mask
+        if scratch_mask is None:
+            raise RuntimeError(
+                "GridAccumulator.update() requires _scratch_threshold_mask; "
+                "it is only None in memmap-backed mode, which must use "
+                "update_tile() instead"
+            )
         for threshold in active_thresholds:
             acc = self._utci_hours_above[threshold]
-            acc += np.where(utci_valid & (utci > threshold), self.timestep_hours, 0.0)
+            np.greater(utci, threshold, out=scratch_mask)
+            np.logical_and(scratch_mask, utci_valid, out=scratch_mask)
+            np.add(acc, dt, out=acc, where=scratch_mask)
 
         self._n_timesteps += 1
         if is_day:

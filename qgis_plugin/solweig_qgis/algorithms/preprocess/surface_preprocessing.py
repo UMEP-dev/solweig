@@ -107,7 +107,7 @@ everything needed to run SOLWEIG Calculation directly.
     tdsm.tif          (if TDSM provided)
     land_cover.tif    (if land cover provided)
     parametersforsolweig.json  (vegetation & material settings)
-    metadata.json     (pixel size, CRS, etc.)
+    metadata.json     (pixel size, CRS, prepare fingerprint for warm-run cache)
 </pre>
 
 <b>Next step:</b>
@@ -317,8 +317,6 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
             cdsm_relative = corrected_cdsm_relative
             tdsm_relative = corrected_tdsm_relative
 
-        gt = surface._geotransform or [0.0, surface.pixel_size, 0.0, 0.0, 0.0, -surface.pixel_size]
-        crs = surface._crs_wkt or ""
         pixel_size = surface.pixel_size
 
         feedback.pushInfo(f"Prepared grid: {surface.dsm.shape[1]}x{surface.dsm.shape[0]} pixels")
@@ -348,18 +346,18 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         if feedback.isCanceled():
             return {}
 
-        # Rasters, walls, SVF, and shadow matrices are already saved by
-        # SurfaceData.prepare() in cleaned/, walls/, and svf/ subdirectories.
-        # Only save QGIS-specific metadata files here.
-        feedback.setProgressText("Saving metadata...")
+        # Rasters, walls, SVF, shadow matrices, and metadata.json are all
+        # written by SurfaceData.prepare() → save_cleaned() into cleaned/,
+        # walls/, svf/ and the working directory root. The only extra file
+        # this algorithm adds is parametersforsolweig.json (UMEP-compatible
+        # materials / vegetation settings — plugin-specific, not part of the
+        # core SurfaceData schema).
+        feedback.setProgressText("Saving UMEP materials...")
         feedback.setProgress(80)
 
-        # Save UMEP-compatible parametersforsolweig.json with user's LC mapping,
-        # vegetation settings, and any matrix overrides applied.
         from ...utils.converters import build_materials_from_lc_mapping
 
         materials = build_materials_from_lc_mapping(parameters, context, self, feedback)
-        # Apply vegetation settings into the materials namespace
         ts = materials.Tree_settings.Value
         ts.Transmissivity = parameters.get("TRANSMISSIVITY", 0.03)
         ts.Transmissivity_leafoff = parameters.get("TRANSMISSIVITY_LEAFOFF", 0.5)
@@ -376,30 +374,6 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         except ImportError:
             pass
 
-        # Save metadata last (acts as a completion marker)
-        metadata = {
-            "pixel_size": pixel_size,
-            "geotransform": list(gt),
-            "crs_wkt": crs,
-            "shape": list(surface.dsm.shape),
-            "dsm_relative": False,  # Always absolute after preprocessing
-            "cdsm_relative": False,
-            "tdsm_relative": False,
-            "source_dsm_relative": dsm_relative,
-            "source_cdsm_relative": cdsm_relative,
-            "source_tdsm_relative": tdsm_relative,
-            "has_cdsm": surface.cdsm is not None,
-            "has_dem": surface.dem is not None,
-            "has_tdsm": surface.tdsm is not None,
-            "has_land_cover": surface.land_cover is not None,
-            "has_walls": True,
-            "has_svf": True,
-        }
-        metadata_path = os.path.join(output_dir, "metadata.json")
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        feedback.pushInfo("Saved metadata.json")
-
         feedback.setProgress(95)
 
         # Report summary
@@ -409,9 +383,9 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         feedback.pushInfo("Surface preprocessing complete!")
         feedback.pushInfo(f"  Grid size: {surface.dsm.shape[1]}x{surface.dsm.shape[0]} pixels")
         feedback.pushInfo(f"  Pixel size: {pixel_size:.2f} m")
-        feedback.pushInfo("  Walls computed: yes")
-        feedback.pushInfo("  SVF computed: yes")
-        feedback.pushInfo(f"  Computation time: {computation_time:.1f} seconds")
+        feedback.pushInfo(f"  Walls: {'present' if surface.wall_height is not None else 'missing'}")
+        feedback.pushInfo(f"  SVF:   {'present' if surface.svf is not None else 'missing'}")
+        feedback.pushInfo(f"  Total time: {computation_time:.1f} seconds")
         feedback.pushInfo(f"  Output directory: {output_dir}")
         feedback.pushInfo("=" * 60)
 

@@ -225,6 +225,45 @@ class TestShadowEquation:
             f"At {altitude}°: expected ~{theoretical_length:.1f}m, got {measured_length}m"
         )
 
+    @pytest.mark.parametrize("pixel_size", [1.0, 2.0, 2.5, 5.0])
+    def test_shadow_length_independent_of_pixel_size(self, pixel_size):
+        """
+        Shadow length in METRES must equal ``h / tan(α)`` regardless of pixel
+        size. At ``pixel_size != 1`` this is a regression guard against the
+        historical inverted-scale bug where Python passed ``pixel_size`` to
+        the Rust shadow caster but the internal ``tan_altitude_by_scale``
+        math expected ``1/pixel_size``. Tests at 1, 2, 2.5, 5 m/px; the 1 m
+        case is a sanity check that coincides with the buggy convention.
+        """
+        height = 20.0
+        altitude = 45.0  # tan = 1, so physical shadow length = height
+        theoretical_metres = height / math.tan(math.radians(altitude))
+
+        # 200-pixel-wide raster, building 20×20 centred at row 100.
+        dsm = np.zeros((200, 200), dtype=np.float32)
+        dsm[90:110, 90:110] = height
+
+        sunlit = calculate_shadow(dsm, altitude=altitude, azimuth=180, pixel_size=pixel_size)
+        shaded = 1.0 - sunlit
+
+        # Find the northernmost shadow pixel — distance in pixels from the
+        # building's north edge (row 90) gives us the shadow length in
+        # pixel units.
+        shadow_north = shaded[:90, 90:110]
+        shadow_rows = np.where(np.any(shadow_north > 0, axis=1))[0]
+        assert len(shadow_rows) > 0, f"No shadow detected at pixel_size={pixel_size}m"
+
+        measured_pixels = 90 - int(shadow_rows[0])
+        measured_metres = measured_pixels * pixel_size
+
+        # ±1 pixel tolerance = ±pixel_size metres.
+        tolerance_metres = pixel_size + 0.1
+        assert abs(measured_metres - theoretical_metres) <= tolerance_metres, (
+            f"pixel_size={pixel_size}m: expected shadow ≈ {theoretical_metres:.1f}m, "
+            f"got {measured_pixels}px × {pixel_size}m = {measured_metres:.1f}m "
+            f"(tolerance {tolerance_metres:.1f}m)"
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

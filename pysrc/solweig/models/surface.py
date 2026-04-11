@@ -88,6 +88,119 @@ def _should_compress_svf_exports(n_pixels: int) -> bool:
     return n_pixels <= max(0, limit)
 
 
+def _detect_dem_quantization(dem: NDArray[np.floating], sample_size: int = 20000) -> float:
+    """
+    Detect the vertical quantization step of a DEM, in metres.
+
+    Returns 0.0 if the DEM appears smooth (e.g. genuine sub-metre float data),
+    or 1.0 if the DEM is effectively integer-quantized at 1 m. Integer-stored
+    DEMs (int16 with 1 m precision) are a common source of visible stair-step
+    contour artifacts in SVF over gently sloped open terrain, because each 1 m
+    terrain step casts a discrete shadow at low-altitude sky patches.
+
+    Detection strategy:
+
+    - Integer dtype → unambiguous 1 m quantization.
+    - Float dtype → sample residuals after 1 m rounding. Pixels that came
+      directly from an int16 source (without bilinear mixing) have residuals
+      of exactly 0, while pixels produced by bilinear resampling have
+      fractional residuals. If a large fraction of samples have near-zero
+      residuals, the underlying source was integer-quantized.
+
+    A truly smooth float DEM has residuals uniformly distributed in [0, 0.5],
+    so roughly ~2% of pixels fall within 0.01 m of an integer. An int16-sourced
+    DEM with bilinear resampling has ~50%+ of pixels landing exactly on integer
+    values (the pixels where the resample weights happened to pick out a single
+    source cell). The 30 % threshold below cleanly separates the two regimes.
+
+    Args:
+        dem: DEM array (any dtype, interpreted as metres).
+        sample_size: Number of random finite values to inspect.
+
+    Returns:
+        Quantization step in metres. 0.0 means "no quantization detected".
+    """
+    if dem is None or dem.size == 0:
+        return 0.0
+
+    # Integer dtype → unambiguous 1 m quantization (units are metres).
+    if np.issubdtype(dem.dtype, np.integer):
+        return 1.0
+
+    finite = dem[np.isfinite(dem)]
+    if finite.size < 100:
+        return 0.0
+    n = min(int(sample_size), finite.size)
+    rng = np.random.default_rng(seed=0)  # deterministic → cache-stable
+    # integers(replace=True implicit) is O(n) vs choice(replace=False) which
+    # allocates an O(N) scratch for Fisher-Yates — at Madrid scale (500 M
+    # finite pixels) choice() costs hundreds of MB. Duplicates among a
+    # 20 000 / 500 M sample are statistically irrelevant for a residual
+    # fraction estimate.
+    idx = rng.integers(0, finite.size, size=n)
+    sample = finite[idx]
+
+    # Residual test: for int-sourced DEMs, a large fraction of samples have
+    # residuals of exactly 0 (source pixels untouched by bilinear weights).
+    residuals = np.abs(sample - np.round(sample))
+    near_integer_fraction = float((residuals < 0.01).mean())
+    if near_integer_fraction >= 0.30:
+        return 1.0
+
+    return 0.0
+
+
+def _gaussian_smooth_2d(arr: NDArray[np.floating], sigma: float) -> NDArray[np.floating]:
+    """
+    Separable 2D Gaussian smoothing with edge-replicated boundaries, pure numpy.
+
+    Avoids ``scipy.ndimage`` so the QGIS plugin runtime (which excludes
+    scipy) can use this. Works in float32 throughout — matches codebase
+    convention, halves peak memory vs a float64 scratch, and the resulting
+    ~0.2 m error on 700 m DEM heights at sigma=3 is far below the 1 m
+    quantization this smoother is meant to remove. Not suitable as a
+    general-purpose scipy replacement outside the anti-quantization path.
+
+    Edge replication (``mode='edge'``) is the correct boundary for terrain:
+    extends the DEM as constant at the last known value, avoiding the
+    phantom-copy artifacts that reflect-style padding would inject.
+
+    Args:
+        arr: 2D float array.
+        sigma: Gaussian standard deviation in pixel units. Returns the
+            input unchanged if ``sigma <= 0``.
+
+    Returns:
+        Smoothed array with the same shape and dtype as ``arr``.
+    """
+    if sigma <= 0.0 or arr.ndim != 2:
+        return arr
+
+    # Kernel radius = ceil(3σ) captures ~99.7% of the Gaussian mass.
+    radius = int(np.ceil(3.0 * sigma))
+    x = np.arange(-radius, radius + 1, dtype=np.float32)
+    kernel = np.exp(-(x * x) / (2.0 * sigma * sigma)).astype(np.float32)
+    kernel /= kernel.sum()
+
+    orig_dtype = arr.dtype
+    work: NDArray[np.float32] = np.asarray(arr, dtype=np.float32)
+    rows, cols = work.shape
+
+    # Horizontal pass.
+    padded_h = np.pad(work, ((0, 0), (radius, radius)), mode="edge")
+    h = np.zeros_like(work)
+    for k_idx, w in enumerate(kernel):
+        h += w * padded_h[:, k_idx : k_idx + cols]
+
+    # Vertical pass.
+    padded_v = np.pad(h, ((radius, radius), (0, 0)), mode="edge")
+    out = np.zeros_like(work)
+    for k_idx, w in enumerate(kernel):
+        out += w * padded_v[k_idx : k_idx + rows, :]
+
+    return out.astype(orig_dtype, copy=False)
+
+
 def _should_export_shadow_npz(n_pixels: int) -> bool:
     """
     Return True when shadowmats.npz should be written.
@@ -339,8 +452,17 @@ class SurfaceData:
     cdsm_relative: bool = True  # Whether CDSM contains relative heights
     tdsm_relative: bool = True  # Whether TDSM contains relative heights
     min_object_height: float = 1.0  # Min nDSM height (m) to cast shadows; below this, DSM is flattened to DEM
+    # DEM integer-quantization smoothing: int16 DEMs (e.g. PNOA-LiDAR at 1m precision)
+    # produce visible stair-step contour artifacts in SVF over gently sloped open
+    # terrain. When enabled and an integer-quantized DEM is detected in preprocess(),
+    # a small Gaussian smooth is applied (sigma in pixel units at target resolution)
+    # to break the quantization without touching nDSM/buildings. Set to False to
+    # preserve bit-exact legacy behaviour or when the DEM has genuine 1m-step terrain.
+    smooth_quantized_dem: bool = True
+    dem_smooth_sigma: float = 3.0
 
     # Internal state
+    _dem_quantization_m: float = field(default=0.0, init=False, repr=False)  # detected in preprocess()
     _nan_filled: bool = field(default=False, init=False, repr=False)
     _preprocessed: bool = field(default=False, init=False, repr=False)
     _geotransform: list[float] | None = field(default=None, init=False, repr=False)  # GDAL geotransform
@@ -552,6 +674,8 @@ class SurfaceData:
         cdsm_relative: bool = True,
         tdsm_relative: bool = True,
         min_object_height: float = 1.0,
+        smooth_quantized_dem: bool = True,
+        dem_smooth_sigma: float = 3.0,
         force_recompute: bool = False,
         tile_size: int | None = None,
         feedback: Any = None,
@@ -594,6 +718,26 @@ class SurfaceData:
                 DSM pixels below this height above DEM are flattened to remove
                 kerbs, street furniture, and LiDAR noise. Default 1.0. Set to
                 0 to disable. Requires DEM.
+            smooth_quantized_dem: Apply Gaussian smoothing to the DEM when it
+                is detected to be integer-quantized (e.g. int16 with 1 m
+                precision). Default True. Integer-stored DEMs produce visible
+                stair-step contour artifacts in SVF over gently sloped open
+                terrain because each 1 m terrain step casts a discrete shadow
+                at low-altitude sky patches; smoothing recovers the sub-metre
+                variation that was lost at storage time. Disable to preserve
+                bit-exact legacy behaviour or when your terrain has genuine
+                1 m steps (e.g. agricultural terraces).
+            dem_smooth_sigma: Gaussian standard deviation in pixel units at
+                target resolution. Default 3.0 — FWHM ≈ 7 px gives bulletproof
+                elimination of the stair-step artifact across all sky patches
+                including the lowest (3°). Softens real terrain features
+                smaller than ~15 m horizontal scale; below that scale, a
+                1 m-quantized DEM has no physically meaningful information
+                anyway (the sharp transitions are storage truncation, not
+                real features). Override to 1.5–2.0 for high-resolution
+                non-quantized DEMs or when 10 m-scale terrain features must
+                be preserved. Only used when ``smooth_quantized_dem=True``
+                and a quantized DEM is detected.
             force_recompute: Recompute walls/SVF even if cached (file mode only).
             tile_size: Core tile side length in pixels for SVF tiling.
                 If None (default), auto-calculated from available resources.
@@ -628,18 +772,99 @@ class SurfaceData:
                 cdsm_relative=cdsm_relative,
                 tdsm_relative=tdsm_relative,
                 min_object_height=min_object_height,
+                smooth_quantized_dem=smooth_quantized_dem,
+                dem_smooth_sigma=dem_smooth_sigma,
             )
 
         # File mode: working_dir is required
         if working_dir is None:
             raise ValueError("working_dir is required when dsm is a file path")
 
+        working_path = Path(working_dir)
+        dsm_path = cast("str | Path", dsm)
+
+        # Capture every input that determines the output of a prepare() call
+        # into a single fingerprint. Used by the fast-path check below and by
+        # save_cleaned() at the end of a cold build — a single source of
+        # truth prevents check/save drift if new kwargs are added later.
+        from ..cache import compare_prepare_fingerprints, compute_prepare_fingerprint
+
+        def _build_prepare_fingerprint() -> dict:
+            return compute_prepare_fingerprint(
+                sources={
+                    "dsm": dsm_path,
+                    "dem": cast("str | Path | None", dem),
+                    "cdsm": cast("str | Path | None", cdsm),
+                    "tdsm": cast("str | Path | None", tdsm),
+                    "land_cover": cast("str | Path | None", land_cover),
+                    "wall_height": cast("str | Path | None", wall_height),
+                    "wall_aspect": cast("str | Path | None", wall_aspect),
+                },
+                kwargs={
+                    "pixel_size": pixel_size,
+                    "bbox": list(bbox) if bbox is not None else None,
+                    "trunk_ratio": float(trunk_ratio),
+                    "dsm_relative": bool(dsm_relative),
+                    "cdsm_relative": bool(cdsm_relative),
+                    "tdsm_relative": bool(tdsm_relative),
+                    "min_object_height": float(min_object_height),
+                    "smooth_quantized_dem": bool(smooth_quantized_dem),
+                    "dem_smooth_sigma": float(dem_smooth_sigma),
+                },
+            )
+
+        # ── Fast-path: reuse cleaned/ output from a previous prepare() run ──
+        # When working_dir already holds a matching fingerprint we can skip
+        # the entire load → resample → preprocess → walls → SVF pipeline and
+        # jump straight to SurfaceData.load(). The fingerprint covers every
+        # source file's mtime/size and every preprocessing kwarg that
+        # affects the output. Skipped when ``svf_dir`` is supplied because
+        # that's an explicit "load SVF from elsewhere" request.
+        if not force_recompute and svf_dir is None:
+            fast_path_metadata = working_path / "metadata.json"
+            fast_path_cleaned = working_path / "cleaned" / "dsm.tif"
+            if fast_path_metadata.exists() and fast_path_cleaned.exists():
+                try:
+                    with open(fast_path_metadata, encoding="utf-8") as fp:
+                        stored_metadata = json.load(fp)
+                except (OSError, json.JSONDecodeError) as e:
+                    logger.debug(f"Could not read fast-path metadata: {e}")
+                    stored_metadata = None
+
+                if stored_metadata is not None:
+                    stored_fp = stored_metadata.get("prepare_fingerprint")
+                    if stored_fp is None:
+                        logger.info(
+                            "Fast-path: metadata.json has no prepare_fingerprint "
+                            "(legacy cache), falling through to full prepare"
+                        )
+                    else:
+                        mismatches = compare_prepare_fingerprints(stored_fp, _build_prepare_fingerprint())
+                        if not mismatches:
+                            logger.info(f"Fast-path cache hit — loading prepared surface from {working_path}")
+                            if feedback is not None and hasattr(feedback, "setProgressText"):
+                                feedback.setProgressText("Loading cached surface (walls + SVF from previous run)...")
+                            # Corrupted cache → fall back to full rebuild.
+                            try:
+                                return cls.load(working_path)
+                            except (FileNotFoundError, OSError) as e:
+                                logger.warning(
+                                    f"Fast-path load failed ({type(e).__name__}: {e}); falling through to full prepare"
+                                )
+                        else:
+                            logger.info(
+                                f"Fast-path cache invalidated ({len(mismatches)} change"
+                                f"{'s' if len(mismatches) != 1 else ''}):"
+                            )
+                            for reason in mismatches:
+                                logger.info(f"  - {reason}")
+                            logger.info("Rebuilding from source rasters…")
+
         logger.info("Preparing surface data from GeoTIFF files...")
         if feedback is not None and hasattr(feedback, "setProgressText"):
             feedback.setProgressText("Loading and aligning rasters...")
 
         # Load and validate DSM — dsm is str | Path after the isinstance guard above
-        dsm_path = cast("str | Path", dsm)
         dsm_arr, dsm_transform, dsm_crs, pixel_size = cls._load_and_validate_dsm(dsm_path, pixel_size)
 
         # Load optional terrain rasters — these are str | Path | None after array branch
@@ -651,8 +876,8 @@ class SurfaceData:
             trunk_ratio,
         )
 
-        # Load preprocessing data (walls, SVF)
-        working_path = Path(working_dir)
+        # Load preprocessing data (walls, SVF). ``working_path`` was
+        # already constructed above for the fast-path check — reuse it.
         preprocess_data = cls._load_preprocessing_data(
             cast("str | Path | None", wall_height),
             cast("str | Path | None", wall_aspect),
@@ -682,6 +907,8 @@ class SurfaceData:
             cdsm_relative=cdsm_relative,
             tdsm_relative=tdsm_relative,
             min_object_height=min_object_height,
+            smooth_quantized_dem=smooth_quantized_dem,
+            dem_smooth_sigma=dem_smooth_sigma,
         )
 
         # Preprocess layers: convert relative heights to absolute and
@@ -806,7 +1033,11 @@ class SurfaceData:
         surface_data.compute_valid_mask()
         surface_data.apply_valid_mask()
         surface_data.crop_to_valid_bbox()
-        surface_data.save_cleaned(working_path)
+
+        # Persist the fingerprint so the next prepare() call can short-circuit.
+        # Reuses the same builder the fast-path check used so the stored and
+        # compared fingerprints cannot drift.
+        surface_data.save_cleaned(working_path, prepare_fingerprint=_build_prepare_fingerprint())
 
         logger.info("✓ Surface data prepared successfully")
         return surface_data
@@ -828,6 +1059,8 @@ class SurfaceData:
         cdsm_relative: bool = True,
         tdsm_relative: bool = True,
         min_object_height: float = 1.0,
+        smooth_quantized_dem: bool = True,
+        dem_smooth_sigma: float = 3.0,
     ) -> SurfaceData:
         """Prepare surface data from in-memory numpy arrays."""
         from ..physics import wallalgorithms as wa
@@ -871,6 +1104,8 @@ class SurfaceData:
             cdsm_relative=cdsm_relative,
             tdsm_relative=tdsm_relative,
             min_object_height=min_object_height,
+            smooth_quantized_dem=smooth_quantized_dem,
+            dem_smooth_sigma=dem_smooth_sigma,
         )
 
         # Preprocess: convert relative heights to absolute and
@@ -1418,6 +1653,8 @@ class SurfaceData:
         cdsm_relative: bool = True,
         tdsm_relative: bool = True,
         min_object_height: float = 1.0,
+        smooth_quantized_dem: bool = True,
+        dem_smooth_sigma: float = 3.0,
     ) -> SurfaceData:
         """
         Create SurfaceData instance from aligned rasters.
@@ -1450,6 +1687,8 @@ class SurfaceData:
             cdsm_relative=cdsm_relative,
             tdsm_relative=tdsm_relative,
             min_object_height=min_object_height,
+            smooth_quantized_dem=smooth_quantized_dem,
+            dem_smooth_sigma=dem_smooth_sigma,
         )
 
         # Store geotransform and CRS for later export
@@ -2125,22 +2364,46 @@ class SurfaceData:
         already flagged as absolute are left unchanged.
 
         This method:
-        1. Converts DSM from relative to absolute if ``dsm_relative=True``
+        1. (Optional) Detects integer-quantized DEMs (e.g. int16 with 1 m
+           precision) and Gaussian-smooths the DEM to remove stair-step
+           contour artifacts in downstream SVF. Controlled by
+           ``smooth_quantized_dem`` and ``dem_smooth_sigma`` on the dataclass.
+        2. Converts DSM from relative to absolute if ``dsm_relative=True``
            (requires DEM: ``dsm_absolute = dem + dsm_relative``)
-        2. Auto-generates TDSM from CDSM * trunk_ratio if TDSM is not provided
-        3. Converts CDSM from relative to absolute if ``cdsm_relative=True``
-        4. Converts TDSM from relative to absolute if ``tdsm_relative=True``
-        5. NaN's canopy pixels that sit below the DSM (inside buildings)
+        3. Auto-generates TDSM from CDSM * trunk_ratio if TDSM is not provided
+        4. Converts CDSM from relative to absolute if ``cdsm_relative=True``
+        5. Converts TDSM from relative to absolute if ``tdsm_relative=True``
+        6. NaN's canopy pixels that sit below the DSM (inside buildings)
 
         Note:
             This method modifies arrays in-place and clears the per-layer
-            relative flags once conversion is done.
+            relative flags once conversion is done. ``self.dem`` may also be
+            overwritten with a smoothed copy (step 1) — the original values
+            are discarded.
         """
         if self._preprocessed:
             return
 
         # Fill NaN in surface layers before any height conversion
         self.fill_nan()
+
+        # Detect integer-quantized DEM and smooth it. Must happen BEFORE the DSM
+        # relative→absolute conversion so that the smoothed DEM feeds into
+        # `DSM = DEM + nDSM` and all downstream base-relative threshold checks
+        # (CDSM/TDSM sub-threshold NaN, canopy-below-DSM) use the smoothed base
+        # consistently. Buildings are unaffected: nDSM is integer but preserved,
+        # and DSM = smoothed_DEM + nDSM keeps building geometry intact.
+        if self.smooth_quantized_dem and self.dem is not None:
+            q = _detect_dem_quantization(self.dem)
+            self._dem_quantization_m = q
+            if q > 0.0 and self.dem_smooth_sigma > 0.0:
+                logger.info(
+                    f"Smoothing quantized DEM (Q={q:.2f}m, sigma={self.dem_smooth_sigma}px) "
+                    f"to suppress stair-step SVF artifacts over gently sloped terrain"
+                )
+                # self.dem is already float32 (coerced in __post_init__), and
+                # _gaussian_smooth_2d also runs in float32.
+                self.dem = _gaussian_smooth_2d(self.dem, self.dem_smooth_sigma)
 
         threshold = np.float32(max(0.1, self.min_object_height))
         zero32 = np.float32(0.0)
@@ -2514,13 +2777,27 @@ class SurfaceData:
         logger.info(f"  Cropped: {old_shape[1]}x{old_shape[0]} → {c1 - c0}x{r1 - r0} pixels")
         return (r0, r1, c0, c1)
 
-    def save_cleaned(self, output_dir: str | Path) -> None:
-        """Save cleaned, aligned rasters to disk for inspection.
+    def save_cleaned(
+        self,
+        output_dir: str | Path,
+        *,
+        prepare_fingerprint: dict | None = None,
+    ) -> None:
+        """Save cleaned, aligned rasters to disk and write ``metadata.json``.
 
-        Writes all present layers to output_dir/cleaned/ as GeoTIFFs.
+        Writes all present layers to ``output_dir/cleaned/`` as GeoTIFFs and
+        a top-level ``output_dir/metadata.json`` so future calls to
+        :meth:`load` and the :meth:`prepare` fast-path can find them.
 
         Args:
-            output_dir: Parent directory. Files are saved under output_dir/cleaned/.
+            output_dir: Parent directory. Rasters are saved under
+                ``output_dir/cleaned/``; metadata lives one level up at
+                ``output_dir/metadata.json``.
+            prepare_fingerprint: Optional fingerprint dict from
+                :func:`cache.compute_prepare_fingerprint`. When provided,
+                embedded under the ``prepare_fingerprint`` key so the
+                :meth:`prepare` fast-path can short-circuit on warm runs
+                where inputs and kwargs are unchanged.
         """
         out = Path(output_dir) / "cleaned"
         out.mkdir(parents=True, exist_ok=True)
@@ -2540,6 +2817,37 @@ class SurfaceData:
             io.save_raster(str(out / "land_cover.tif"), self.land_cover.astype(np.float32), gt, crs)
         if self._valid_mask is not None:
             io.save_raster(str(out / "valid_mask.tif"), self._valid_mask.astype(np.float32), gt, crs)
+
+        # Write top-level metadata.json used by SurfaceData.load() and the
+        # prepare() fast-path. Keys mirror the QGIS plugin's own
+        # metadata.json schema (see qgis_plugin/.../surface_preprocessing.py).
+        metadata: dict = {
+            "pixel_size": float(self.pixel_size),
+            "geotransform": list(gt),
+            "crs_wkt": crs,
+            "shape": [int(self.dsm.shape[0]), int(self.dsm.shape[1])],
+            "dsm_relative": False,  # always absolute after preprocess()
+            "cdsm_relative": False,
+            "tdsm_relative": False,
+            "has_cdsm": self.cdsm is not None,
+            "has_dem": self.dem is not None,
+            "has_tdsm": self.tdsm is not None,
+            "has_land_cover": self.land_cover is not None,
+            "has_walls": self.wall_height is not None and self.wall_aspect is not None,
+            "has_svf": self.svf is not None,
+            "dem_quantization_m": float(self._dem_quantization_m),
+            "smooth_quantized_dem": bool(self.smooth_quantized_dem),
+            "dem_smooth_sigma": float(self.dem_smooth_sigma),
+            "min_object_height": float(self.min_object_height),
+            "trunk_ratio": float(self.trunk_ratio),
+        }
+        if prepare_fingerprint is not None:
+            metadata["prepare_fingerprint"] = prepare_fingerprint
+
+        meta_path = Path(output_dir) / "metadata.json"
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2)
+
         logger.info(f"  Cleaned rasters saved to {out}")
 
     def get_buffer_pool(self) -> BufferPool:

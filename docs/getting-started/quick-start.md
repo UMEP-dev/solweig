@@ -99,9 +99,16 @@ UTCI, sun hours, etc.) — see [Timeseries](../guide/timeseries.md).
 
 1. Loads the DSM (and optional CDSM, DEM, land cover)
 2. Fills NaN/nodata values using the ground reference
-3. Computes **wall heights and aspects** from the DSM edges
-4. Computes **Sky View Factors** (15 directional grids)
-5. Caches results to `working_dir/` for reuse in subsequent runs
+3. Detects integer-quantized DEMs (e.g. 1 m int16 LiDAR products) and
+   applies a small Gaussian smooth to break stair-step contours in SVF —
+   see `smooth_quantized_dem` / `dem_smooth_sigma` on `prepare()`
+4. Computes **wall heights and aspects** from the DSM edges
+5. Computes **Sky View Factors** (15 directional grids)
+6. Caches results to `working_dir/` with a preparation fingerprint, so
+   subsequent runs on unchanged inputs short-circuit via `SurfaceData.load()`
+   and skip the entire load → resample → preprocess → walls → SVF pipeline.
+   Warm runs complete in ~50 ms; cache mismatches are logged in detail
+   (which source file, which kwarg).
 
 ## Adding thermal comfort indices
 

@@ -188,7 +188,7 @@ Build must be `--release` — `conftest.py` gates on `RELEASE_BUILD` flag.
 
 Conventional commits: `<type>: <description> (<version>)`
 - Types: `feat`, `fix`, `docs`, `chore`, `refactor`
-- Version tag appended in parentheses: `(0.1.0b68)`
+- Version tag appended in parentheses: `(0.1.0b82)`
 
 ---
 
@@ -237,7 +237,20 @@ This is a **scientific library**. All code decisions must be driven by scientifi
 
 ---
 
-## Documentation Health (audited 2026-03-14)
+## Documentation Health (audited 2026-04-11)
+
+### Fixed (2026-04-11 — v0.1.0b82)
+
+- `README.md`: validation table updated with b82 numbers (Gustav Adolfs RMSE 9.3–18.9 → 5.7–7.5, GVC 11.5–15.6 → 1.5–6.1 after the scale convention fix). Demos list now includes Bilbao and Madrid demos.
+- `VALIDATION.md`: full post-b82 numbers for all three sites + new version history row. Removed the duplicated "b82 change summary" paragraph; the version history table is the single source of truth for changelog.
+- `docs/getting-started/quick-start.md`: added surface preparation steps for DEM stair-step smoothing and the warm-run fast-path (100× speedup).
+- `docs/guide/qgis-plugin.md`: corrected output directory structure (now shows `cleaned/`, `walls/px<size>/`, `svf/px<size>/`). Added warm-run cache description.
+- `qgis_plugin/.../surface_preprocessing.py`: final summary log line no longer claims "Walls computed: yes / SVF computed: yes" unconditionally (misleading on warm cache hits); now reports "Walls: present / SVF: present".
+- `surface.py` fast-path: emits `setProgressText("Loading cached surface...")` via feedback so QGIS users see context during the otherwise-silent ~50 ms warm load.
+- `specs/shadows.md`: ray-march `dz` formula corrected to `ds × step × tan(α) × scale` and annotated with the solweig/UMEP convention difference (solweig: `scale = pixel_size_m`; UMEP: `scale = 1/pixel_size`). This matches the `shadowing.rs` / `shadow_gpu.rs` b82 fix (`tan().* scale`, was `/ scale`) and explains why shadow length was physically wrong at non-1m pixel sizes before b82.
+- `qgis_plugin/.../metadata.txt`: bumped to `0.1.0-beta82` with a b82 changelog entry.
+- `pyproject.toml`: bumped version to `0.1.0b82`.
+- Progress-reporting audit: surface prep walls=10→30%, SVF=30→75%, plugin finalises at 80/95/100; calculation phases 5/10/15/20/25 then callback 25→80 then 80/100. Tile-granular callback in timeseries.py correctly maps `(tile_idx * n_steps + t_idx + 1, n_tiles * n_steps)` to tile-agnostic percentage. No stale setProgress patterns observed.
 
 ### Fixed (2026-03-14)
 

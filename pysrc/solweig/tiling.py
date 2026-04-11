@@ -345,18 +345,29 @@ def compute_max_tile_side(*, context: str = "solweig") -> int:
 # =============================================================================
 
 
-def _calculate_auto_tile_size(rows: int, cols: int) -> int:
+def _calculate_auto_tile_size(rows: int, cols: int, buffer_pixels: int = 0) -> int:
     """
     Calculate optimal core tile size based on raster dimensions and resources.
 
-    Returns the resource-derived maximum tile side as the core size.
-    ``validate_tile_size()`` will further adjust to ensure the full tile
-    (core + 2 × overlap) fits within resource limits.
+    The resource-derived budget from :func:`compute_max_tile_side` is the
+    *full* tile side (core plus both sides of the overlap buffer). The core
+    must leave room for ``2 × buffer_pixels`` of overlap inside that budget,
+    so we subtract them here. ``buffer_pixels`` defaults to 0 for callers
+    that don't use overlap (e.g. SVF-less paths); the standard timeseries
+    caller should pass the real buffer so the returned core fits
+    ``validate_tile_size()`` without clamping.
+
+    Args:
+        rows: Total raster rows (currently unused; reserved for future
+            aspect-ratio-aware sizing).
+        cols: Total raster cols (currently unused).
+        buffer_pixels: Overlap buffer that will wrap each core tile side.
 
     Returns:
-        Core tile size in pixels.
+        Core tile size in pixels, at least ``MIN_TILE_SIZE``.
     """
-    return compute_max_tile_side(context="solweig")
+    max_full = compute_max_tile_side(context="solweig")
+    return max(MIN_TILE_SIZE, max_full - 2 * buffer_pixels)
 
 
 def _extract_tile_surface(

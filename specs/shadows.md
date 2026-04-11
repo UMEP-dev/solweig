@@ -23,11 +23,12 @@ The algorithm traces rays from each ground pixel toward the sun:
 ```text
 dx = -sign(cos(θ)) × step / tan(θ)    # When E-W dominant
 dy = sign(sin(θ)) × step               # When E-W dominant
-dz = (ds × step × tan(α)) / scale      # Height gain per step
+dz = ds × step × tan(α) × scale        # Height gain per step (metres)
 ```
 
 - θ = sun azimuth (radians)
 - ds = path length correction for diagonal movement
+- scale = pixel size in metres (solweig convention; note: upstream UMEP uses `1/pixel_size`, so the corresponding UMEP formula divides by `scale`)
 
 ### Shadow Condition
 

@@ -348,6 +348,8 @@ Once installed, SOLWEIG algorithms appear in the **Processing Toolbox** under th
 Complete working scripts:
 
 - **[demos/athens-demo.py](demos/athens-demo.py)** — Full workflow: rasterise tree vectors, load GeoTIFFs, run a multi-day timeseries, visualise summary grids.
+- **[demos/bilbao-demo.py](demos/bilbao-demo.py)** — Valley urban canyon with `dsm_relative=True`, terrain-aware shadows, and `max_shadow_distance_m` for bounded horizontal reach.
+- **[demos/madrid-demo.py](demos/madrid-demo.py)** — Automatic tiling stress test on a 500 M-pixel raster (55 km × 58 km at 2.5 m), exercising resource-aware tile sizing and the full timeseries path end-to-end.
 - **[demos/solweig_gbg_test.py](demos/solweig_gbg_test.py)** — Gothenburg: surface preparation with SVF caching, timeseries calculation.
 
 ---
@@ -356,11 +358,11 @@ Complete working scripts:
 
 SOLWEIG is validated against field radiation measurements from three sites in Gothenburg, Sweden (Lindberg et al. 2008, 2011). All geodata, measurements, and test scripts are checked into the repository and run as part of the test suite.
 
-| Site                                  | Season          | Days |    Tmrt RMSE |   Tmrt R² |
-| ------------------------------------- | --------------- | ---: | -----------: | --------: |
-| Kronenhuset (courtyard, 1 m)          | Autumn          |    1 |       6.0 °C |      0.52 |
-| Gustav Adolfs torg (open square, 2 m) | Autumn + Summer |    3 |  9.3–18.9 °C | 0.72–0.91 |
-| GVC (university campus, 2 m)          | Summer          |    3 | 11.5–15.6 °C | 0.00–0.20 |
+| Site                                  | Season          | Days |  Tmrt RMSE |   Tmrt R² |
+| ------------------------------------- | --------------- | ---: | ---------: | --------: |
+| Kronenhuset (courtyard, 1 m)          | Autumn          |    1 |     6.7 °C |      0.51 |
+| Gustav Adolfs torg (open square, 2 m) | Autumn + Summer |    3 | 5.7-7.5 °C | 0.78-0.87 |
+| GVC (university campus, 2 m)          | Summer          |    3 | 1.5-6.1 °C | 0.79-0.99 |
 
 Anisotropic sky mode, matched daytime observation hours. Full details, radiation budget comparisons, and version history: **[Validation Report](VALIDATION.md)**.
 

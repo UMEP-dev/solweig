@@ -66,18 +66,33 @@ Load raster layers, align them to a common grid, compute wall heights, wall aspe
 
 ```
 prepared_surface/
-  dsm.tif                    # Aligned DSM
-  wall_height.tif            # Computed wall heights
-  wall_aspect.tif            # Computed wall aspects
-  cdsm.tif                   # Aligned CDSM (if provided)
-  dem.tif                    # Aligned DEM (if provided)
-  tdsm.tif                   # Aligned TDSM (if provided)
-  land_cover.tif             # Aligned land cover (if provided)
-  svfs.zip                   # Sky View Factor arrays
-  shadowmats.npz             # Shadow matrices (for anisotropic sky)
-  parametersforsolweig.json  # Saved material/vegetation settings
-  metadata.json              # Grid info and completion marker
+  metadata.json              # Grid info + preparation fingerprint (warm-run cache key)
+  parametersforsolweig.json  # Saved material/vegetation settings (UMEP-compatible)
+  cleaned/
+    dsm.tif                  # Aligned, absolute DSM
+    wall_height.tif          # Computed wall heights
+    wall_aspect.tif          # Computed wall aspects
+    cdsm.tif                 # Aligned CDSM (if provided)
+    dem.tif                  # Aligned DEM, Gaussian-smoothed if quantized
+    tdsm.tif                 # Aligned TDSM (if provided)
+    land_cover.tif           # Aligned land cover (if provided)
+  walls/
+    px<size>/                # Per-pixel-size wall cache
+  svf/
+    px<size>/
+      memmap/                # Memmap-backed SVF arrays
+      svfs.zip               # SVF arrays (UMEP-compatible archive)
+      shadowmats.npz         # Shadow matrices for anisotropic sky (small rasters only)
+      shadow_memmaps/        # Shadow memmap fallback for large rasters
 ```
+
+**Warm-run cache**: rerunning *Prepare Surface Data* with unchanged inputs
+short-circuits the full load → resample → preprocess → walls → SVF pipeline
+by comparing a fingerprint of source file mtimes/sizes and preparation kwargs
+stored in `metadata.json`. A cache hit completes in ~50 ms instead of tens of
+seconds. If any source file is edited or any kwarg changes, the log reports
+exactly which input invalidated the cache and the pipeline rebuilds from
+source.
 
 ### 3. SOLWEIG Calculation
 

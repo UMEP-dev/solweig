@@ -48,15 +48,15 @@ from the original shapefiles provided with each validation dataset.
 
 ---
 
-## Results — v0.1.0b81 (2026-04-08)
+## Results — v0.1.0b82 (2026-04-11)
 
 ### Summary
 
 | Metric               | Kronenhuset |  Gustav Adolfs |             GVC |
 | -------------------- | ----------: | -------------: | --------------: |
-| Tmrt RMSE range (°C) |         6.7 |      8.7–17.6  |    12.3–15.4    |
-| Tmrt R² range        |        0.51 |     0.74–0.91  |   0.00–0.21     |
-| Tmrt bias range (°C) |       +2.8  | -12.7 to -2.1  | -2.4 to +7.8    |
+| Tmrt RMSE range (°C) |         6.7 |      5.7–7.5   |    1.5–6.1      |
+| Tmrt R² range        |        0.51 |     0.78–0.87  |   0.79–0.99     |
+| Tmrt bias range (°C) |       +2.8  | -0.4 to +2.4   | +0.9 to +5.3    |
 | Days                 |           1 |              3 |               3 |
 | Total obs hours      |          12 |             43 |              30 |
 
@@ -68,12 +68,12 @@ valid observations).
 | Site          | Day        | RMSE (°C) | MAE (°C) | Bias (°C) |   R² |   n |
 | ------------- | ---------- | --------: | -------: | --------: | ---: | --: |
 | Kronenhuset   | 2005-10-07 |       6.7 |      5.8 |      +2.8 | 0.51 |  12 |
-| Gustav Adolfs | 2005-10-11 |      17.6 |     15.1 |     -12.7 | 0.91 |  12 |
-| Gustav Adolfs | 2006-07-26 |      11.8 |      8.4 |      -2.7 | 0.56 |  16 |
-| Gustav Adolfs | 2006-08-01 |       8.7 |      6.1 |      -2.1 | 0.74 |  15 |
-| GVC           | 2010-07-07 |      15.4 |     11.5 |      -5.6 | 0.06 |  11 |
-| GVC           | 2010-07-10 |      12.3 |      8.0 |      +7.8 | 0.00 |   7 |
-| GVC           | 2010-07-12 |      13.3 |     10.6 |      -2.4 | 0.21 |  12 |
+| Gustav Adolfs | 2005-10-11 |       5.7 |      4.8 |      +1.1 | 0.87 |  12 |
+| Gustav Adolfs | 2006-07-26 |       6.4 |      4.5 |      +2.4 | 0.85 |  16 |
+| Gustav Adolfs | 2006-08-01 |       7.5 |      5.1 |      -0.4 | 0.78 |  15 |
+| GVC           | 2010-07-07 |       1.5 |      1.3 |      +0.9 | 0.99 |  11 |
+| GVC           | 2010-07-10 |       4.0 |      3.7 |      +3.7 | 0.79 |   7 |
+| GVC           | 2010-07-12 |       6.1 |      5.3 |      +5.3 | 0.89 |  12 |
 
 ### Radiation components — all sites
 
@@ -84,57 +84,57 @@ different). Units: W/m² for radiation, °C for Tmrt.
 
 | Component |        RMSE |           Bias |
 | --------- | ----------: | -------------: |
-| K↓        | 51.4 (46.8) | -22.5 (-6.3)   |
-| K↑        |         7.5 |           +5.0 |
-| L↓        | 32.2 (39.2) | +31.4 (+38.8)  |
-| L↑        |        13.3 |           +9.4 |
-| Tmrt      |   6.7 (6.4) |   +2.8 (+2.0)  |
+| K↓        | 51.5 (46.8) | -22.5 (-6.0)   |
+| K↑        |         7.6 |           +5.0 |
+| L↓        | 31.4 (38.4) | +30.5 (+37.9)  |
+| L↑        |        13.3 |           +9.3 |
+| Tmrt      |   6.7       |           +2.8 |
 
-#### Gustav Adolfs torg
+#### Gustav Adolfs torg (2005-10-11, 2006-07-26, 2006-08-01)
 
 | Day        | Component |    RMSE |    Bias |
 | ---------- | --------- | ------: | ------: |
-| 2005-10-11 | K↓        |   221.5 |  -172.8 |
-| 2005-10-11 | K↑        |    28.5 |   -21.7 |
-| 2005-10-11 | L↓        |    73.8 |   +72.8 |
-| 2005-10-11 | L↑        |    13.5 |    -6.5 |
-| 2006-07-26 | K↓        |   182.4 |   -84.9 |
-| 2006-07-26 | K↑        |    28.0 |   -13.7 |
-| 2006-07-26 | L↓        |    72.4 |   +62.9 |
-| 2006-07-26 | L↑        |    42.7 |   -26.4 |
-| 2006-08-01 | K↓        |   177.0 |   -93.1 |
-| 2006-08-01 | K↑        |    24.1 |    -9.7 |
-| 2006-08-01 | L↓        |    61.0 |   +58.2 |
-| 2006-08-01 | L↑        |    30.7 |   -11.4 |
+| 2005-10-11 | K↓        |    48.0 |   -21.3 |
+| 2005-10-11 | K↑        |     8.8 |    -2.3 |
+| 2005-10-11 | L↓        |    57.3 |   +55.2 |
+| 2005-10-11 | L↑        |    10.8 |    +1.4 |
+| 2006-07-26 | K↓        |    60.3 |    -4.3 |
+| 2006-07-26 | K↑        |    14.8 |    -0.8 |
+| 2006-07-26 | L↓        |    51.5 |   +39.3 |
+| 2006-07-26 | L↑        |    24.5 |   -10.3 |
+| 2006-08-01 | K↓        |   157.0 |   -62.8 |
+| 2006-08-01 | K↑        |    22.2 |    -3.5 |
+| 2006-08-01 | L↓        |    45.9 |   +40.9 |
+| 2006-08-01 | L↑        |    28.1 |    -4.3 |
 
 #### GVC (2010-07-07, 07-10, 07-12)
 
 | Day        | Component |    RMSE |    Bias |
 | ---------- | --------- | ------: | ------: |
-| 2010-07-07 | K↓        |   342.2 |  -145.0 |
-| 2010-07-07 | K↑        |    32.2 |    -7.4 |
-| 2010-07-07 | L↓        |    48.0 |   +46.2 |
-| 2010-07-07 | L↑        |    35.5 |   -24.2 |
-| 2010-07-10 | K↓        |   238.5 |   +98.5 |
-| 2010-07-10 | K↑        |    23.6 |   +18.5 |
-| 2010-07-10 | L↓        |    67.0 |   +66.9 |
-| 2010-07-10 | L↑        |    26.5 |   +22.9 |
-| 2010-07-12 | K↓        |   273.2 |  -100.1 |
-| 2010-07-12 | K↑        |    24.7 |    -1.5 |
-| 2010-07-12 | L↓        |    52.8 |   +52.2 |
-| 2010-07-12 | L↑        |    23.1 |    +0.6 |
+| 2010-07-07 | K↓        |    39.9 |   -17.5 |
+| 2010-07-07 | K↑        |    23.1 |   +16.5 |
+| 2010-07-07 | L↓        |    21.8 |   +18.9 |
+| 2010-07-07 | L↑        |     8.9 |    -4.4 |
+| 2010-07-10 | K↓        |    21.4 |   +16.7 |
+| 2010-07-10 | K↑        |    30.8 |   +27.8 |
+| 2010-07-10 | L↓        |    38.7 |   +38.5 |
+| 2010-07-10 | L↑        |    32.5 |   +31.7 |
+| 2010-07-12 | K↓        |   111.6 |   +27.1 |
+| 2010-07-12 | K↑        |    26.5 |   +21.8 |
+| 2010-07-12 | L↓        |    29.8 |   +29.2 |
+| 2010-07-12 | L↑        |    24.2 |   +22.1 |
 
 ### Ldown — all sites
 
 | Site          | Day        | RMSE (W/m²) | Bias (W/m²) |
 | ------------- | ---------- | ----------: | ----------: |
-| Kronenhuset   | 2005-10-07 |        32.2 |       +31.4 |
-| Gustav Adolfs | 2005-10-11 |        73.8 |       +72.8 |
-| Gustav Adolfs | 2006-07-26 |        72.4 |       +62.9 |
-| Gustav Adolfs | 2006-08-01 |        61.0 |       +58.2 |
-| GVC           | 2010-07-07 |        48.0 |       +46.2 |
-| GVC           | 2010-07-10 |        67.0 |       +66.9 |
-| GVC           | 2010-07-12 |        52.8 |       +52.2 |
+| Kronenhuset   | 2005-10-07 |        31.4 |       +30.5 |
+| Gustav Adolfs | 2005-10-11 |        57.3 |       +55.2 |
+| Gustav Adolfs | 2006-07-26 |        51.5 |       +39.3 |
+| Gustav Adolfs | 2006-08-01 |        45.9 |       +40.9 |
+| GVC           | 2010-07-07 |        21.8 |       +18.9 |
+| GVC           | 2010-07-10 |        38.7 |       +38.5 |
+| GVC           | 2010-07-12 |        29.8 |       +29.2 |
 
 ---
 
@@ -268,6 +268,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b74 | 2026-03-18 | 3 | 6.7–17.6 °C | Fix rasterio resampling pixel drift (from\_bounds inexact pixel size). Fix QGIS phantom vegetation (fill\_nan overwriting CDSM NaN markers). Add SurfaceData.load(); eliminate QGIS/core duplication. Fix progress bar regression. Validation unchanged from b72. |
 | 0.1.0b78 | 2026-03-29 | 3 | 6.7–17.6 °C | Fix phantom vegetation in tiled timeseries: tile-extracted surfaces inherit \_nan\_filled state, preventing double fill\_nan from overwriting intentional CDSM/TDSM NaN markers with DEM values. Also fix tiling buffer overflow on small rasters (core=1 / segfault). Unified tile-outer timeseries architecture. Validation restored to b72 baseline. |
 | 0.1.0b81 | 2026-04-08 | 3 | 6.7–17.6 °C | Fix tiled SVF core window overflow when buffer\_pixels > tile\_size (overlap clamped to actual raster extent). Remove dead Rust code (steradians\_for\_patch\_option, weighted\_patch\_sum\_pure). Validation unchanged from b78. |
+| 0.1.0b82 | 2026-04-11 | 3 | 1.5–7.5 °C | Fix inverted `scale` convention in Rust shadow caster (dz off by `pixel_size²` at non-1 m rasters). Also: DEM stair-step smoothing, `prepare()` warm-run fast-path, tile sizer buffer fix, `GridAccumulator.update()` in-place ufuncs, QGIS metadata consolidation. |
 
 ---
 

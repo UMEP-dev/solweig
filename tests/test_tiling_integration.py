@@ -35,10 +35,32 @@ class TestTilingHelpers:
     """Tests for tiling helper functions."""
 
     def test_auto_tile_size_returns_resource_max(self):
-        """Auto tile size returns resource-derived maximum."""
+        """Auto tile size returns resource-derived maximum when no buffer."""
         max_side = compute_max_tile_side(context="solweig")
         assert _calculate_auto_tile_size(max_side + 1000, max_side + 1000) == max_side
         assert _calculate_auto_tile_size(100, 100) == max_side
+
+    def test_auto_tile_size_reserves_buffer(self):
+        """Auto tile size subtracts 2*buffer_pixels so `core + 2*buffer`
+        fits within the resource budget without clamping."""
+        from solweig.tiling import MIN_TILE_SIZE, validate_tile_size
+
+        max_side = compute_max_tile_side(context="solweig")
+        buffer_px = 200
+
+        core = _calculate_auto_tile_size(10000, 10000, buffer_px)
+        # Core must fit core + 2*buffer inside the full budget.
+        assert core + 2 * buffer_px <= max_side
+        # And it should actually reserve the buffer (not leave room unused),
+        # down to the MIN_TILE_SIZE floor.
+        expected = max(MIN_TILE_SIZE, max_side - 2 * buffer_px)
+        assert core == expected
+
+        # validate_tile_size should now accept the auto-sized core without
+        # clamping — the hallmark of the fix for the spurious warning.
+        adjusted, warning = validate_tile_size(core, buffer_px, 1.0, context="solweig")
+        assert adjusted == core
+        assert warning is None
 
     def test_extract_tile_surface_reuses_svf(self):
         """When surface has precomputed SVF, tile surface should get sliced SVF."""

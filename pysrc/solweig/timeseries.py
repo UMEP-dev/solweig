@@ -311,7 +311,7 @@ def _calculate_timeseries(
             core_tile_size = tile_size
             logger.info(f"Using explicit tile_size={tile_size}")
         else:
-            core_tile_size = _calculate_auto_tile_size(rows, cols)
+            core_tile_size = _calculate_auto_tile_size(rows, cols, buffer_pixels)
         adjusted_tile_size, tile_warning = validate_tile_size(core_tile_size, buffer_pixels, pixel_size)
         if tile_warning:
             logger.warning(tile_warning)

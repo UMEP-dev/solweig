@@ -1169,7 +1169,9 @@ impl ShadowGpuContext {
         let sin_azimuth = azimuth_rad.sin();
         let cos_azimuth = azimuth_rad.cos();
         let tan_azimuth = azimuth_rad.tan();
-        let tan_altitude_by_scale = altitude_rad.tan() / scale;
+        // See shadowing.rs scale note: solweig convention is `scale = pixel_size_m`,
+        // so the vertical-drop factor multiplies rather than divides.
+        let tan_altitude_by_scale = altitude_rad.tan() * scale;
         let min_sun_elev_rad = min_sun_elev_deg.to_radians();
         let height_reach_m = max_local_dsm_ht / min_sun_elev_rad.tan();
         let max_reach_m = if max_shadow_distance_m > 0.0 { height_reach_m.min(max_shadow_distance_m) } else { height_reach_m };
@@ -1605,7 +1607,10 @@ impl ShadowGpuContext {
             // For above-horizon patches, tan must be non-negative; use abs()
             // so the large negative becomes large positive → dz exceeds
             // max_local_dsm_ht immediately → no shadow (physically correct).
-            tan_altitude_by_scale: altitude_rad.tan().abs() / scale,
+            //
+            // See shadowing.rs scale note: solweig convention is
+            // `scale = pixel_size_m`, so the vertical-drop factor multiplies.
+            tan_altitude_by_scale: altitude_rad.tan().abs() * scale,
             scale,
             max_index,
             max_local_dsm_ht,
@@ -2118,7 +2123,10 @@ impl ShadowGpuContext {
             // For above-horizon patches, tan must be non-negative; use abs()
             // so the large negative becomes large positive → dz exceeds
             // max_local_dsm_ht immediately → no shadow (physically correct).
-            tan_altitude_by_scale: altitude_rad.tan().abs() / scale,
+            //
+            // See shadowing.rs scale note: solweig convention is
+            // `scale = pixel_size_m`, so the vertical-drop factor multiplies.
+            tan_altitude_by_scale: altitude_rad.tan().abs() * scale,
             scale,
             max_index,
             max_local_dsm_ht,
