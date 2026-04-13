@@ -57,9 +57,14 @@ ERA5 reanalysis data.
 
 A TMY is a statistical composite — each calendar month is selected
 from the most "typical" month across a multi-year reference period
-(2005–2020 for PVGIS v5.3). The result represents long-term average
+(2005–2023 for PVGIS v5.3). The result represents long-term average
 climate conditions, <i>not</i> observations from a specific year.
-Data freshness depends on the upstream PVGIS release, not on SOLWEIG.
+Because each month is taken from a real historical year, the row
+timestamps in the downloaded file will legitimately span multiple
+years within the reference period (e.g. a 2022 January alongside a
+2014 February). This is the defining characteristic of a TMY, not
+an error. Data freshness depends on the upstream PVGIS release,
+not on SOLWEIG.
 
 Enter latitude and longitude, and the file will be downloaded and
 saved to the specified output path.
@@ -257,8 +262,9 @@ EU Joint Research Centre. Data derived from ERA5 reanalysis.
         feedback.pushInfo(f"Downloaded EPW file: {output_path}")
         feedback.pushInfo(
             "Note: This is a Typical Meteorological Year (TMY) file — a statistical"
-            " composite of typical months from the ERA5 reference period (2005-2020),"
-            " not observations from a specific year."
+            " composite of typical months from the PVGIS v5.3 reference period (2005-2023),"
+            " not observations from a specific year. Row timestamps will span multiple"
+            " years within that window because each month is a real historical month."
         )
 
         # Generate preview report
@@ -490,9 +496,12 @@ EU Joint Research Centre. Data derived from ERA5 reanalysis.
         <strong>About Typical Meteorological Year (TMY) data:</strong>
         A TMY file is a statistical composite &mdash; each calendar month is selected
         from the most &ldquo;typical&rdquo; month across a multi-year reference period
-        (2005&ndash;2020 for PVGIS v5.3). It represents long-term average climate conditions,
-        not observations from any single year. The dates shown above are nominal; the
-        underlying data is drawn from the full reference period.
+        (2005&ndash;2023 for PVGIS v5.3). It represents long-term average climate conditions,
+        not observations from any single year. Individual row timestamps in the file
+        will legitimately span multiple years within the reference window (e.g. a
+        January from 2022 alongside a February from 2014), because each month is a
+        real historical month selected as the most typical. This is the defining
+        property of a TMY and not an artefact.
         See the
         <a href="https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/pvgis-tools/pvgis-typical-meteorological-year-tmy-generator_en"
 >PVGIS TMY documentation</a>

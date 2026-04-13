@@ -1,6 +1,6 @@
 [project]
 name = "solweig"
-version = "0.1.0b82"
+version = "0.1.0b83"
 description = "High-performance SOLWEIG urban microclimate model (Rust + Python)"
 readme = "README.md"
 requires-python = ">=3.11, <3.14"

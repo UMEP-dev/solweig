@@ -269,6 +269,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b78 | 2026-03-29 | 3 | 6.7–17.6 °C | Fix phantom vegetation in tiled timeseries: tile-extracted surfaces inherit \_nan\_filled state, preventing double fill\_nan from overwriting intentional CDSM/TDSM NaN markers with DEM values. Also fix tiling buffer overflow on small rasters (core=1 / segfault). Unified tile-outer timeseries architecture. Validation restored to b72 baseline. |
 | 0.1.0b81 | 2026-04-08 | 3 | 6.7–17.6 °C | Fix tiled SVF core window overflow when buffer\_pixels > tile\_size (overlap clamped to actual raster extent). Remove dead Rust code (steradians\_for\_patch\_option, weighted\_patch\_sum\_pure). Validation unchanged from b78. |
 | 0.1.0b82 | 2026-04-11 | 3 | 1.5–7.5 °C | Fix inverted `scale` convention in Rust shadow caster (dz off by `pixel_size²` at non-1 m rasters). Also: DEM stair-step smoothing, `prepare()` warm-run fast-path, tile sizer buffer fix, `GridAccumulator.update()` in-place ufuncs, QGIS metadata consolidation. |
+| 0.1.0b83 | 2026-04-13 | 3 | 1.5–7.5 °C | Docs-only: correct PVGIS TMY reference period (2005–2020 → 2005–2023 for v5.3) and clarify that TMY row timestamps legitimately span multiple years because each month is a real historical month. Validation unchanged from b82. |
 
 ---
 

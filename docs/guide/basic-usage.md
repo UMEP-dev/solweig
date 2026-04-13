@@ -96,7 +96,7 @@ location = solweig.Location.from_epw(epw_path)
 ```
 
 !!! note "TMY files represent typical climate, not a specific year"
-    A TMY is a statistical composite — each calendar month is selected from the most "typical" month across a multi-year reference period (2005–2020 for PVGIS v5.3). The result represents long-term average conditions, not observations from any single year. Data freshness depends on the upstream [PVGIS release](https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/pvgis-tools/pvgis-typical-meteorological-year-tmy-generator_en), not on SOLWEIG.
+    A TMY is a statistical composite — each calendar month is selected from the most "typical" month across a multi-year reference period (2005–2023 for PVGIS v5.3). The result represents long-term average conditions, not observations from any single year. Because each month is taken from a real historical year, the row timestamps in the file will legitimately span multiple years within the reference window (e.g. a January from 2022 alongside a February from 2014) — this is the defining property of a TMY, not an artefact. Data freshness depends on the upstream [PVGIS release](https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/pvgis-tools/pvgis-typical-meteorological-year-tmy-generator_en), not on SOLWEIG.
 
 ## Running a Calculation
 

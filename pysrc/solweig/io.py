@@ -1129,11 +1129,15 @@ def download_epw(
 
     **Important:** TMY files are *not* observations for a specific year.
     A TMY is a statistical composite — each calendar month is selected from
-    the most "typical" month across a multi-year reference period (2005–2020
+    the most "typical" month across a multi-year reference period (2005–2023
     for PVGIS v5.3).  The resulting file represents long-term average climate
-    conditions, not a recent or continuously updated dataset.  The reference
-    period is fixed per PVGIS release; data freshness depends on the upstream
-    PVGIS version, not on SOLWEIG.
+    conditions, not a recent or continuously updated dataset.  Because each
+    month is taken from a real historical year, the row timestamps in the
+    returned file will legitimately span multiple years within the reference
+    window (e.g. a January from 2022 alongside a February from 2014). This is
+    the defining property of a TMY and not an artefact.  The reference period
+    is fixed per PVGIS release; data freshness depends on the upstream PVGIS
+    version, not on SOLWEIG.
 
     See the PVGIS TMY documentation for full methodology and data sources:
     https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/pvgis-tools/pvgis-typical-meteorological-year-tmy-generator_en
