@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta83
+version=0.1.0-beta84
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,13 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta84
+    - Rust wall-aspect kernel: promote internal math to f64, switch to banker's rounding to match numpy's np.round (closer to UMEP numerics; input/output arrays stay f32 so data memory is unchanged)
+    - Delete Python Goodwin fallback from wallalgorithms.py; Rust kernel is now the single code path (same numerical behaviour for QGIS and pip users)
+    - Public API additions on solweig/__init__.py: extract_bounds, intersect_bounds, resample_to_grid, namespace_to_dict, pixel_size_tag, compute_max_tile_pixels, looks_like_relative, wallalgorithms
+    - QGIS plugin now uses only solweig's public API (no reaching into models/utils/loaders/physics/tiling/cache internals)
+    - Plugin error wrapping: QgsProcessingException messages now expose SolweigError structured attributes (field/expected/got/reason/...)
+    - Small cleanups: remove duplicate MIN_SUN_ELEVATION_DEG constant, standardize logging in api.py, remove dead xy_to_lnglat/rotate_array/cart2pol/get_ders, remove unimplemented poi_coords parameter
     0.1.0-beta83
     - Fix PVGIS TMY reference period docs (2005-2020 -> 2005-2023 for v5.3)
     - Clarify that TMY row timestamps legitimately span multiple years (each month is a real historical month)

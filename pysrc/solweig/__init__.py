@@ -68,7 +68,12 @@ from .api import (  # noqa: E402
     # Validation
     validate_inputs,
 )
+from .cache import pixel_size_tag  # noqa: E402
 from .errors import SolweigError  # noqa: E402
+from .models.surface import looks_like_relative  # noqa: E402
+from .physics import wallalgorithms  # noqa: E402
+from .tiling import compute_max_tile_pixels  # noqa: E402
+from .utils import extract_bounds, intersect_bounds, namespace_to_dict, resample_to_grid  # noqa: E402
 
 # Try to import Rust algorithms
 try:
@@ -216,6 +221,15 @@ __all__ = [
     "io",
     "walls",
     "progress",
+    "wallalgorithms",
+    # Preprocessing / grid helpers (used by the QGIS plugin and external tools)
+    "extract_bounds",
+    "intersect_bounds",
+    "resample_to_grid",
+    "namespace_to_dict",
+    "pixel_size_tag",
+    "compute_max_tile_pixels",
+    "looks_like_relative",
     # GPU utilities
     "is_gpu_available",
     "get_compute_backend",

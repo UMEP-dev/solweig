@@ -1,14 +1,9 @@
 """
 Golden Regression Tests for Wall Geometry Algorithms
 
-These tests verify that the pure numpy implementation of wall height and
-wall aspect calculations (without scipy) produces results consistent with
-the UMEP Python reference implementation (which uses scipy).
-
-The wall algorithms use image rotation to detect wall orientations from the DSM.
-Our `rotate_array` function replaces scipy.ndimage.rotate.
-
-Reference fixtures were generated using UMEP Python with scipy.
+These tests verify that the Rust wall-height / wall-aspect kernels
+produce results consistent with the UMEP Python reference implementation.
+Reference fixtures were generated using UMEP Python.
 """
 
 from pathlib import Path
@@ -179,56 +174,6 @@ class TestGoldenWallAspect:
                 f"Only {match_rate * 100:.1f}% of wall aspects match within "
                 f"{WALL_ASP_ATOL}° tolerance (expected >= 80%)"
             )
-
-
-class TestRotateArrayConsistency:
-    """Tests for the pure numpy rotate_array implementation."""
-
-    def test_rotate_90_degrees(self):
-        """90 degree rotation should transpose and flip."""
-        from solweig.physics.morphology import rotate_array
-
-        arr = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.float32)
-
-        result = rotate_array(arr, 90, order=0)
-        expected = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]], dtype=np.float32)
-
-        np.testing.assert_array_equal(result, expected)
-
-    def test_rotate_180_degrees(self):
-        """180 degree rotation should flip both axes."""
-        from solweig.physics.morphology import rotate_array
-
-        arr = np.array([[1, 2], [3, 4]], dtype=np.float32)
-
-        result = rotate_array(arr, 180, order=0)
-        expected = np.array([[4, 3], [2, 1]], dtype=np.float32)
-
-        np.testing.assert_array_equal(result, expected)
-
-    def test_rotate_360_degrees(self):
-        """360 degree rotation should return original."""
-        from solweig.physics.morphology import rotate_array
-
-        arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
-
-        result = rotate_array(arr, 360, order=0)
-
-        np.testing.assert_array_equal(result, arr)
-
-    def test_rotate_bilinear_smooth(self):
-        """Bilinear interpolation should produce smooth values."""
-        from solweig.physics.morphology import rotate_array
-
-        arr = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]], dtype=np.float32)
-
-        result = rotate_array(arr, 45, order=1)
-
-        # Center should still have high value
-        assert result[1, 1] > 0.5, "Center should retain most of the value"
-
-        # Should have some non-zero neighbors due to interpolation
-        assert np.any(result[result != result[1, 1]] > 0), "Interpolation should spread values"
 
 
 class TestBinaryDilationConsistency:

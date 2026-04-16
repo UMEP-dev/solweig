@@ -28,6 +28,26 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
+def format_solweig_error(prefix: str, error: Exception) -> str:
+    """Build a QgsProcessingException message that exposes the structured
+    attributes of a ``solweig.SolweigError`` subclass.
+
+    Core error types (``GridShapeMismatch``, ``InvalidSurfaceData``,
+    ``MissingPrecomputedData``, ``WeatherDataError``, ``ConfigurationError``)
+    carry extra fields (``field``, ``expected``, ``got``, ``what``,
+    ``suggestion``, ``parameter``, ``reason``) that carry the actionable
+    content the user needs to fix the input. The plain ``str(error)`` usually
+    covers them, but we also surface the error type name and any structured
+    attributes that are set, so the QGIS error dialog is useful on its own.
+    """
+    parts = [f"{prefix}: {type(error).__name__}: {error}"]
+    for attr in ("field", "expected", "got", "what", "suggestion", "parameter", "reason", "value"):
+        val = getattr(error, attr, None)
+        if val is not None and val != "":
+            parts.append(f"  {attr}: {val}")
+    return "\n".join(parts)
+
+
 class SolweigAlgorithmBase(QgsProcessingAlgorithm):
     """
     Base class for all SOLWEIG processing algorithms.

@@ -323,7 +323,7 @@ def _max_shadow_height(dsm: np.ndarray, cdsm: np.ndarray | None = None, use_veg:
     return height
 
 
-def _looks_like_relative(
+def looks_like_relative(
     layer: np.ndarray | None,
     reference: np.ndarray | None,
 ) -> bool:
@@ -597,13 +597,13 @@ class SurfaceData:
 
         # Validate before expensive SVF loading
         base_surface = dem if dem is not None else dsm_arr
-        if cdsm is not None and _looks_like_relative(cdsm, base_surface):
+        if cdsm is not None and looks_like_relative(cdsm, base_surface):
             raise ValueError(
                 "Loaded CDSM appears to contain relative heights (height above ground) "
                 "instead of absolute elevations.  The prepared surface may be corrupt — "
                 "re-run SurfaceData.prepare() with the correct cdsm_relative flag."
             )
-        if tdsm is not None and _looks_like_relative(tdsm, base_surface):
+        if tdsm is not None and looks_like_relative(tdsm, base_surface):
             raise ValueError(
                 "Loaded TDSM appears to contain relative heights (height above ground) "
                 "instead of absolute elevations.  The prepared surface may be corrupt — "
@@ -2883,7 +2883,7 @@ class SurfaceData:
         self._cache.clear()
         self._gvf_geometry_cache = None
 
-    def _looks_like_relative_heights(self) -> bool:
+    def looks_like_relative_heights(self) -> bool:
         """
         Heuristic check if CDSM appears to contain relative heights.
 
@@ -2917,7 +2917,7 @@ class SurfaceData:
         if self.cdsm is None:
             return
 
-        if self.cdsm_relative and not self._preprocessed and self._looks_like_relative_heights():
+        if self.cdsm_relative and not self._preprocessed and self.looks_like_relative_heights():
             logger.warning(
                 f"CDSM appears to contain relative vegetation heights "
                 f"(max CDSM={np.nanmax(self.cdsm):.1f}m < min DSM={np.nanmin(self.dsm):.1f}m), "

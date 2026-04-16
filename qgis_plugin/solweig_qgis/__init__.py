@@ -246,6 +246,13 @@ def _install_solweig() -> tuple[bool, str]:
     and sys.executable points to the QGIS binary, not a usable Python interpreter.
     See: https://github.com/qgis/QGIS/issues/45646
 
+    ``--no-deps`` is used because QGIS ships its own GDAL; pulling pip's
+    GDAL in as a transitive dep crashes QGIS. solweig's GDAL path only
+    needs numpy and osgeo (both bundled with QGIS), and the other pip-
+    declared deps (rasterio, pyproj, shapely, tqdm, pillow) are all
+    guarded behind branches that are never taken when
+    ``UMEP_USE_GDAL=1`` is set by the plugin.
+
     Returns:
         Tuple of (success, message).
     """
@@ -292,7 +299,7 @@ def check_dependencies() -> tuple[bool, str]:
             f"requires >= {_REQUIRED_SOLWEIG_VERSION}.\n\n"
             "To upgrade manually:\n\n"
             "  In OSGeo4W Shell (Windows) or Terminal (macOS/Linux):\n"
-            "  pip install --upgrade solweig\n\n"
+            "  pip install --upgrade --no-deps solweig\n\n"
             "After upgrading, restart QGIS."
         )
         return False, msg
@@ -304,7 +311,7 @@ def check_dependencies() -> tuple[bool, str]:
 To install SOLWEIG manually:
 
   In OSGeo4W Shell (Windows) or Terminal (macOS/Linux):
-  pip install solweig
+  pip install --no-deps solweig
 
 After installation, restart QGIS and re-enable the plugin.
 """
@@ -328,11 +335,11 @@ def _prompt_install():
                 f"SOLWEIG {_SOLWEIG_INSTALLED_VERSION} is installed but this plugin "
                 f"requires >= {_REQUIRED_SOLWEIG_VERSION}.\n\n"
                 "Would you like to upgrade now?\n\n"
-                "This will run:  pip install --upgrade solweig"
+                "This will run:  pip install --upgrade --no-deps solweig"
             )
             decline_msg = (
                 "SOLWEIG was not upgraded. You can upgrade manually:\n\n"
-                "  pip install --upgrade solweig\n\n"
+                "  pip install --upgrade --no-deps solweig\n\n"
                 "Then restart QGIS."
             )
         else:
@@ -340,10 +347,11 @@ def _prompt_install():
             prompt = (
                 "The SOLWEIG library is required but not installed.\n\n"
                 "Would you like to install it now?\n\n"
-                "This will run:  pip install solweig"
+                "This will run:  pip install --no-deps solweig"
             )
             decline_msg = (
-                "SOLWEIG was not installed. You can install it manually:\n\n  pip install solweig\n\nThen restart QGIS."
+                "SOLWEIG was not installed. You can install it manually:\n\n  "
+                "pip install --no-deps solweig\n\nThen restart QGIS."
             )
 
         reply = QMessageBox.question(

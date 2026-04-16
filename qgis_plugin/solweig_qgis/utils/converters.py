@@ -91,9 +91,9 @@ def _looks_like_relative_heights(
 
     Delegates to the canonical implementation in the core API.
     """
-    from solweig.models.surface import _looks_like_relative
+    from solweig import looks_like_relative
 
-    return _looks_like_relative(layer, reference_surface)
+    return looks_like_relative(layer, reference_surface)
 
 
 def _load_optional_raster(
@@ -121,7 +121,7 @@ def _align_layer(
     crs_wkt: str,
 ) -> NDArray[np.floating]:
     """Resample a raster to the target grid if extents or shape differ."""
-    from solweig.utils import extract_bounds, resample_to_grid
+    from solweig import extract_bounds, resample_to_grid
 
     # Expected target dimensions (same formula as resample_to_grid)
     expected_h = int(np.round((target_bbox[3] - target_bbox[1]) / pixel_size))
@@ -172,7 +172,7 @@ def create_surface_from_parameters(
     """
     try:
         import solweig
-        from solweig.utils import extract_bounds, intersect_bounds
+        from solweig import extract_bounds, intersect_bounds
     except ImportError as e:
         raise QgsProcessingException("SOLWEIG library not found. Please install solweig package.") from e
 
@@ -291,7 +291,7 @@ def create_surface_from_parameters(
     # Compute wall heights and aspects from DSM
     feedback.setProgressText("Computing wall heights...")
     feedback.pushInfo("Computing walls from DSM...")
-    from solweig.physics import wallalgorithms as wa
+    from solweig import wallalgorithms as wa
 
     walls = wa.findwalls(surface.dsm, 1.0)
     feedback.pushInfo("Computing wall aspects...")
@@ -528,7 +528,7 @@ def create_physics_from_parameters(
         SimpleNamespace with Tree_settings overridden by QGIS parameters.
     """
     try:
-        from solweig.loaders import load_physics
+        from solweig import load_physics
     except ImportError as e:
         raise QgsProcessingException("SOLWEIG library not found. Please install solweig package.") from e
 
@@ -567,7 +567,7 @@ def build_materials_from_lc_mapping(
         SimpleNamespace compatible with ``solweig.calculate(materials=...)``.
     """
     try:
-        from solweig.loaders import load_params
+        from solweig import load_params
     except ImportError as e:
         raise QgsProcessingException("SOLWEIG library not found. Please install solweig package.") from e
 

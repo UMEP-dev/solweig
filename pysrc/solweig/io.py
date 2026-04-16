@@ -606,38 +606,6 @@ def load_raster(
     return rast_arr, trf_arr, crs_wkt, no_data_val
 
 
-def xy_to_lnglat(crs_wkt: str | None, x, y):
-    """Convert x, y coordinates to longitude and latitude.
-
-    Accepts scalar or array-like x/y. If crs_wkt is None the inputs are
-    assumed already to be lon/lat and are returned unchanged.
-    """
-    if crs_wkt is None:
-        logger.info("No CRS provided, assuming coordinates are already in WGS84 (lon/lat).")
-        return x, y
-
-    try:
-        if GDAL_ENV is False:
-            source_crs = pyproj.CRS(crs_wkt)
-            target_crs = pyproj.CRS(4326)  # WGS84
-            transformer = pyproj.Transformer.from_crs(source_crs, target_crs, always_xy=True)
-            lng, lat = transformer.transform(x, y)
-        else:
-            old_cs = gdal.osr.SpatialReference()
-            old_cs.ImportFromWkt(crs_wkt)
-            new_cs = gdal.osr.SpatialReference()
-            new_cs.ImportFromEPSG(4326)
-            transform = gdal.osr.CoordinateTransformation(old_cs, new_cs)
-            out = transform.TransformPoint(float(x), float(y))
-            lng, lat = out[0], out[1]
-
-        return lng, lat
-
-    except Exception:
-        logger.exception("Failed to transform coordinates")
-        raise
-
-
 def create_empty_raster(
     path_str: str | Path,
     rows: int,

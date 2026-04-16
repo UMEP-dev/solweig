@@ -270,6 +270,10 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
                 min_object_height=min_object_height,
                 feedback=feedback,
             )
+        except solweig.SolweigError as e:
+            from ..base import format_solweig_error
+
+            raise QgsProcessingException(format_solweig_error("Surface preparation failed", e)) from e
         except Exception as e:
             raise QgsProcessingException(f"Surface preparation failed: {e}") from e
 
@@ -323,7 +327,7 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         feedback.pushInfo(f"Output pixel size: {pixel_size:.2f} m")
 
         if wall_limit != 1.0:
-            from solweig.physics import wallalgorithms as wa
+            from solweig import wallalgorithms as wa
 
             feedback.pushInfo(
                 f"Recomputing walls with custom minimum height {wall_limit:.1f} m "
@@ -365,7 +369,7 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         ts.Last_day_leaf = int(parameters.get("LEAF_END", 300))
 
         try:
-            from solweig.utils import namespace_to_dict
+            from solweig import namespace_to_dict
 
             params_path = os.path.join(output_dir, "parametersforsolweig.json")
             with open(params_path, "w") as f:

@@ -1007,7 +1007,7 @@ class TestPreprocessing:
         cdsm = np.ones((10, 10), dtype=np.float32) * 5.0
 
         surface = SurfaceData(dsm=dsm, cdsm=cdsm)
-        assert surface._looks_like_relative_heights() is True
+        assert surface.looks_like_relative_heights() is True
 
     def test_looks_like_relative_heights_false_absolute(self):
         """_looks_like_relative_heights returns False for absolute heights."""
@@ -1016,7 +1016,7 @@ class TestPreprocessing:
         cdsm = np.ones((10, 10), dtype=np.float32) * 105.0
 
         surface = SurfaceData(dsm=dsm, cdsm=cdsm)
-        assert surface._looks_like_relative_heights() is False
+        assert surface.looks_like_relative_heights() is False
 
     def test_looks_like_relative_heights_false_coastal(self):
         """_looks_like_relative_heights handles coastal areas near sea level."""
@@ -1027,7 +1027,7 @@ class TestPreprocessing:
 
         surface = SurfaceData(dsm=dsm, cdsm=cdsm)
         # At low elevations, heuristic is inconclusive - returns False to avoid false positives
-        assert surface._looks_like_relative_heights() is False
+        assert surface.looks_like_relative_heights() is False
 
     def test_preprocessing_warning_issued(self, caplog):
         """Warning is issued when CDSM looks relative but preprocess not called."""

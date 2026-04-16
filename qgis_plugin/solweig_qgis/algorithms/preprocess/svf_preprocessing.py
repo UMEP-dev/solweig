@@ -135,7 +135,7 @@ Calculation algorithm loads these automatically.
         start_time = time.time()
 
         # Import solweig
-        self.import_solweig()
+        solweig = self.import_solweig()
 
         # Load surface data from prepared directory
         feedback.setProgressText("Loading surface data...")
@@ -176,7 +176,7 @@ Calculation algorithm loads these automatically.
 
         from pathlib import Path
 
-        from solweig.models.surface import SurfaceData as SD
+        from solweig import SurfaceData as SD
 
         use_veg = cdsm is not None
         dsm_f32 = dsm.astype(np.float32)
@@ -197,7 +197,7 @@ Calculation algorithm loads these automatically.
         }
 
         rows, cols = dsm_f32.shape
-        from solweig.tiling import compute_max_tile_pixels
+        from solweig import compute_max_tile_pixels
 
         _max_px = compute_max_tile_pixels(context="svf")
         n_pixels = rows * cols
@@ -217,6 +217,10 @@ Calculation algorithm loads these automatically.
                 feedback=feedback,
                 progress_range=(20.0, 90.0),
             )
+        except solweig.SolweigError as e:
+            from ..base import format_solweig_error
+
+            raise QgsProcessingException(format_solweig_error("SVF computation failed", e)) from e
         except Exception as e:
             raise QgsProcessingException(f"SVF computation failed: {e}") from e
         if surface.svf is None:
@@ -234,7 +238,7 @@ Calculation algorithm loads these automatically.
         # SVF and shadow matrices are already saved by _compute_and_cache_svf
         # in svf/px{size}/.  No root-level copies needed — SurfaceData.load()
         # finds them via PrecomputedData.prepare() fallback logic.
-        from solweig.cache import pixel_size_tag
+        from solweig import pixel_size_tag
 
         cache_dir = Path(output_dir) / "svf" / pixel_size_tag(pixel_size)
         feedback.pushInfo(f"SVF cached in {cache_dir}")

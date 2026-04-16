@@ -486,7 +486,9 @@ GeoTIFF files organised into subfolders of the output directory:
             for warning in warnings:
                 feedback.reportError(f"Warning: {warning}", fatalError=False)
         except solweig.SolweigError as e:
-            raise QgsProcessingException(f"Validation failed: {e}") from e
+            from ..base import format_solweig_error
+
+            raise QgsProcessingException(format_solweig_error("Validation failed", e)) from e
 
         if feedback.isCanceled():
             return {}
@@ -537,6 +539,10 @@ GeoTIFF files organised into subfolders of the output directory:
             )
         except KeyboardInterrupt:
             feedback.pushInfo("Calculation cancelled by user.")
+        except solweig.SolweigError as e:
+            from ..base import format_solweig_error
+
+            raise QgsProcessingException(format_solweig_error("Calculation failed", e)) from e
         except Exception as e:
             raise QgsProcessingException(f"Calculation failed: {e}") from e
 

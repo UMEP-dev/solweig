@@ -20,11 +20,15 @@ use rayon::prelude::*;
 /// Supports order=0 (nearest neighbor) and order=1 (bilinear).
 /// Uses inverse mapping: for each output pixel, find the source coordinate.
 fn rotate_2d(arr: &Array2<f32>, angle_deg: f32, order: u8) -> Array2<f32> {
+    // Math is done in f64 to match scipy.ndimage.rotate's f64 accumulation
+    // precision. UMEP uses scipy, so aligning numerically requires the same
+    // precision budget. Input and output stay f32 (we don't contaminate the
+    // caller's data arrays — this promotion is strictly internal).
     let (rows, cols) = arr.dim();
-    let center_y = (rows as f32 - 1.0) / 2.0;
-    let center_x = (cols as f32 - 1.0) / 2.0;
+    let center_y = (rows as f64 - 1.0) / 2.0;
+    let center_x = (cols as f64 - 1.0) / 2.0;
 
-    let theta = angle_deg * std::f32::consts::PI / 180.0;
+    let theta = (angle_deg as f64) * std::f64::consts::PI / 180.0;
     let cos_t = theta.cos();
     let sin_t = theta.sin();
 
@@ -32,22 +36,25 @@ fn rotate_2d(arr: &Array2<f32>, angle_deg: f32, order: u8) -> Array2<f32> {
 
     for r in 0..rows {
         for c in 0..cols {
-            let xc = c as f32 - center_x;
-            let yc = r as f32 - center_y;
+            let xc = c as f64 - center_x;
+            let yc = r as f64 - center_y;
 
             // Inverse rotation to find source coordinates
             let src_x = cos_t * xc - sin_t * yc + center_x;
             let src_y = sin_t * xc + cos_t * yc + center_y;
 
             if order == 0 {
-                // Nearest neighbor
-                let sx = src_x.round() as i32;
-                let sy = src_y.round() as i32;
+                // Nearest neighbor — use banker's rounding (round ties to even) so
+                // that source-coordinate selection matches numpy's ``np.round``
+                // convention used by the UMEP reference. Rust's default ``round()``
+                // rounds half-away-from-zero, which flips tie decisions vs UMEP.
+                let sx = src_x.round_ties_even() as i32;
+                let sy = src_y.round_ties_even() as i32;
                 let sx = sx.clamp(0, cols as i32 - 1) as usize;
                 let sy = sy.clamp(0, rows as i32 - 1) as usize;
                 output[[r, c]] = arr[[sy, sx]];
             } else {
-                // Bilinear interpolation
+                // Bilinear interpolation in f64
                 let x0 = src_x.floor() as i32;
                 let y0 = src_y.floor() as i32;
                 let x1 = x0 + 1;
@@ -58,13 +65,14 @@ fn rotate_2d(arr: &Array2<f32>, angle_deg: f32, order: u8) -> Array2<f32> {
                 let y0c = y0.clamp(0, rows as i32 - 1) as usize;
                 let y1c = y1.clamp(0, rows as i32 - 1) as usize;
 
-                let wx = (src_x - x0 as f32).clamp(0.0, 1.0);
-                let wy = (src_y - y0 as f32).clamp(0.0, 1.0);
+                let wx = (src_x - x0 as f64).clamp(0.0, 1.0);
+                let wy = (src_y - y0 as f64).clamp(0.0, 1.0);
 
-                output[[r, c]] = arr[[y0c, x0c]] * (1.0 - wx) * (1.0 - wy)
-                    + arr[[y0c, x1c]] * wx * (1.0 - wy)
-                    + arr[[y1c, x0c]] * (1.0 - wx) * wy
-                    + arr[[y1c, x1c]] * wx * wy;
+                let v = arr[[y0c, x0c]] as f64 * (1.0 - wx) * (1.0 - wy)
+                    + arr[[y0c, x1c]] as f64 * wx * (1.0 - wy)
+                    + arr[[y1c, x0c]] as f64 * (1.0 - wx) * wy
+                    + arr[[y1c, x1c]] as f64 * wx * wy;
+                output[[r, c]] = v as f32;
             }
         }
     }
@@ -99,10 +107,15 @@ fn precompute_filters(
     (0..180)
         .map(|h| {
             let mut fm = rotate_2d(&filtmatrix, h as f32, 1); // bilinear
-            fm.mapv_inplace(|v| v.round());
+            // Banker's rounding (round ties to even) matches numpy's ``np.round``
+            // used by UMEP. Rust's default ``round()`` rounds half-away-from-zero,
+            // which at bilinear tie values (≈ 0.5) produces a different filter
+            // template and shifts the Goodwin "best h" search by ~90° at some
+            // wall pixels.
+            fm.mapv_inplace(|v| v.round_ties_even());
 
             let mut bf = rotate_2d(&buildfilt, h as f32, 0); // nearest
-            bf.mapv_inplace(|v| v.round());
+            bf.mapv_inplace(|v| v.round_ties_even());
 
             let index = 270.0 - h as f32;
 
@@ -203,7 +216,10 @@ pub(crate) fn compute_wall_aspect_pure(
                 }
             }
 
-            let mut best_sum = 0.0f32;
+            // Accumulators in f64 to match numpy's default f64 summation
+            // precision (UMEP uses ``np.sum`` under the hood). Filter and
+            // walls/dsm arrays stay f32 — only the summation runs in f64.
+            let mut best_sum = 0.0f64;
             let mut best_side = 0.0f32;
             let mut best_dir = 0.0f32;
 
@@ -211,11 +227,12 @@ pub(crate) fn compute_wall_aspect_pure(
                 let index = 270.0 - h as f32;
 
                 // Weighted sum of wall neighbors along the rotated filter line
-                let mut wallscut_sum = 0.0f32;
+                let mut wallscut_sum = 0.0f64;
                 for di in 0..filtersize {
                     for dj in 0..filtersize {
-                        wallscut_sum +=
-                            walls_ref[[i - half_floor + di, j - half_floor + dj]] * fm[[di, dj]];
+                        wallscut_sum += (walls_ref[[i - half_floor + di, j - half_floor + dj]]
+                            as f64)
+                            * (fm[[di, dj]] as f64);
                     }
                 }
 
@@ -223,11 +240,12 @@ pub(crate) fn compute_wall_aspect_pure(
                     best_sum = wallscut_sum;
 
                     // Determine which side of the wall is the building
-                    let mut sum_side1 = 0.0f32;
-                    let mut sum_side2 = 0.0f32;
+                    let mut sum_side1 = 0.0f64;
+                    let mut sum_side2 = 0.0f64;
                     for di in 0..filtersize {
                         for dj in 0..filtersize {
-                            let dsm_val = dsm_ref[[i - half_floor + di, j - half_floor + dj]];
+                            let dsm_val =
+                                dsm_ref[[i - half_floor + di, j - half_floor + dj]] as f64;
                             let bf_val = bf[[di, dj]];
                             if bf_val == 1.0 {
                                 sum_side1 += dsm_val;
@@ -303,30 +321,36 @@ pub(crate) fn compute_wall_aspect_pure(
 /// Compute DSM aspect (orientation of slope) using numpy.gradient equivalent.
 ///
 /// Returns aspect in radians matching the Python `get_ders` function.
+///
+/// Gradient and atan2 are computed in f64 to match numpy's default f64
+/// precision for ``np.gradient`` and ``np.arctan2`` (UMEP path). The input
+/// dsm view remains f32 and the returned aspect array is f32; promotion
+/// is strictly internal so caller-visible array memory is unchanged.
 fn compute_dsm_aspect(dsm: &ArrayView2<f32>, dx: f32) -> Array2<f32> {
     let (rows, cols) = dsm.dim();
-    let mut fy = Array2::<f32>::zeros((rows, cols));
-    let mut fx = Array2::<f32>::zeros((rows, cols));
+    let mut fy = Array2::<f64>::zeros((rows, cols));
+    let mut fx = Array2::<f64>::zeros((rows, cols));
+    let dx = dx as f64;
 
-    // Compute gradients (matching numpy.gradient behavior)
+    // Compute gradients (matching numpy.gradient behavior in f64)
     for i in 0..rows {
         for j in 0..cols {
             // fy: gradient along axis 0 (rows)
             fy[[i, j]] = if i == 0 {
-                (dsm[[1, j]] - dsm[[0, j]]) / dx
+                (dsm[[1, j]] as f64 - dsm[[0, j]] as f64) / dx
             } else if i == rows - 1 {
-                (dsm[[rows - 1, j]] - dsm[[rows - 2, j]]) / dx
+                (dsm[[rows - 1, j]] as f64 - dsm[[rows - 2, j]] as f64) / dx
             } else {
-                (dsm[[i + 1, j]] - dsm[[i - 1, j]]) / (2.0 * dx)
+                (dsm[[i + 1, j]] as f64 - dsm[[i - 1, j]] as f64) / (2.0 * dx)
             };
 
             // fx: gradient along axis 1 (cols)
             fx[[i, j]] = if j == 0 {
-                (dsm[[i, 1]] - dsm[[i, 0]]) / dx
+                (dsm[[i, 1]] as f64 - dsm[[i, 0]] as f64) / dx
             } else if j == cols - 1 {
-                (dsm[[i, cols - 1]] - dsm[[i, cols - 2]]) / dx
+                (dsm[[i, cols - 1]] as f64 - dsm[[i, cols - 2]] as f64) / dx
             } else {
-                (dsm[[i, j + 1]] - dsm[[i, j - 1]]) / (2.0 * dx)
+                (dsm[[i, j + 1]] as f64 - dsm[[i, j - 1]] as f64) / (2.0 * dx)
             };
         }
     }
@@ -341,9 +365,9 @@ fn compute_dsm_aspect(dsm: &ArrayView2<f32>, dx: f32) -> Array2<f32> {
             let mut theta = fy_val.atan2(fx_val);
             theta = -theta;
             if theta < 0.0 {
-                theta += 2.0 * std::f32::consts::PI;
+                theta += 2.0 * std::f64::consts::PI;
             }
-            *a = theta;
+            *a = theta as f32;
         });
 
     asp

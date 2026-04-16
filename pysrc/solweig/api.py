@@ -55,6 +55,7 @@ from .models import (
     TileSpec,
     Weather,
 )
+from .solweig_logging import get_logger
 from .summary import Timeseries, TimeseriesSummary
 from .tiling import (
     calculate_buffer_distance,
@@ -65,6 +66,8 @@ from .utils import dict_to_namespace, extract_bounds, intersect_bounds, namespac
 
 if TYPE_CHECKING:
     pass
+
+logger = get_logger(__name__)
 
 
 def validate_inputs(
@@ -205,7 +208,7 @@ def validate_inputs(
                         f"0-50m. If it contains absolute elevations, set {flag}=False."
                     )
 
-    if surface.cdsm is not None and not surface.cdsm_relative and surface._looks_like_relative_heights():
+    if surface.cdsm is not None and not surface.cdsm_relative and surface.looks_like_relative_heights():
         cdsm_max = float(np.nanmax(surface.cdsm))
         warnings.append(
             f"CDSM values (max={cdsm_max:.1f}m) are much smaller than DSM "
@@ -245,7 +248,6 @@ def _calculate_single(
     precomputed: PrecomputedData | None = None,
     use_anisotropic_sky: bool | None = None,
     conifer: bool = False,
-    poi_coords: list[tuple[int, int]] | None = None,
     state: ThermalState | None = None,
     physics: SimpleNamespace | None = None,
     materials: SimpleNamespace | None = None,
@@ -255,10 +257,6 @@ def _calculate_single(
     _requested_outputs: set[str] | None = None,
 ) -> SolweigResult:
     """Single-timestep Rust FFI call. Internal building block for calculate()."""
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     # Track whether anisotropic mode was explicitly requested by direct API arg.
     # Config/default fallbacks intentionally do not trigger strict precondition
     # failures because we cannot distinguish "config default" from a deliberate
@@ -321,10 +319,6 @@ def _calculate_single(
     # Compute derived weather values (sun position, radiation split)
     if not weather._derived_computed:
         weather.compute_derived(location)
-
-    # Note: poi_coords parameter exists but POI mode not yet implemented
-    if poi_coords is not None:
-        raise NotImplementedError("POI mode (point-of-interest calculation) is planned for Phase 4")
 
     # Fill NaN in surface layers (idempotent — skipped if already done)
     surface.fill_nan()

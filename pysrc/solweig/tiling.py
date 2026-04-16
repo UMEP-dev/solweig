@@ -17,6 +17,7 @@ import os
 
 import numpy as np
 
+from .constants import MIN_SUN_ELEVATION_DEG
 from .models import PrecomputedData, SurfaceData, TileSpec
 from .solweig_logging import get_logger
 
@@ -29,7 +30,6 @@ logger = get_logger(__name__)
 
 MIN_TILE_SIZE = 256  # Minimum tile size in pixels
 _FALLBACK_MAX_TILE_SIZE = 2500  # Used when GPU + RAM detection both fail
-MIN_SUN_ELEVATION_DEG = 3.0  # Minimum sun elevation for shadow calculations
 MAX_BUFFER_M = 1000.0  # Default maximum buffer / shadow distance in meters
 
 # Backward-compat alias (imported by tests)
