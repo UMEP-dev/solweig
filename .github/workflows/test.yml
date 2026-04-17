@@ -157,6 +157,7 @@ jobs:
           tests/validation/test_validation_kronenhuset.py
           tests/validation/test_validation_gustav_adolfs.py
           tests/validation/test_validation_gvc.py
+          tests/validation/test_timeseries_plots.py
           -v --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}
