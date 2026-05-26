@@ -197,7 +197,7 @@ Calculation algorithm loads these automatically.
         }
 
         rows, cols = dsm_f32.shape
-        from solweig import compute_max_tile_pixels
+        from solweig.geospatial import compute_max_tile_pixels
 
         _max_px = compute_max_tile_pixels(context="svf")
         n_pixels = rows * cols
@@ -238,7 +238,7 @@ Calculation algorithm loads these automatically.
         # SVF and shadow matrices are already saved by _compute_and_cache_svf
         # in svf/px{size}/.  No root-level copies needed — SurfaceData.load()
         # finds them via PrecomputedData.prepare() fallback logic.
-        from solweig import pixel_size_tag
+        from solweig.geospatial import pixel_size_tag
 
         cache_dir = Path(output_dir) / "svf" / pixel_size_tag(pixel_size)
         feedback.pushInfo(f"SVF cached in {cache_dir}")

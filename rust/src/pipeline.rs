@@ -6,7 +6,7 @@
 //! Supports both isotropic and anisotropic (Perez) sky models.
 
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayView3, Zip};
-use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2, PyReadonlyArray3};
+use numpy::{IntoPyArray, PyArray2, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, VecDeque};
@@ -595,7 +595,9 @@ fn asvf_for_svf_cached(svf: ArrayView2<f32>) -> Arc<Vec<f32>> {
     static CACHE: OnceLock<Mutex<AsvfCache>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(AsvfCache::default()));
 
-    let mut guard = cache.lock().expect("ASVF cache mutex poisoned");
+    // Recover from poisoning: cached Arc<Vec<f32>> entries are immutable, so the
+    // inner data is safe to keep reading after a panic in some other thread.
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(hit) = guard.map.get(&key).cloned() {
         if let Some(pos) = guard.lru.iter().position(|k| *k == key) {
             guard.lru.remove(pos);
@@ -710,7 +712,8 @@ fn patch_lut_for_option_cached(patch_option: i32) -> Arc<PatchOptionLut> {
     static CACHE: OnceLock<Mutex<HashMap<i32, Arc<PatchOptionLut>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
-    let mut guard = cache.lock().expect("patch LUT cache mutex poisoned");
+    // Recover from poisoning: cached Arc<PatchOptionLut> entries are immutable.
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard
         .entry(patch_option)
         .or_insert_with(|| {
@@ -855,6 +858,156 @@ pub fn precompute_gvf_cache(
     Ok(PyGvfGeometryCache { inner: cache })
 }
 
+// ── SVF bundle ──────────────────────────────────────────────────────────────
+
+/// Bundle of the 17 SVF / SVF-veg / SVF-aveg / svfbuveg / svfalfa rasters.
+///
+/// SVF arrays are constant across all timesteps for a given surface, so the
+/// bundle is constructed once and reused. Bundling them into one Python
+/// object replaces 17 positional arguments to `compute_timestep` and makes
+/// the FFI signature easier to extend with future SVF variants (a new
+/// directional component becomes one extra field in one place, not a new
+/// positional argument touching five Python and Rust call sites).
+#[pyclass]
+pub struct SvfBundle {
+    svf: Py<numpy::PyArray2<f32>>,
+    svf_n: Py<numpy::PyArray2<f32>>,
+    svf_e: Py<numpy::PyArray2<f32>>,
+    svf_s: Py<numpy::PyArray2<f32>>,
+    svf_w: Py<numpy::PyArray2<f32>>,
+    svf_veg: Py<numpy::PyArray2<f32>>,
+    svf_veg_n: Py<numpy::PyArray2<f32>>,
+    svf_veg_e: Py<numpy::PyArray2<f32>>,
+    svf_veg_s: Py<numpy::PyArray2<f32>>,
+    svf_veg_w: Py<numpy::PyArray2<f32>>,
+    svf_aveg: Py<numpy::PyArray2<f32>>,
+    svf_aveg_n: Py<numpy::PyArray2<f32>>,
+    svf_aveg_e: Py<numpy::PyArray2<f32>>,
+    svf_aveg_s: Py<numpy::PyArray2<f32>>,
+    svf_aveg_w: Py<numpy::PyArray2<f32>>,
+    svfbuveg: Py<numpy::PyArray2<f32>>,
+    svfalfa: Py<numpy::PyArray2<f32>>,
+}
+
+#[pymethods]
+impl SvfBundle {
+    #[new]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        svf: Py<numpy::PyArray2<f32>>,
+        svf_n: Py<numpy::PyArray2<f32>>,
+        svf_e: Py<numpy::PyArray2<f32>>,
+        svf_s: Py<numpy::PyArray2<f32>>,
+        svf_w: Py<numpy::PyArray2<f32>>,
+        svf_veg: Py<numpy::PyArray2<f32>>,
+        svf_veg_n: Py<numpy::PyArray2<f32>>,
+        svf_veg_e: Py<numpy::PyArray2<f32>>,
+        svf_veg_s: Py<numpy::PyArray2<f32>>,
+        svf_veg_w: Py<numpy::PyArray2<f32>>,
+        svf_aveg: Py<numpy::PyArray2<f32>>,
+        svf_aveg_n: Py<numpy::PyArray2<f32>>,
+        svf_aveg_e: Py<numpy::PyArray2<f32>>,
+        svf_aveg_s: Py<numpy::PyArray2<f32>>,
+        svf_aveg_w: Py<numpy::PyArray2<f32>>,
+        svfbuveg: Py<numpy::PyArray2<f32>>,
+        svfalfa: Py<numpy::PyArray2<f32>>,
+    ) -> Self {
+        Self {
+            svf,
+            svf_n,
+            svf_e,
+            svf_s,
+            svf_w,
+            svf_veg,
+            svf_veg_n,
+            svf_veg_e,
+            svf_veg_s,
+            svf_veg_w,
+            svf_aveg,
+            svf_aveg_n,
+            svf_aveg_e,
+            svf_aveg_s,
+            svf_aveg_w,
+            svfbuveg,
+            svfalfa,
+        }
+    }
+}
+
+// ── State bundle ────────────────────────────────────────────────────────────
+
+/// FFI version constant for the StateBundle protocol.
+///
+/// Increment when the bundle's field layout changes in a way that breaks
+/// callers compiled against an older Rust extension. Python side asserts
+/// match before constructing the bundle (see
+/// `pysrc/solweig/models/state.py::ThermalState.STATE_BUNDLE_VERSION`).
+pub const STATE_BUNDLE_VERSION: u32 = 1;
+
+/// Thermal state carried forward across timesteps.
+///
+/// Combines the 6 thermal arrays (tgmap1 + cardinal directions, tgout1)
+/// and 3 scalars (firstdaytime, timeadd, timestep_dec) that previously
+/// crossed the FFI as separate positional arguments. The bundle also
+/// carries a `version: u32` field — the Python side fails fast on
+/// mismatch instead of silently mis-mapping fields.
+#[pyclass]
+pub struct StateBundle {
+    version: u32,
+    firstdaytime: i32,
+    timeadd: f32,
+    timestep_dec: f32,
+    tgmap1: Py<numpy::PyArray2<f32>>,
+    tgmap1_e: Py<numpy::PyArray2<f32>>,
+    tgmap1_s: Py<numpy::PyArray2<f32>>,
+    tgmap1_w: Py<numpy::PyArray2<f32>>,
+    tgmap1_n: Py<numpy::PyArray2<f32>>,
+    tgout1: Py<numpy::PyArray2<f32>>,
+}
+
+#[pymethods]
+impl StateBundle {
+    #[new]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        version: u32,
+        firstdaytime: i32,
+        timeadd: f32,
+        timestep_dec: f32,
+        tgmap1: Py<numpy::PyArray2<f32>>,
+        tgmap1_e: Py<numpy::PyArray2<f32>>,
+        tgmap1_s: Py<numpy::PyArray2<f32>>,
+        tgmap1_w: Py<numpy::PyArray2<f32>>,
+        tgmap1_n: Py<numpy::PyArray2<f32>>,
+        tgout1: Py<numpy::PyArray2<f32>>,
+    ) -> PyResult<Self> {
+        if version != STATE_BUNDLE_VERSION {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "StateBundle version mismatch: Python sent {version}, Rust expects {STATE_BUNDLE_VERSION}. \
+                 Rebuild the Rust extension (`maturin develop --release`)."
+            )));
+        }
+        Ok(Self {
+            version,
+            firstdaytime,
+            timeadd,
+            timestep_dec,
+            tgmap1,
+            tgmap1_e,
+            tgmap1_s,
+            tgmap1_w,
+            tgmap1_n,
+            tgout1,
+        })
+    }
+
+    /// Expose the version for debugging / tests.
+    #[getter]
+    fn version(&self) -> u32 {
+        self.version
+    }
+}
+
 // ── Main fused timestep function ───────────────────────────────────────────
 
 /// Compute a single daytime timestep entirely in Rust.
@@ -885,24 +1038,9 @@ pub fn compute_timestep(
     bush: Option<PyReadonlyArray2<f32>>,
     wall_ht: Option<PyReadonlyArray2<f32>>,
     wall_asp: Option<PyReadonlyArray2<f32>>,
-    // SVF arrays (constant across timesteps, borrowed)
-    svf: PyReadonlyArray2<f32>,
-    svf_n: PyReadonlyArray2<f32>,
-    svf_e: PyReadonlyArray2<f32>,
-    svf_s: PyReadonlyArray2<f32>,
-    svf_w: PyReadonlyArray2<f32>,
-    svf_veg: PyReadonlyArray2<f32>,
-    svf_veg_n: PyReadonlyArray2<f32>,
-    svf_veg_e: PyReadonlyArray2<f32>,
-    svf_veg_s: PyReadonlyArray2<f32>,
-    svf_veg_w: PyReadonlyArray2<f32>,
-    svf_aveg: PyReadonlyArray2<f32>,
-    svf_aveg_n: PyReadonlyArray2<f32>,
-    svf_aveg_e: PyReadonlyArray2<f32>,
-    svf_aveg_s: PyReadonlyArray2<f32>,
-    svf_aveg_w: PyReadonlyArray2<f32>,
-    svfbuveg: PyReadonlyArray2<f32>,
-    svfalfa: PyReadonlyArray2<f32>,
+    // SVF arrays (constant across timesteps; 17 rasters bundled into one
+    // pyclass to keep the FFI surface manageable).
+    svf_bundle: &SvfBundle,
     // Land cover property grids (constant across timesteps, borrowed)
     alb_grid: PyReadonlyArray2<f32>,
     emis_grid: PyReadonlyArray2<f32>,
@@ -916,16 +1054,8 @@ pub fn compute_timestep(
     shmat: Option<PyReadonlyArray3<u8>>,
     vegshmat: Option<PyReadonlyArray3<u8>>,
     vbshmat: Option<PyReadonlyArray3<u8>>,
-    // Thermal state (mutable, updated each timestep)
-    firstdaytime: i32,
-    timeadd: f32,
-    timestep_dec: f32,
-    tgmap1: PyReadonlyArray2<f32>,
-    tgmap1_e: PyReadonlyArray2<f32>,
-    tgmap1_s: PyReadonlyArray2<f32>,
-    tgmap1_w: PyReadonlyArray2<f32>,
-    tgmap1_n: PyReadonlyArray2<f32>,
-    tgout1: PyReadonlyArray2<f32>,
+    // Thermal state (6 arrays + 3 scalars + version) bundled into one pyclass.
+    state_bundle: &StateBundle,
     // Valid pixel mask (1=valid, 0=NaN/nodata — skip computation for invalid pixels)
     valid_mask: PyReadonlyArray2<u8>,
     // Optional output selection bitmask for Python conversion (tmrt always returned)
@@ -939,23 +1069,43 @@ pub fn compute_timestep(
     let bush_v = bush.as_ref().map(|a| a.as_array());
     let wall_ht_v = wall_ht.as_ref().map(|a| a.as_array());
     let wall_asp_v = wall_asp.as_ref().map(|a| a.as_array());
-    let svf_v = svf.as_array();
-    let svf_n_v = svf_n.as_array();
-    let svf_e_v = svf_e.as_array();
-    let svf_s_v = svf_s.as_array();
-    let svf_w_v = svf_w.as_array();
-    let svf_veg_v = svf_veg.as_array();
-    let svf_veg_n_v = svf_veg_n.as_array();
-    let svf_veg_e_v = svf_veg_e.as_array();
-    let svf_veg_s_v = svf_veg_s.as_array();
-    let svf_veg_w_v = svf_veg_w.as_array();
-    let svf_aveg_v = svf_aveg.as_array();
-    let svf_aveg_n_v = svf_aveg_n.as_array();
-    let svf_aveg_e_v = svf_aveg_e.as_array();
-    let svf_aveg_s_v = svf_aveg_s.as_array();
-    let svf_aveg_w_v = svf_aveg_w.as_array();
-    let svfbuveg_v = svfbuveg.as_array();
-    let svfalfa_v = svfalfa.as_array();
+    // Bind each SVF raster from the bundle. The PyReadonlyArray2 bindings
+    // (svf_ro etc.) must outlive the ArrayView2s (svf_v etc.); both are
+    // declared at this scope so they live for the whole function body.
+    let svf_ro = svf_bundle.svf.bind(py).readonly();
+    let svf_n_ro = svf_bundle.svf_n.bind(py).readonly();
+    let svf_e_ro = svf_bundle.svf_e.bind(py).readonly();
+    let svf_s_ro = svf_bundle.svf_s.bind(py).readonly();
+    let svf_w_ro = svf_bundle.svf_w.bind(py).readonly();
+    let svf_veg_ro = svf_bundle.svf_veg.bind(py).readonly();
+    let svf_veg_n_ro = svf_bundle.svf_veg_n.bind(py).readonly();
+    let svf_veg_e_ro = svf_bundle.svf_veg_e.bind(py).readonly();
+    let svf_veg_s_ro = svf_bundle.svf_veg_s.bind(py).readonly();
+    let svf_veg_w_ro = svf_bundle.svf_veg_w.bind(py).readonly();
+    let svf_aveg_ro = svf_bundle.svf_aveg.bind(py).readonly();
+    let svf_aveg_n_ro = svf_bundle.svf_aveg_n.bind(py).readonly();
+    let svf_aveg_e_ro = svf_bundle.svf_aveg_e.bind(py).readonly();
+    let svf_aveg_s_ro = svf_bundle.svf_aveg_s.bind(py).readonly();
+    let svf_aveg_w_ro = svf_bundle.svf_aveg_w.bind(py).readonly();
+    let svfbuveg_ro = svf_bundle.svfbuveg.bind(py).readonly();
+    let svfalfa_ro = svf_bundle.svfalfa.bind(py).readonly();
+    let svf_v = svf_ro.as_array();
+    let svf_n_v = svf_n_ro.as_array();
+    let svf_e_v = svf_e_ro.as_array();
+    let svf_s_v = svf_s_ro.as_array();
+    let svf_w_v = svf_w_ro.as_array();
+    let svf_veg_v = svf_veg_ro.as_array();
+    let svf_veg_n_v = svf_veg_n_ro.as_array();
+    let svf_veg_e_v = svf_veg_e_ro.as_array();
+    let svf_veg_s_v = svf_veg_s_ro.as_array();
+    let svf_veg_w_v = svf_veg_w_ro.as_array();
+    let svf_aveg_v = svf_aveg_ro.as_array();
+    let svf_aveg_n_v = svf_aveg_n_ro.as_array();
+    let svf_aveg_e_v = svf_aveg_e_ro.as_array();
+    let svf_aveg_s_v = svf_aveg_s_ro.as_array();
+    let svf_aveg_w_v = svf_aveg_w_ro.as_array();
+    let svfbuveg_v = svfbuveg_ro.as_array();
+    let svfalfa_v = svfalfa_ro.as_array();
     let alb_grid_v = alb_grid.as_array();
     let emis_grid_v = emis_grid.as_array();
     let tgk_grid_v = tgk_grid.as_array();
@@ -963,12 +1113,23 @@ pub fn compute_timestep(
     let tmaxlst_grid_v = tmaxlst_grid.as_array();
     let buildings_v = buildings.as_array();
     let lc_grid_v = lc_grid.as_ref().map(|a| a.as_array());
-    let tgmap1_v = tgmap1.as_array();
-    let tgmap1_e_v = tgmap1_e.as_array();
-    let tgmap1_s_v = tgmap1_s.as_array();
-    let tgmap1_w_v = tgmap1_w.as_array();
-    let tgmap1_n_v = tgmap1_n.as_array();
-    let tgout1_v = tgout1.as_array();
+    // Bind thermal state arrays from the bundle. Same lifetime pattern as the
+    // SvfBundle: the *_ro binders outlive the *_v ArrayView2s.
+    let tgmap1_ro = state_bundle.tgmap1.bind(py).readonly();
+    let tgmap1_e_ro = state_bundle.tgmap1_e.bind(py).readonly();
+    let tgmap1_s_ro = state_bundle.tgmap1_s.bind(py).readonly();
+    let tgmap1_w_ro = state_bundle.tgmap1_w.bind(py).readonly();
+    let tgmap1_n_ro = state_bundle.tgmap1_n.bind(py).readonly();
+    let tgout1_ro = state_bundle.tgout1.bind(py).readonly();
+    let tgmap1_v = tgmap1_ro.as_array();
+    let tgmap1_e_v = tgmap1_e_ro.as_array();
+    let tgmap1_s_v = tgmap1_s_ro.as_array();
+    let tgmap1_w_v = tgmap1_w_ro.as_array();
+    let tgmap1_n_v = tgmap1_n_ro.as_array();
+    let tgout1_v = tgout1_ro.as_array();
+    let firstdaytime = state_bundle.firstdaytime;
+    let timeadd = state_bundle.timeadd;
+    let timestep_dec = state_bundle.timestep_dec;
 
     // Borrow anisotropic arrays (if provided)
     let shmat_v = shmat.as_ref().map(|a| a.as_array());
@@ -985,6 +1146,26 @@ pub fn compute_timestep(
         return Err(pyo3::exceptions::PyValueError::new_err(
             "config.has_walls=true requires both wall_ht and wall_asp inputs",
         ));
+    }
+
+    // Validate anisotropic shadow-matrix dimensions match the DSM grid before
+    // indexing them. Without this check a mis-sized array silently reads OOB
+    // garbage (or aborts via wgpu) inside the hot loop.
+    let dsm_shape = dsm_v.dim();
+    for (name, opt) in [
+        ("shmat", shmat_v.as_ref()),
+        ("vegshmat", vegshmat_v.as_ref()),
+        ("vbshmat", vbshmat_v.as_ref()),
+    ] {
+        if let Some(arr) = opt {
+            let (rows, cols, _) = arr.dim();
+            if (rows, cols) != dsm_shape {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "{name} dim ({}, {}, _) does not match DSM dim {:?}",
+                    rows, cols, dsm_shape
+                )));
+            }
+        }
     }
     // Extract GVF cache reference (pure Rust data) before releasing the GIL
     let gvf_cache_inner = gvf_cache.map(|c| &c.inner);
@@ -1173,8 +1354,12 @@ pub fn compute_timestep(
                         lc_grid_v.is_some(),
                     )
                 } else {
-                    // Full GVF (first timestep or no cache)
-                    let wh = wall_ht_v.unwrap();
+                    // Full GVF (first timestep or no cache).
+                    // wall_ht_v and wall_asp_v are guaranteed Some here: this
+                    // branch is gated by config.has_walls=true, which we
+                    // validate at function entry (line ~990) rejecting calls
+                    // without both arrays.
+                    let wh = wall_ht_v.expect("wall_ht: gated by config.has_walls=true");
                     gvf_calc_pure(
                         wallsun.view(),
                         wh,
@@ -1183,7 +1368,7 @@ pub fn compute_timestep(
                         shadow_f32.view(),
                         first,
                         second,
-                        wall_asp_v.unwrap(),
+                        wall_asp_v.expect("wall_asp: gated by config.has_walls=true"),
                         ground.tg.view(),
                         ground.tg_wall,
                         weather.ta,
@@ -1356,9 +1541,11 @@ pub fn compute_timestep(
             let (kup, kdown, ldown, kside_dirs_sum, lside_dirs_sum, kside_total, lside_total) =
                 if use_aniso {
                     // === Anisotropic sky ===
-                    let shmat_a = shmat_v.unwrap();
-                    let vegshmat_a = vegshmat_v.unwrap();
-                    let vbshmat_a = vbshmat_v.unwrap();
+                    // The three shadow matrices are guaranteed Some by use_aniso
+                    // (lines just above check .is_some() on all three).
+                    let shmat_a = shmat_v.expect("shmat: gated by use_aniso");
+                    let vegshmat_a = vegshmat_v.expect("vegshmat: gated by use_aniso");
+                    let vbshmat_a = vbshmat_v.expect("vbshmat: gated by use_aniso");
 
                     // Perez sky luminance distribution (computed in Rust — no Python round-trip)
                     let lv_arr = crate::perez::perez_v3(
@@ -1377,9 +1564,19 @@ pub fn compute_timestep(
                         ArrayView1::from(patch_lut.altitude_sin.as_slice());
 
                     // ASVF from SVF (arccos(sqrt(clip(svf, 0, 1)))) cached by SVF buffer.
+                    // The cache key already includes (nrows, ncols, hash), so the cached
+                    // buffer length equals shape.0 * shape.1 by construction. The expect
+                    // is kept as a defensive guard with a precise diagnostic.
                     let asvf_cache = asvf_for_svf_cached(svf_v);
-                    let asvf_arr = ArrayView2::from_shape(shape, asvf_cache.as_slice())
-                        .expect("ASVF cache shape mismatch");
+                    let asvf_arr =
+                        ArrayView2::from_shape(shape, asvf_cache.as_slice()).unwrap_or_else(|e| {
+                            panic!(
+                                "ASVF cache shape mismatch: requested {:?}, buffer len {} ({})",
+                                shape,
+                                asvf_cache.len(),
+                                e
+                            )
+                        });
 
                     // Esky anisotropic (Jonsson + CI correction)
                     let esky_a = {

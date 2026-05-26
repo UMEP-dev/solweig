@@ -1875,9 +1875,17 @@ impl ShadowGpuContext {
             && buffers.shadow_u8_n_pack == n_pack;
 
         if svf_buffers_reusable {
-            // Buffers exist with matching config — just clear data and bitpack buffers
-            let svf_data_buf = buffers.svf_data_buffer.as_ref().unwrap();
-            let shadow_u8_out = buffers.shadow_u8_output_buffer.as_ref().unwrap();
+            // Buffers exist with matching config — just clear data and bitpack buffers.
+            // svf_buffers_reusable was true above, which requires svf_data_buffer.is_some();
+            // shadow_u8_output_buffer is co-allocated with it (see buffer init path).
+            let svf_data_buf = buffers
+                .svf_data_buffer
+                .as_ref()
+                .expect("svf_data_buf: gated by svf_buffers_reusable");
+            let shadow_u8_out = buffers
+                .shadow_u8_output_buffer
+                .as_ref()
+                .expect("shadow_u8_out: co-allocated with svf_data_buf");
             let mut encoder = self
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {

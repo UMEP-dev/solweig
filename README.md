@@ -366,6 +366,13 @@ SOLWEIG is validated against field radiation measurements from three sites in Go
 
 Anisotropic sky mode, matched daytime observation hours. Full details, radiation budget comparisons, and version history: **[Validation Report](VALIDATION.md)**.
 
+> **Known systematic bias:** modelled downwelling longwave (L↓) is consistently
+> ~+18 to +55 W/m² above observations across all sites. This is a formulation
+> issue inherited from UMEP (Jonsson et al. 2006 — non-sky hemisphere filled
+> with wall emissions at air temperature, while real shaded walls are cooler)
+> and is not run- or sun-position-dependent. See
+> [VALIDATION.md § Ldown overestimation](VALIDATION.md#ldown-overestimation).
+
 ---
 
 ## Citation

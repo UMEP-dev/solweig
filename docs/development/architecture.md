@@ -94,6 +94,27 @@ This eliminates intermediate numpy allocations and FFI round-trips between
 Python and Rust. The pipeline accepts all inputs and returns the
 complete result.
 
+### FFI argument bundling
+
+The 17 SVF rasters and 9 thermal-state fields are grouped into PyO3
+classes (`pipeline.SvfBundle`, `pipeline.StateBundle`) so the
+`compute_timestep` signature stays at ~18 positional arguments instead
+of the 43 it would otherwise need. `StateBundle` also carries an
+explicit **FFI version field** (`pipeline.STATE_BUNDLE_VERSION`); the
+constructor raises ``ValueError`` on version mismatch so a stale
+Python/Rust pairing fails loudly instead of silently mis-mapping
+fields.
+
+When adding a new per-pixel field that needs to cross the FFI:
+
+- If it joins an existing bundle, add it to that bundle's struct in
+  `rust/src/pipeline.rs` and to the corresponding constructor call in
+  `pysrc/solweig/computation.py`. Increment the bundle's version
+  constant. Golden tests must still pass byte-identical.
+- If it doesn't fit an existing bundle, prefer creating a new bundle
+  over adding a top-level positional argument — see the existing
+  `SvfBundle` / `StateBundle` definitions as templates.
+
 **Python helpers** called by the orchestration layer (Layer 2):
 
 | Module | Function | Purpose |

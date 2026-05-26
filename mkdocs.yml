@@ -94,12 +94,17 @@ nav:
       - Core Functions: api/functions.md
       - Data Classes: api/dataclasses.md
       - I/O Functions: api/io.md
+      - Geospatial Helpers: api/geospatial.md
       - Errors: api/errors.md
   - Physics:
       - Overview: physics/index.md
   - Development:
       - Contributing: development/contributing.md
       - Architecture: development/architecture.md
+      - Principles: development/principles.md
+      - Invariants: development/invariants.md
+  - About:
+      - Release notes: about/changelog.md
 
 extra:
   social:

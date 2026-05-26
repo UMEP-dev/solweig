@@ -110,38 +110,41 @@ def validate_inputs(
             print(f"Missing data: {e}")
     """
     warnings = []
-    dsm_shape = surface.dsm.shape
+    geom = surface.geometry
+    optical = surface.optical
+    aux = surface.auxiliary
+    dsm_shape = geom.shape
 
     # Check grid shapes match DSM
     grids_to_check = [
-        ("cdsm", surface.cdsm),
-        ("dem", surface.dem),
-        ("tdsm", surface.tdsm),
-        ("wall_height", surface.wall_height),
-        ("wall_aspect", surface.wall_aspect),
-        ("land_cover", surface.land_cover),
-        ("albedo", surface.albedo),
-        ("emissivity", surface.emissivity),
+        ("cdsm", geom.cdsm),
+        ("dem", geom.dem),
+        ("tdsm", geom.tdsm),
+        ("wall_height", aux.wall_height),
+        ("wall_aspect", aux.wall_aspect),
+        ("land_cover", optical.land_cover),
+        ("albedo", optical.albedo),
+        ("emissivity", optical.emissivity),
     ]
     for name, grid in grids_to_check:
         if grid is not None and grid.shape != dsm_shape:
             raise GridShapeMismatch(name, dsm_shape, grid.shape)
 
     # Check SVF arrays if present
-    if surface.svf is not None:
+    if aux.svf is not None:
         svf_grids = [
-            ("svf.svf", surface.svf.svf),
-            ("svf.svf_north", surface.svf.svf_north),
-            ("svf.svf_east", surface.svf.svf_east),
-            ("svf.svf_south", surface.svf.svf_south),
-            ("svf.svf_west", surface.svf.svf_west),
+            ("svf.svf", aux.svf.svf),
+            ("svf.svf_north", aux.svf.svf_north),
+            ("svf.svf_east", aux.svf.svf_east),
+            ("svf.svf_south", aux.svf.svf_south),
+            ("svf.svf_west", aux.svf.svf_west),
         ]
         for name, grid in svf_grids:
             if grid is not None and grid.shape != dsm_shape:
                 raise GridShapeMismatch(name, dsm_shape, grid.shape)
 
     # Check SVF is available (required for all calculations)
-    if surface.svf is None and (precomputed is None or precomputed.svf is None):
+    if not aux.has_svf and (precomputed is None or precomputed.svf is None):
         raise MissingPrecomputedData(
             "Sky View Factor (SVF) data is required but not available.",
             "Call surface.compute_svf() before calculate(), or use SurfaceData.prepare() "
@@ -151,7 +154,7 @@ def validate_inputs(
     # Check anisotropic sky requirements
     if use_anisotropic_sky:
         has_shadow_matrices = (precomputed is not None and precomputed.shadow_matrices is not None) or (
-            surface.shadow_matrices is not None
+            aux.shadow_matrices is not None
         )
         if not has_shadow_matrices:
             raise MissingPrecomputedData(
@@ -161,20 +164,20 @@ def validate_inputs(
             )
 
     # Check for potential issues (warnings, not errors)
-    if surface.cdsm is not None and not surface._preprocessed and surface.cdsm_relative:
+    if geom.cdsm is not None and not surface._preprocessed and geom.cdsm_relative:
         warnings.append(
             "CDSM provided with cdsm_relative=True but preprocess() not called. "
             "Vegetation heights may be incorrect. Call surface.preprocess() first."
         )
-    if surface.tdsm is not None and not surface._preprocessed and surface.tdsm_relative:
+    if geom.tdsm is not None and not surface._preprocessed and geom.tdsm_relative:
         warnings.append(
             "TDSM provided with tdsm_relative=True but preprocess() not called. "
             "Trunk heights may be incorrect. Call surface.preprocess() first."
         )
 
     # DSM height sanity checks
-    dsm_max = float(np.nanmax(surface.dsm))
-    dsm_min = float(np.nanmin(surface.dsm))
+    dsm_max = float(np.nanmax(geom.dsm))
+    dsm_min = float(np.nanmin(geom.dsm))
     height_range = dsm_max - dsm_min
 
     if height_range > 500:
@@ -184,7 +187,7 @@ def validate_inputs(
             "relief; consider increasing max_shadow_distance_m for wide valleys."
         )
 
-    if surface.dem is None and dsm_min > 100:
+    if geom.dem is None and dsm_min > 100:
         warnings.append(
             f"DSM minimum value is {dsm_min:.0f}m with no DEM provided. "
             "If this is above-sea-level elevation, provide a DEM so SOLWEIG can "
@@ -193,8 +196,8 @@ def validate_inputs(
 
     # Per-layer relative height mismatch detection
     for grid_name, grid, is_relative in [
-        ("CDSM", surface.cdsm, surface.cdsm_relative),
-        ("TDSM", surface.tdsm, surface.tdsm_relative),
+        ("CDSM", geom.cdsm, geom.cdsm_relative),
+        ("TDSM", geom.tdsm, geom.tdsm_relative),
     ]:
         if grid is not None and is_relative:
             nonzero = grid[grid > 0]
@@ -208,8 +211,8 @@ def validate_inputs(
                         f"0-50m. If it contains absolute elevations, set {flag}=False."
                     )
 
-    if surface.cdsm is not None and not surface.cdsm_relative and surface.looks_like_relative_heights():
-        cdsm_max = float(np.nanmax(surface.cdsm))
+    if geom.cdsm is not None and not geom.cdsm_relative and surface.looks_like_relative_heights():
+        cdsm_max = float(np.nanmax(geom.cdsm))
         warnings.append(
             f"CDSM values (max={cdsm_max:.1f}m) are much smaller than DSM "
             f"(min={dsm_min:.1f}m) with cdsm_relative=False. "
@@ -257,35 +260,30 @@ def _calculate_single(
     _requested_outputs: set[str] | None = None,
 ) -> SolweigResult:
     """Single-timestep Rust FFI call. Internal building block for calculate()."""
+    from .models.settings import Settings
+
     # Track whether anisotropic mode was explicitly requested by direct API arg.
     # Config/default fallbacks intentionally do not trigger strict precondition
     # failures because we cannot distinguish "config default" from a deliberate
     # explicit request at runtime.
     anisotropic_requested_explicitly = use_anisotropic_sky is True
 
-    # Build effective configuration: explicit params override config
-    # Config provides base values, explicit params take precedence
-    effective_aniso = use_anisotropic_sky
-    effective_human = human
-    effective_physics = physics
-    effective_materials = materials
-    effective_max_shadow = max_shadow_distance_m
+    # Resolve effective settings: per-call kwargs > ModelConfig > defaults.
+    # See `pysrc/solweig/models/settings.py` for merge semantics.
+    settings = Settings.resolve(
+        config=config,
+        use_anisotropic_sky=use_anisotropic_sky,
+        conifer=conifer,
+        wall_material=wall_material,
+        max_shadow_distance_m=max_shadow_distance_m,
+        human=human,
+        physics=physics,
+        materials=materials,
+    ).with_loaded_defaults()
 
+    # Debug log: which fields explicitly overrode the config?
     if config is not None:
-        # Use config values as fallback for None parameters
-        if effective_aniso is None:
-            effective_aniso = config.use_anisotropic_sky
-        if effective_human is None:
-            effective_human = config.human
-        if effective_physics is None:
-            effective_physics = config.physics
-        if effective_materials is None:
-            effective_materials = config.materials
-        if effective_max_shadow is None:
-            effective_max_shadow = config.max_shadow_distance_m
-
-        # Debug log when explicit params override config
-        overrides = []
+        overrides: list[str] = []
         if use_anisotropic_sky is not None and use_anisotropic_sky != config.use_anisotropic_sky:
             overrides.append(f"use_anisotropic_sky={use_anisotropic_sky}")
         if human is not None and config.human is not None:
@@ -297,25 +295,6 @@ def _calculate_single(
         if overrides:
             logger.debug(f"Explicit params override config: {', '.join(overrides)}")
 
-    # Apply defaults for anything still None
-    if effective_aniso is None:
-        effective_aniso = True
-    if effective_human is None:
-        effective_human = HumanParams()
-    # Auto-load bundled UMEP JSON as default materials (single source of truth)
-    if effective_materials is None:
-        effective_materials = load_params()
-
-    # Assign back to use in the rest of the function
-    use_anisotropic_sky = effective_aniso
-    human = effective_human
-    physics = effective_physics
-    materials = effective_materials
-
-    # Load default physics if not provided
-    if physics is None:
-        physics = load_physics()
-
     # Compute derived weather values (sun position, radiation split)
     if not weather._derived_computed:
         weather.compute_derived(location)
@@ -324,9 +303,9 @@ def _calculate_single(
     surface.fill_nan()
 
     # Explicit anisotropic requests must have shadow matrices available.
-    if anisotropic_requested_explicitly and use_anisotropic_sky:
+    if anisotropic_requested_explicitly and settings.use_anisotropic_sky:
         has_shadow_matrices = (precomputed is not None and precomputed.shadow_matrices is not None) or (
-            surface.shadow_matrices is not None
+            surface.auxiliary.shadow_matrices is not None
         )
         if not has_shadow_matrices:
             raise MissingPrecomputedData(
@@ -341,15 +320,15 @@ def _calculate_single(
         surface=surface,
         location=location,
         weather=weather,
-        human=human,
+        human=settings.human,
         precomputed=precomputed,
         state=state,
-        physics=physics,
-        materials=materials,
-        conifer=conifer,
-        wall_material=wall_material,
-        use_anisotropic_sky=use_anisotropic_sky,
-        max_shadow_distance_m=effective_max_shadow,
+        physics=settings.physics,
+        materials=settings.materials,
+        conifer=settings.conifer,
+        wall_material=settings.wall_material,
+        use_anisotropic_sky=settings.use_anisotropic_sky,
+        max_shadow_distance_m=settings.max_shadow_distance_m,
         return_state_copy=return_state_copy,
         requested_outputs=_requested_outputs,
     )
@@ -411,6 +390,14 @@ def calculate(
     Returns:
         TimeseriesSummary with per-pixel grids (mean/max/min Tmrt and UTCI,
         sun/shade hours, heat-stress exceedance).
+
+    Notes:
+        Modelled downwelling longwave (L↓) carries a known +18 to +55 W/m²
+        positive bias inherited from the UMEP Jonsson et al. (2006) formulation.
+        The bias is steady across hours and grows with reduced sky-view; see
+        ``VALIDATION.md § Ldown overestimation``. K↓ at any single pixel is
+        shadow-edge-sensitive and may spike on a single mis-aligned hour;
+        spatially-averaged K↓ has much lower error.
 
     Example::
 

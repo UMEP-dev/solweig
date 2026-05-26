@@ -1,7 +1,32 @@
-use ndarray::{Array2, ArrayView2};
+use ndarray::{Array2, ArrayBase, ArrayView2, Data, DataMut, Ix2};
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rayon::prelude::*;
+
+// Convenience accessors that document the invariant once instead of in every
+// call site. All Array2<f32>s and views in this module are either allocated
+// via Array2::zeros (standard C-order contiguous) or are views over PyO3
+// numpy arrays that we have verified to be contiguous at the FFI boundary.
+// The .expect() messages are diagnostic in case that invariant is ever
+// violated by a future refactor.
+const VEG_CONTIG_INVARIANT: &str =
+    "vegetation.rs invariant: all f32 arrays here are contiguous (Array2::zeros or contiguous numpy views)";
+
+#[inline(always)]
+fn as_slice_checked<D>(arr: &ArrayBase<D, Ix2>) -> &[f32]
+where
+    D: Data<Elem = f32>,
+{
+    arr.as_slice().expect(VEG_CONTIG_INVARIANT)
+}
+
+#[inline(always)]
+fn as_slice_mut_checked<D>(arr: &mut ArrayBase<D, Ix2>) -> &mut [f32]
+where
+    D: DataMut<Elem = f32>,
+{
+    arr.as_slice_mut().expect(VEG_CONTIG_INVARIANT)
+}
 
 /// Pure result type for lside_veg (no PyO3 dependency).
 pub(crate) struct LsideVegPureResult {
@@ -182,11 +207,22 @@ pub(crate) fn lside_veg_pure(
             );
         });
 
+    // INVARIANT: each *_vec was filled by Zip::indexed over the (rows, cols) shape
+    // above, so len == rows * cols. `from_shape_vec` cannot fail here; the
+    // debug_assert pins the invariant if the loop above is ever changed.
+    debug_assert_eq!(least_vec.len(), rows * cols);
+    debug_assert_eq!(lsouth_vec.len(), rows * cols);
+    debug_assert_eq!(lwest_vec.len(), rows * cols);
+    debug_assert_eq!(lnorth_vec.len(), rows * cols);
     LsideVegPureResult {
-        least: Array2::from_shape_vec((rows, cols), least_vec).unwrap(),
-        lsouth: Array2::from_shape_vec((rows, cols), lsouth_vec).unwrap(),
-        lwest: Array2::from_shape_vec((rows, cols), lwest_vec).unwrap(),
-        lnorth: Array2::from_shape_vec((rows, cols), lnorth_vec).unwrap(),
+        least: Array2::from_shape_vec((rows, cols), least_vec)
+            .expect("least_vec length mismatches (rows, cols)"),
+        lsouth: Array2::from_shape_vec((rows, cols), lsouth_vec)
+            .expect("lsouth_vec length mismatches (rows, cols)"),
+        lwest: Array2::from_shape_vec((rows, cols), lwest_vec)
+            .expect("lwest_vec length mismatches (rows, cols)"),
+        lnorth: Array2::from_shape_vec((rows, cols), lnorth_vec)
+            .expect("lnorth_vec length mismatches (rows, cols)"),
     }
 }
 
@@ -318,20 +354,21 @@ pub(crate) fn kside_veg_isotropic_pure(
     }
 
     // Isotropic diffuse/reflected radiation
-    let ke_slice = Keast.as_slice_mut().unwrap();
-    let ks_slice = Ksouth.as_slice_mut().unwrap();
-    let kw_slice = Kwest.as_slice_mut().unwrap();
-    let kn_slice = Knorth.as_slice_mut().unwrap();
-    let fsh_slice = F_sh.as_slice().unwrap();
-    let svf_e_slice = svfviktbuvegE.as_slice().unwrap();
-    let svf_s_slice = svfviktbuvegS.as_slice().unwrap();
-    let svf_w_slice = svfviktbuvegW.as_slice().unwrap();
-    let svf_n_slice = svfviktbuvegN.as_slice().unwrap();
-    let kup_e_slice = KupE.as_slice().unwrap();
-    let kup_s_slice = KupS.as_slice().unwrap();
-    let kup_w_slice = KupW.as_slice().unwrap();
-    let kup_n_slice = KupN.as_slice().unwrap();
-    let valid_slice = valid.as_ref().map(|v| v.as_slice().unwrap());
+    let ke_slice = as_slice_mut_checked(&mut Keast);
+    let ks_slice = as_slice_mut_checked(&mut Ksouth);
+    let kw_slice = as_slice_mut_checked(&mut Kwest);
+    let kn_slice = as_slice_mut_checked(&mut Knorth);
+    let fsh_slice = as_slice_checked(&F_sh);
+    let svf_e_slice = as_slice_checked(&svfviktbuvegE);
+    let svf_s_slice = as_slice_checked(&svfviktbuvegS);
+    let svf_w_slice = as_slice_checked(&svfviktbuvegW);
+    let svf_n_slice = as_slice_checked(&svfviktbuvegN);
+    let kup_e_slice = as_slice_checked(&KupE);
+    let kup_s_slice = as_slice_checked(&KupS);
+    let kup_w_slice = as_slice_checked(&KupW);
+    let kup_n_slice = as_slice_checked(&KupN);
+    // `valid` is ArrayView2<u8>, not Array2<f32>, so the helpers above don't apply.
+    let valid_slice = valid.as_ref().map(|v| v.as_slice().expect(VEG_CONTIG_INVARIANT));
     ke_slice
         .par_iter_mut()
         .zip(ks_slice.par_iter_mut())
@@ -792,9 +829,9 @@ pub fn kside_veg(
                 })
                 .collect();
             // Write-back sequentially
-            let kside_d_slice = KsideD.as_slice_mut().unwrap();
-            let kside_slice = Kside.as_slice_mut().unwrap();
-            let kside_i_slice = KsideI.as_slice().unwrap();
+            let kside_d_slice = as_slice_mut_checked(&mut KsideD);
+            let kside_slice = as_slice_mut_checked(&mut Kside);
+            let kside_i_slice = as_slice_checked(&KsideI);
             for (idx, res) in results.into_iter().enumerate() {
                 kside_d_slice[idx] = res.kside_d;
                 kside_slice[idx] =
@@ -937,10 +974,10 @@ pub fn kside_veg(
                 })
                 .collect();
             // Write-back sequentially
-            let ke_slice = Keast.as_slice_mut().unwrap();
-            let ks_slice = Ksouth.as_slice_mut().unwrap();
-            let kw_slice = Kwest.as_slice_mut().unwrap();
-            let kn_slice = Knorth.as_slice_mut().unwrap();
+            let ke_slice = as_slice_mut_checked(&mut Keast);
+            let ks_slice = as_slice_mut_checked(&mut Ksouth);
+            let kw_slice = as_slice_mut_checked(&mut Kwest);
+            let kn_slice = as_slice_mut_checked(&mut Knorth);
             for (idx, res) in results.into_iter().enumerate() {
                 // Preserve existing direct component (already stored in *_slice from earlier direct computation)
                 ke_slice[idx] += res.ke;
@@ -952,19 +989,19 @@ pub fn kside_veg(
         }
     } else {
         // Isotropic (original) formulation, now parallelized using nested zip pattern
-        let ke_slice = Keast.as_slice_mut().unwrap();
-        let ks_slice = Ksouth.as_slice_mut().unwrap();
-        let kw_slice = Kwest.as_slice_mut().unwrap();
-        let kn_slice = Knorth.as_slice_mut().unwrap();
-        let fsh_slice = F_sh.as_slice().unwrap();
-        let svf_e_slice = svfviktbuvegE.as_slice().unwrap();
-        let svf_s_slice = svfviktbuvegS.as_slice().unwrap();
-        let svf_w_slice = svfviktbuvegW.as_slice().unwrap();
-        let svf_n_slice = svfviktbuvegN.as_slice().unwrap();
-        let kup_e_slice = KupE.as_slice().unwrap();
-        let kup_s_slice = KupS.as_slice().unwrap();
-        let kup_w_slice = KupW.as_slice().unwrap();
-        let kup_n_slice = KupN.as_slice().unwrap();
+        let ke_slice = as_slice_mut_checked(&mut Keast);
+        let ks_slice = as_slice_mut_checked(&mut Ksouth);
+        let kw_slice = as_slice_mut_checked(&mut Kwest);
+        let kn_slice = as_slice_mut_checked(&mut Knorth);
+        let fsh_slice = as_slice_checked(&F_sh);
+        let svf_e_slice = as_slice_checked(&svfviktbuvegE);
+        let svf_s_slice = as_slice_checked(&svfviktbuvegS);
+        let svf_w_slice = as_slice_checked(&svfviktbuvegW);
+        let svf_n_slice = as_slice_checked(&svfviktbuvegN);
+        let kup_e_slice = as_slice_checked(&KupE);
+        let kup_s_slice = as_slice_checked(&KupS);
+        let kup_w_slice = as_slice_checked(&KupW);
+        let kup_n_slice = as_slice_checked(&KupN);
         ke_slice
             .par_iter_mut()
             .zip(ks_slice.par_iter_mut())

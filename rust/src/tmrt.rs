@@ -123,9 +123,10 @@ pub(crate) fn compute_tmrt_from_dir_sums_pure(
     // Allocate output array
     let mut tmrt = Array2::<f32>::zeros(shape);
 
-    // Compute Tmrt element-wise in parallel
+    // Compute Tmrt element-wise in parallel.
+    // tmrt was just allocated via Array2::zeros so as_slice_mut() is Some.
     tmrt.as_slice_mut()
-        .unwrap()
+        .expect("tmrt: freshly-allocated Array2::zeros is contiguous")
         .par_iter_mut()
         .enumerate()
         .for_each(|(idx, out)| {

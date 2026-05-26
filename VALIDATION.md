@@ -28,6 +28,12 @@ a glance.
 | Days                 |           1 |             3 |            3 |
 | Total obs hours      |          12 |            43 |           30 |
 
+> **⚠️ Read this before interpreting the radiation panels.** The model carries a
+> known **+18 to +55 W/m² L↓ overestimation** at every site — a formulation issue,
+> not a calibration error. See [§ Ldown overestimation](#ldown-overestimation)
+> below. K↓ at open sites is shadow-edge-sensitive and can spike on a single
+> mis-aligned hour; see [§ Kdown at open sites](#kdown-at-open-sites).
+
 ---
 
 ## Kronenhuset
@@ -204,6 +210,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b82 | 2026-04-11 |     3 |      1.5–7.5 °C | Fix inverted `scale` convention in Rust shadow caster (dz off by `pixel_size²` at non-1 m rasters). Also: DEM stair-step smoothing, `prepare()` warm-run fast-path, tile sizer buffer fix, `GridAccumulator.update()` in-place ufuncs, QGIS metadata consolidation.                                                                                                                                                                                                                                                                                                                                                                    |
 | 0.1.0b83 | 2026-04-13 |     3 |      1.5–7.5 °C | Docs-only: correct PVGIS TMY reference period (2005–2020 → 2005–2023 for v5.3) and clarify that TMY row timestamps legitimately span multiple years because each month is a real historical month. Validation unchanged from b82.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 0.1.0b84 | 2026-04-16 |     3 |      1.5–7.5 °C | Rust wall-aspect kernel: promote internal math to f64 and switch to banker's rounding to match numpy/UMEP precision and tie-breaking. Input/output arrays stay f32 — promotion is strictly internal, no change to data-array memory. Delete Python Goodwin fallback so solweig has a single numerical path (QGIS and pip users get identical output). Validation Tmrt numbers shifted by ≤0.13 °C per day (all within thresholds); displayed range unchanged. Plus: 8 new public API exports for plugin/external tools, plugin error wrapping now surfaces SolweigError structured attributes, and ~400 lines of dead helpers removed. |
+| 0.1.0b85 | 2026-05-26 |     3 |      1.5–7.5 °C | Architecture stabilisation pass — **zero numerical change, byte-identical golden output**. (1) Rust FFI bundling: 17 SVF arrays → `SvfBundle`, 9 thermal-state fields → `StateBundle` with FFI-version field that fails fast on mismatch. `compute_timestep` signature drops from 43 → 18 args. (2) Surface views (`surface.geometry` / `.optical` / `.auxiliary`) now load-bearing in the production path. (3) Cache-key hardening: `_arr_key` adds witness bytes from first/middle/last element, catching in-place mutations the old `(ctypes.data, shape)` key missed. (4) `Settings` dataclass replaces the 50-line override block. (5) Geospatial helpers moved to `solweig.geospatial` submodule; top-level re-exports emit `DeprecationWarning`. (6) Audit script wired (`poe audit` → `AUDIT.md`); CI gains an `audit` job and the `test-spec` job now includes slow tests. (7) `vegetation.rs` panic surface 44 → 14 via documented `expect()` helper. (8) `surface.py` shrinks 3037 → 2944 (serialization helpers extracted). |
 
 ---
 

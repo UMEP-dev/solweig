@@ -25,17 +25,18 @@ I/O helpers::
     solweig.walls.generate_wall_hts(dsm_path, bbox, out_dir)
 """
 
-import contextlib
-import logging
-import os
-from importlib.metadata import PackageNotFoundError, version
+import contextlib as _contextlib
+import logging as _logging
+import os as _os
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _version
 
-logger = logging.getLogger(__name__)
+_logger = _logging.getLogger(__name__)
 
 # Version: single source of truth is pyproject.toml
 try:
-    __version__ = version("solweig")
-except PackageNotFoundError:
+    __version__ = _version("solweig")
+except _PackageNotFoundError:
     __version__ = "0.0.0.dev0"  # Fallback for editable/source installs without metadata
 
 # Import simplified API
@@ -68,40 +69,85 @@ from .api import (  # noqa: E402
     # Validation
     validate_inputs,
 )
-from .cache import pixel_size_tag  # noqa: E402
 from .errors import SolweigError  # noqa: E402
-from .models.surface import looks_like_relative  # noqa: E402
-from .physics import wallalgorithms  # noqa: E402
-from .tiling import compute_max_tile_pixels  # noqa: E402
-from .utils import extract_bounds, intersect_bounds, namespace_to_dict, resample_to_grid  # noqa: E402
 
-# Try to import Rust algorithms
+# ── Deprecated top-level geospatial helpers ──────────────────────────────────
+# These were promoted to the top level in 0.1.0b84 so the QGIS plugin could
+# stop reaching into internals. The cleaner home is `solweig.geospatial`
+# (created 0.1.0b85). Top-level access is preserved here behind a
+# DeprecationWarning so downstream code keeps working but is nudged toward
+# the structured import path.
+#
+# Removal target: 0.1.0b88 (or first 0.2.x). When removing, delete the
+# `_DEPRECATED_REEXPORTS` map, the `__getattr__` block below, and update
+# the matching entries in `__all__`.
+_DEPRECATED_REEXPORTS = {
+    "extract_bounds": "solweig.geospatial",
+    "intersect_bounds": "solweig.geospatial",
+    "resample_to_grid": "solweig.geospatial",
+    "namespace_to_dict": "solweig.geospatial",
+    "pixel_size_tag": "solweig.geospatial",
+    "compute_max_tile_pixels": "solweig.geospatial",
+    "looks_like_relative": "solweig.geospatial",
+    "wallalgorithms": "solweig.geospatial",
+}
+
+
+def __getattr__(name: str):  # noqa: N807 — PEP 562 module-level hook
+    if name in _DEPRECATED_REEXPORTS:
+        import warnings as _warnings
+
+        target = _DEPRECATED_REEXPORTS[name]
+        _warnings.warn(
+            f"`solweig.{name}` is deprecated and will be removed in a future "
+            f"release. Import from `{target}` instead: "
+            f"`from {target} import {name}`.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from . import geospatial as _geo
+
+        return getattr(_geo, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+# Try to import Rust algorithms. The submodules are imported with underscore
+# aliases so they don't leak into the top-level public surface; user code that
+# really needs a specific Rust submodule should import from `solweig.rustalgos`
+# directly.
 try:
-    from .rustalgos import GPU_ENABLED, RELEASE_BUILD, gvf, pet, shadowing, sky, skyview, utci, vegetation
+    from .rustalgos import GPU_ENABLED, RELEASE_BUILD
+    from .rustalgos import gvf as _gvf  # noqa: F401
+    from .rustalgos import pet as _pet  # noqa: F401
+    from .rustalgos import shadowing as _shadowing
+    from .rustalgos import sky as _sky  # noqa: F401
+    from .rustalgos import skyview as _skyview  # noqa: F401
+    from .rustalgos import utci as _utci  # noqa: F401
+    from .rustalgos import vegetation as _vegetation  # noqa: F401
 
     # Defer GPU initialization until first use (avoids import-time failures
     # on headless systems). Set SOLWEIG_NO_GPU=1 to disable entirely.
     _gpu_initialized = False
 
-    if GPU_ENABLED and not os.environ.get("SOLWEIG_NO_GPU"):
-        logger.debug("GPU support compiled in; will enable on first use")
+    if GPU_ENABLED and not _os.environ.get("SOLWEIG_NO_GPU"):
+        _logger.debug("GPU support compiled in; will enable on first use")
     elif not GPU_ENABLED:
-        logger.debug("GPU support not compiled in this build")
+        _logger.debug("GPU support not compiled in this build")
     else:
-        logger.debug("GPU disabled via SOLWEIG_NO_GPU environment variable")
+        _logger.debug("GPU disabled via SOLWEIG_NO_GPU environment variable")
 
 except ImportError as e:
-    logger.warning(f"Failed to import Rust algorithms: {e}")
+    _logger.warning(f"Failed to import Rust algorithms: {e}")
     GPU_ENABLED = False
     RELEASE_BUILD = False
     _gpu_initialized = False
-    shadowing = None
-    skyview = None
-    gvf = None
-    sky = None
-    vegetation = None
-    utci = None
-    pet = None
+    _shadowing = None
+    _skyview = None
+    _gvf = None
+    _sky = None
+    _vegetation = None
+    _utci = None
+    _pet = None
 
 
 def _ensure_gpu_initialized() -> None:
@@ -110,15 +156,15 @@ def _ensure_gpu_initialized() -> None:
     if _gpu_initialized:
         return
     _gpu_initialized = True
-    if not GPU_ENABLED or shadowing is None:
+    if not GPU_ENABLED or _shadowing is None:
         return
-    if os.environ.get("SOLWEIG_NO_GPU"):
+    if _os.environ.get("SOLWEIG_NO_GPU"):
         return
     try:
-        shadowing.enable_gpu()
-        logger.info("GPU acceleration enabled")
+        _shadowing.enable_gpu()
+        _logger.info("GPU acceleration enabled")
     except Exception:
-        logger.warning("GPU initialization failed, falling back to CPU", exc_info=True)
+        _logger.warning("GPU initialization failed, falling back to CPU", exc_info=True)
 
 
 def is_gpu_available() -> bool:
@@ -137,10 +183,10 @@ def is_gpu_available() -> bool:
     _ensure_gpu_initialized()
     if not GPU_ENABLED:
         return False
-    if shadowing is None:
+    if _shadowing is None:
         return False
     try:
-        return shadowing.is_gpu_enabled()
+        return _shadowing.is_gpu_enabled()
     except (AttributeError, RuntimeError):
         return False
 
@@ -162,9 +208,9 @@ def disable_gpu() -> None:
     This can be useful for debugging or if GPU results differ from expected.
     The change takes effect immediately for subsequent calculations.
     """
-    if shadowing is not None:
-        with contextlib.suppress(AttributeError):
-            shadowing.disable_gpu()
+    if _shadowing is not None:
+        with _contextlib.suppress(AttributeError):
+            _shadowing.disable_gpu()
 
 
 def get_gpu_limits() -> dict[str, int | str] | None:
@@ -180,10 +226,10 @@ def get_gpu_limits() -> dict[str, int | str] | None:
     Returns ``None`` if GPU is not available or not compiled in.
     Lazily initialises the GPU context on first call.
     """
-    if not GPU_ENABLED or shadowing is None:
+    if not GPU_ENABLED or _shadowing is None:
         return None
     try:
-        return shadowing.gpu_limits()
+        return _shadowing.gpu_limits()
     except (AttributeError, RuntimeError):
         return None
 
@@ -207,7 +253,9 @@ __all__ = [
     "load_params",
     "load_physics",
     "load_materials",
-    # Tiling utilities
+    # Tiling utilities (calculate_buffer_distance + generate_tiles + TileSpec
+    # are part of the documented public API; compute_max_tile_pixels is plugin
+    # plumbing and lives in solweig.geospatial)
     "calculate_buffer_distance",
     "TileSpec",
     "generate_tiles",
@@ -221,15 +269,6 @@ __all__ = [
     "io",
     "walls",
     "progress",
-    "wallalgorithms",
-    # Preprocessing / grid helpers (used by the QGIS plugin and external tools)
-    "extract_bounds",
-    "intersect_bounds",
-    "resample_to_grid",
-    "namespace_to_dict",
-    "pixel_size_tag",
-    "compute_max_tile_pixels",
-    "looks_like_relative",
     # GPU utilities
     "is_gpu_available",
     "get_compute_backend",
@@ -238,3 +277,9 @@ __all__ = [
     "GPU_ENABLED",
     "RELEASE_BUILD",
 ]
+# NOTE: The following names are still reachable as `solweig.<name>` for
+# backwards-compatibility but are NOT in __all__: extract_bounds,
+# intersect_bounds, resample_to_grid, namespace_to_dict, pixel_size_tag,
+# compute_max_tile_pixels, looks_like_relative, wallalgorithms. They emit a
+# DeprecationWarning on access (see the `__getattr__` hook above). Import
+# from `solweig.geospatial` instead.

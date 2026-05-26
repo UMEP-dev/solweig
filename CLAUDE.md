@@ -10,6 +10,22 @@ SOLWEIG (SOlar and LongWave Environmental Irradiance Geometry-model) is a high-p
 - **License**: GPL-3.0
 - **Version**: 0.1.0 beta series (single source of truth: `pyproject.toml`)
 
+## Read first — architectural anchors
+
+Before making any non-trivial change, skim:
+
+- **[docs/development/principles.md](docs/development/principles.md)** — what this
+  library is for, the four identities it serves, the architectural rules that
+  follow. When facing a "should this go here or there?" question, work from
+  this page first.
+- **[docs/development/invariants.md](docs/development/invariants.md)** — the
+  load-bearing assumptions the code makes but does not always enforce
+  (array layout, immutability, GIL ownership, etc). Violating these
+  produces silently wrong results, not crashes.
+- **[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md)** — the deeper review the
+  principles and invariants pages derive from. Read once for the why; the
+  shorter pages are the day-to-day reference.
+
 ---
 
 ## Quick Reference: Common Commands
@@ -161,9 +177,10 @@ Plus: **benchmark tests** (`tests/benchmarks/`) for performance and memory regre
 |-----|-------------|
 | **lint** | `ruff check` + `ruff format --check` |
 | **typecheck** | `ty check` on pysrc/, tests/, demos/, scripts/, qgis_plugin/ |
-| **test** | Matrix: Python 3.10, 3.11, 3.12 — excludes slow tests (NOTE: 3.10 is below requires-python >=3.11; 3.13 is missing) |
+| **test** | Matrix: Python 3.11, 3.12, 3.13 — excludes slow tests |
 | **test-qgis-compat** | GDAL backend, NumPy 1.26, `UMEP_USE_GDAL=1` |
 | **validation** | 3 real-world sites (Kronenhuset, Gustav Adolfs, GVC) |
+| **benchmarks** | Memory + perf-matrix gates: bytes-per-pixel ceiling, per-scenario runtime budgets, aniso/iso, tiled/non-tiled, plugin/API ratios. `SOLWEIG_PERF_BUDGET_SCALE=2.0` in CI for shared-runner variance. |
 | **test-spec** | Scientific parity gates (vs reference UMEP implementation) |
 
 Build must be `--release` — `conftest.py` gates on `RELEASE_BUILD` flag.

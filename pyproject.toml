@@ -1,6 +1,6 @@
 [project]
 name = "solweig"
-version = "0.1.0b84"
+version = "0.1.0b85"
 description = "High-performance SOLWEIG urban microclimate model (Rust + Python)"
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -78,6 +78,7 @@ dev = [
     "poethepoet>=0.29.0",
     "ty>=0.0.12",
     "pre-commit>=4.3.0",
+    "coverage[toml]>=7.0",
     # Documentation
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
@@ -106,6 +107,7 @@ test_full = { shell = "pytest tests/ -x -q" }
 test_benchmarks = { shell = "pytest tests/benchmarks/ -x -q" }
 test_gpu_gates = { shell = "pytest tests/spec/test_svf.py tests/spec/test_svf_core_api.py tests/spec/test_aniso_gpu_parity.py -q && pytest tests/test_tiling_integration.py -k 'multitile_vs_nontiled_comparison or anisotropic_tiled_vs_nontiled' -q" }
 test_gpu_perf_gate = { shell = "pytest tests/benchmarks/test_tiling_benchmark.py -q" }
+audit = { shell = "python scripts/audit.py" }
 docs = { shell = "mkdocs serve" }
 docs_build = { shell = "mkdocs build --strict" }
 notebooks = { shell = "jupyter nbconvert --to notebook --execute docs/tutorials/*.ipynb --inplace" }

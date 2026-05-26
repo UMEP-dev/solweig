@@ -402,10 +402,11 @@ pub fn pet_grid<'py>(
     let mut result = ndarray::Array2::zeros((rows, cols));
     let warn_flag = AtomicBool::new(false);
 
-    // Process in parallel using rayon
+    // Process in parallel using rayon.
+    // result was just allocated via Array2::zeros so as_slice_mut() is Some.
     result
         .as_slice_mut()
-        .unwrap()
+        .expect("result: freshly-allocated Array2::zeros is contiguous")
         .par_iter_mut()
         .enumerate()
         .for_each(|(idx, out)| {

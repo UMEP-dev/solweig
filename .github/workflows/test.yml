@@ -162,6 +162,38 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
+  benchmarks:
+    name: Benchmark regression gates (memory + perf matrix)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: uv sync --group test
+
+      - name: Build Rust extension
+        run: uv run maturin develop --release
+
+      - name: Run benchmark gates
+        # Strict gates from tests/benchmarks/: bytes-per-pixel ceiling, per-scenario
+        # absolute runtime budgets, anisotropic-over-isotropic ratios, tiled-over-
+        # non-tiled ratios, plugin-over-API ratios. PERF_BUDGET_SCALE accommodates
+        # shared-runner variance — increase if CI becomes flaky.
+        run: uv run python -m pytest tests/benchmarks/ -v --tb=short
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          SOLWEIG_PERF_BUDGET_SCALE: "2.0"
+
   test-spec:
     name: Test scientific spec/parity gates
     runs-on: ubuntu-latest
@@ -187,7 +219,87 @@ jobs:
       - name: Verify UMEP availability for parity tests
         run: uv run python -c "import umep"
 
-      - name: Run scientific/spec suite (excluding slow)
-        run: uv run python -m pytest tests/spec -m 'not slow' -v --tb=short
+      - name: Run scientific/spec suite (including slow — UMEP parity needs it)
+        # Spec tests include UMEP parity, anisotropic pipeline E2E, and the
+        # shape-validation regression test. Slow ones must run in CI to keep
+        # parity meaningful; otherwise drift sneaks through the fast gate.
+        run: uv run python -m pytest tests/spec -v --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}
+
+  test-slow:
+    name: Slow integration tests (top-level)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: uv sync --group test
+
+      - name: Build Rust extension
+        run: uv run maturin develop --release
+
+      - name: Run slow top-level tests
+        # The fast `test` job runs `-m 'not slow'`. This job picks up the
+        # slow ones outside tests/spec, tests/golden, tests/validation and
+        # tests/benchmarks (which have their own jobs) — that's `test_api`,
+        # `test_cache_lifecycle`, `test_svf_bundle`, `test_timeseries`,
+        # `test_tiling_integration`, `test_qgis_surface_preprocessing_e2e`.
+        run: |
+          uv run python -m pytest \
+            tests/test_api.py \
+            tests/test_cache_lifecycle.py \
+            tests/test_svf_bundle.py \
+            tests/test_timeseries.py \
+            tests/test_tiling_integration.py \
+            tests/test_qgis_surface_preprocessing_e2e.py \
+            -m slow -v --tb=short
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+  audit:
+    name: Repository audit (informational)
+    runs-on: ubuntu-latest
+    # NOT a required gate today — produces AUDIT.md as a CI artifact so
+    # drift over time is visible without forcing every warning to block PRs.
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dev + test dependencies
+        run: uv sync --group test --group dev
+
+      - name: Build Rust extension
+        run: uv run maturin develop --release
+
+      - name: Run audit
+        run: uv run poe audit
+
+      - name: Upload AUDIT.md
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report
+          path: AUDIT.md
+
+      - name: Show audit summary in CI log
+        run: head -25 AUDIT.md

@@ -410,11 +410,19 @@ pub(crate) fn anisotropic_sky_pure(
                             pres.lwest += lw;
                             pres.lnorth += ln;
                         } else {
-                            let voxel_map_val = voxel_maps.as_ref().unwrap()[[r, c, i]];
+                            // voxel_maps / voxel_table are guaranteed Some in
+                            // the wall-scheme branch (else-arm of the
+                            // surface-scheme `if` above; the caller never
+                            // selects wall-scheme without supplying both).
+                            let voxel_map_val = voxel_maps
+                                .as_ref()
+                                .expect("voxel_maps: gated by wall-scheme branch")[[r, c, i]];
                             if voxel_map_val > 0.0 {
                                 let (ls_sun, ls_sh, ld_sun, ld_sh, le, lso, lw, ln) =
                                     patch_radiation::longwave_from_buildings_wall_scheme_pixel(
-                                        *voxel_table.as_ref().unwrap(),
+                                        *voxel_table
+                                            .as_ref()
+                                            .expect("voxel_table: gated by wall-scheme branch"),
                                         voxel_map_val as usize,
                                         steradian,
                                         angle_of_incidence,
@@ -644,7 +652,9 @@ pub fn anisotropic_sky(
     let l_patches_v = l_patches.as_array();
     let patch_altitude = l_patches_v.column(0);
     let mut skyalt_vec: Vec<f32> = patch_altitude.iter().cloned().collect();
-    skyalt_vec.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    // patch altitudes are well-defined non-NaN f32 from L_patches[:, 0];
+    // partial_cmp on finite floats never returns None.
+    skyalt_vec.sort_by(|a, b| a.partial_cmp(b).expect("patch altitudes are finite, partial_cmp Some"));
     skyalt_vec.dedup();
     let skyalt = Array1::<f32>::from(skyalt_vec);
 
@@ -773,7 +783,11 @@ pub(crate) fn cylindric_wedge_pure_masked(
         })
         .collect();
 
-    Array2::from_shape_vec((rows, cols), pixel_results).unwrap()
+    // pixel_results is collected from a rayon iterator over rows*cols indices,
+    // so its length is always rows*cols by construction.
+    debug_assert_eq!(pixel_results.len(), rows * cols);
+    Array2::from_shape_vec((rows, cols), pixel_results)
+        .expect("pixel_results length equals rows*cols by construction")
 }
 
 /// Fraction of sunlit walls based on sun altitude and SVF-weighted building angles.

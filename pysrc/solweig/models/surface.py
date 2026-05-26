@@ -10,7 +10,6 @@ walls and sky view factors automatically.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -30,6 +29,7 @@ from ..rustalgos import skyview
 from ..solweig_logging import get_logger
 from ..utils import extract_bounds, intersect_bounds, resample_to_grid
 from .precomputed import ShadowArrays, SvfArrays
+from .surface_views import OpticalPropertiesView, PreprocessedAuxiliaryView, SurfaceGeometryView
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -73,19 +73,29 @@ class _ComputationCache:
         for attr in self.__slots__:
             setattr(self, attr, None)
 
+    def get_or_compute(self, slot: str, key: Any, compute: Callable[[], Any]) -> Any:
+        """Return the cached value for ``slot`` when its key matches, else
+        recompute via ``compute()``, store ``(key, value)`` in the slot, and
+        return the new value.
 
-def _should_compress_svf_exports(n_pixels: int) -> bool:
-    """
-    Return True when SVF/shadow exports should use compression.
+        Centralises the 6 ad-hoc ``(key, value)`` tuple caches previously
+        duplicated across ``computation.calculate_core_fused``. The slot must
+        be one of the declared ``__slots__``.
+        """
+        existing = getattr(self, slot)
+        if existing is not None and existing[0] == key:
+            return existing[1]
+        value = compute()
+        setattr(self, slot, (key, value))
+        return value
 
-    Large rasters spend a long post-GPU tail in single-threaded compression.
-    Default threshold can be overridden with SOLWEIG_COMPRESS_MAX_PIXELS.
-    """
-    try:
-        limit = int(os.getenv("SOLWEIG_COMPRESS_MAX_PIXELS", "50000000"))
-    except ValueError:
-        limit = 50_000_000
-    return n_pixels <= max(0, limit)
+
+# Serialization helpers moved to models/surface_serialization.py. Aliased
+# here under their historical underscored names for in-file callers.
+from .surface_serialization import save_shadow_matrices as _save_shadow_matrices  # noqa: E402
+from .surface_serialization import save_svfs_zip as _save_svfs_zip  # noqa: E402
+from .surface_serialization import should_compress_svf_exports as _should_compress_svf_exports  # noqa: E402
+from .surface_serialization import should_export_shadow_npz as _should_export_shadow_npz  # noqa: E402
 
 
 def _detect_dem_quantization(dem: NDArray[np.floating], sample_size: int = 20000) -> float:
@@ -199,101 +209,6 @@ def _gaussian_smooth_2d(arr: NDArray[np.floating], sigma: float) -> NDArray[np.f
         out += w * padded_v[k_idx : k_idx + rows, :]
 
     return out.astype(orig_dtype, copy=False)
-
-
-def _should_export_shadow_npz(n_pixels: int) -> bool:
-    """
-    Return True when shadowmats.npz should be written.
-
-    For very large grids, serializing 3 bitpacked matrices into one NPZ can
-    dominate runtime after GPU work completes. For those cases we keep the
-    memmap cache and skip NPZ export by default.
-    """
-    force = os.getenv("SOLWEIG_FORCE_SHADOW_NPZ", "").strip().lower() in ("1", "true")
-    if force:
-        return True
-    try:
-        limit = int(os.getenv("SOLWEIG_SHADOW_NPZ_MAX_PIXELS", "50000000"))
-    except ValueError:
-        limit = 50_000_000
-    return n_pixels <= max(0, limit)
-
-
-def _save_svfs_zip(svf_data: SvfArrays, svf_cache_dir: Path, aligned_rasters: dict, *, compress: bool = True) -> None:
-    """Save SVF arrays as svfs.zip for PrecomputedData.prepare() compatibility."""
-    import tempfile
-    import zipfile
-
-    geotransform = aligned_rasters.get("dsm_transform")
-    crs_wkt = aligned_rasters.get("dsm_crs")
-
-    # If geotransform/CRS not available, skip zip (memmap still works)
-    if geotransform is None:
-        logger.debug("  Skipping svfs.zip (no geotransform available)")
-        return
-
-    svf_files = {
-        "svf.tif": svf_data.svf,
-        "svfN.tif": svf_data.svf_north,
-        "svfE.tif": svf_data.svf_east,
-        "svfS.tif": svf_data.svf_south,
-        "svfW.tif": svf_data.svf_west,
-        "svfveg.tif": svf_data.svf_veg,
-        "svfNveg.tif": svf_data.svf_veg_north,
-        "svfEveg.tif": svf_data.svf_veg_east,
-        "svfSveg.tif": svf_data.svf_veg_south,
-        "svfWveg.tif": svf_data.svf_veg_west,
-        "svfaveg.tif": svf_data.svf_aveg,
-        "svfNaveg.tif": svf_data.svf_aveg_north,
-        "svfEaveg.tif": svf_data.svf_aveg_east,
-        "svfSaveg.tif": svf_data.svf_aveg_south,
-        "svfWaveg.tif": svf_data.svf_aveg_west,
-    }
-
-    # Convert Affine to GDAL geotransform list if needed
-    if hasattr(geotransform, "to_gdal"):
-        geotransform = list(geotransform.to_gdal())
-
-    svf_zip_path = svf_cache_dir / "svfs.zip"
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for filename, arr in svf_files.items():
-            if arr is not None:
-                tif_path = str(Path(tmpdir) / filename)
-                # Intermediate export for zip packaging: avoid COG/preview overhead.
-                io.save_raster(
-                    tif_path,
-                    arr,
-                    geotransform,
-                    crs_wkt,
-                    use_cog=False,
-                    generate_preview=False,
-                )
-        compression = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
-        with zipfile.ZipFile(str(svf_zip_path), "w", compression=compression) as zf:
-            for filename in svf_files:
-                tif_file = Path(tmpdir) / filename
-                if tif_file.exists():
-                    zf.write(str(tif_file), filename)
-
-    mode = "compressed" if compress else "stored (uncompressed)"
-    logger.info(f"  ✓ SVF saved as {svf_zip_path} ({mode})")
-
-
-def _save_shadow_matrices(svf_result, svf_cache_dir: Path, patch_count: int = 153, *, compress: bool = True) -> None:
-    """Save shadow matrices as shadowmats.npz for anisotropic sky model."""
-    # Shadow matrices are bitpacked uint8 from Rust: shape (rows, cols, ceil(patches/8))
-    shadow_path = svf_cache_dir / "shadowmats.npz"
-    save_fn = np.savez_compressed if compress else np.savez
-    save_fn(
-        str(shadow_path),
-        shadowmat=np.array(svf_result.bldg_sh_matrix),
-        vegshadowmat=np.array(svf_result.veg_sh_matrix),
-        vbshmat=np.array(svf_result.veg_blocks_bldg_sh_matrix),
-        patch_count=np.array(patch_count),
-    )
-
-    mode = "compressed" if compress else "uncompressed"
-    logger.info(f"  ✓ Shadow matrices saved as {shadow_path} ({mode})")
 
 
 def _max_shadow_height(dsm: np.ndarray, cdsm: np.ndarray | None = None, use_veg: bool = False) -> float:
@@ -2882,6 +2797,26 @@ class SurfaceData:
         # These are lazily rebuilt on demand in computation.calculate_core_fused().
         self._cache.clear()
         self._gvf_geometry_cache = None
+
+    # ── Typed views (see models/surface_views.py) ────────────────────────────
+    # Group fields by concern without changing the underlying field layout.
+    # Internal callers can opt in to these views for clarity; existing
+    # ``surface.dsm`` / ``surface.svf`` / … access keeps working unchanged.
+
+    @property
+    def geometry(self) -> SurfaceGeometryView:
+        """Read-only view of the user-provided geometry inputs."""
+        return SurfaceGeometryView(_surface=self)
+
+    @property
+    def optical(self) -> OpticalPropertiesView:
+        """Read-only view of the per-pixel optical inputs."""
+        return OpticalPropertiesView(_surface=self)
+
+    @property
+    def auxiliary(self) -> PreprocessedAuxiliaryView:
+        """Read-only view of library-derived auxiliary data (walls, SVF, …)."""
+        return PreprocessedAuxiliaryView(_surface=self)
 
     def looks_like_relative_heights(self) -> bool:
         """

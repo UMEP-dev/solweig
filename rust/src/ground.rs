@@ -46,8 +46,9 @@ pub(crate) fn compute_ground_temperature_pure(
 
     let mut tg = Array2::<f32>::zeros(shape);
 
+    // tg was just allocated via Array2::zeros so as_slice_mut() is Some.
     tg.as_slice_mut()
-        .unwrap()
+        .expect("tg: freshly-allocated Array2::zeros is contiguous")
         .par_iter_mut()
         .enumerate()
         .for_each(|(idx, out)| {

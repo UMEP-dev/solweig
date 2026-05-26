@@ -327,7 +327,7 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         feedback.pushInfo(f"Output pixel size: {pixel_size:.2f} m")
 
         if wall_limit != 1.0:
-            from solweig import wallalgorithms as wa
+            from solweig.geospatial import wallalgorithms as wa
 
             feedback.pushInfo(
                 f"Recomputing walls with custom minimum height {wall_limit:.1f} m "
@@ -369,7 +369,7 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         ts.Last_day_leaf = int(parameters.get("LEAF_END", 300))
 
         try:
-            from solweig import namespace_to_dict
+            from solweig.geospatial import namespace_to_dict
 
             params_path = os.path.join(output_dir, "parametersforsolweig.json")
             with open(params_path, "w") as f:

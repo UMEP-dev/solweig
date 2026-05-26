@@ -22,6 +22,45 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
+def _qdt_to_naive_datetime(qdt: Any | None) -> Any | None:
+    """Convert a QDateTime (or aware Python datetime) to a naive datetime.
+
+    Returns ``None`` unchanged. Used by every weather loader in this module
+    to keep Python and QGIS time types interchangeable.
+    """
+    if qdt is None:
+        return None
+    if hasattr(qdt, "toPyDateTime"):
+        qdt = qdt.toPyDateTime()
+    if getattr(qdt, "tzinfo", None) is not None:
+        qdt = qdt.replace(tzinfo=None)
+    return qdt
+
+
+def _parse_hours_filter(
+    hours_filter: str | None,
+    feedback: QgsProcessingFeedback,
+) -> list[int] | None:
+    """Parse a comma-separated "9,10,11" hours filter into a list of ints.
+
+    Returns ``None`` for empty/missing input. Invalid input is reported as
+    a non-fatal QGIS error and treated as "use all hours" (returns ``None``).
+    """
+    if not hours_filter:
+        return None
+    try:
+        hours_str = hours_filter.replace(" ", "")
+        hours_list = [int(h) for h in hours_str.split(",")]
+        feedback.pushInfo(f"Hour filter: {hours_list}")
+        return hours_list
+    except ValueError:
+        feedback.reportError(
+            f"Invalid hours filter: {hours_filter}. Using all hours.",
+            fatalError=False,
+        )
+        return None
+
+
 def load_raster_from_layer(
     layer: QgsRasterLayer,
 ) -> tuple[NDArray[np.floating], list[float], str]:
@@ -91,7 +130,7 @@ def _looks_like_relative_heights(
 
     Delegates to the canonical implementation in the core API.
     """
-    from solweig import looks_like_relative
+    from solweig.geospatial import looks_like_relative
 
     return looks_like_relative(layer, reference_surface)
 
@@ -121,7 +160,7 @@ def _align_layer(
     crs_wkt: str,
 ) -> NDArray[np.floating]:
     """Resample a raster to the target grid if extents or shape differ."""
-    from solweig import extract_bounds, resample_to_grid
+    from solweig.geospatial import extract_bounds, resample_to_grid
 
     # Expected target dimensions (same formula as resample_to_grid)
     expected_h = int(np.round((target_bbox[3] - target_bbox[1]) / pixel_size))
@@ -172,7 +211,7 @@ def create_surface_from_parameters(
     """
     try:
         import solweig
-        from solweig import extract_bounds, intersect_bounds
+        from solweig.geospatial import extract_bounds, intersect_bounds
     except ImportError as e:
         raise QgsProcessingException("SOLWEIG library not found. Please install solweig package.") from e
 
@@ -291,7 +330,7 @@ def create_surface_from_parameters(
     # Compute wall heights and aspects from DSM
     feedback.setProgressText("Computing wall heights...")
     feedback.pushInfo("Computing walls from DSM...")
-    from solweig import wallalgorithms as wa
+    from solweig.geospatial import wallalgorithms as wa
 
     walls = wa.findwalls(surface.dsm, 1.0)
     feedback.pushInfo("Computing wall aspects...")
@@ -699,29 +738,9 @@ def load_weather_from_epw(
     except ImportError as e:
         raise QgsProcessingException("SOLWEIG library not found. Please install solweig package.") from e
 
-    # Convert QDateTime to Python naive datetime
-    if start_dt is not None and hasattr(start_dt, "toPyDateTime"):
-        start_dt = start_dt.toPyDateTime()
-    if end_dt is not None and hasattr(end_dt, "toPyDateTime"):
-        end_dt = end_dt.toPyDateTime()
-    # Strip timezone info to avoid aware/naive comparison errors
-    if start_dt is not None and start_dt.tzinfo is not None:
-        start_dt = start_dt.replace(tzinfo=None)
-    if end_dt is not None and end_dt.tzinfo is not None:
-        end_dt = end_dt.replace(tzinfo=None)
-
-    # Parse hours filter
-    hours_list = None
-    if hours_filter:
-        try:
-            hours_str = hours_filter.replace(" ", "")
-            hours_list = [int(h) for h in hours_str.split(",")]
-            feedback.pushInfo(f"Hour filter: {hours_list}")
-        except ValueError:
-            feedback.reportError(
-                f"Invalid hours filter: {hours_filter}. Using all hours.",
-                fatalError=False,
-            )
+    start_dt = _qdt_to_naive_datetime(start_dt)
+    end_dt = _qdt_to_naive_datetime(end_dt)
+    hours_list = _parse_hours_filter(hours_filter, feedback)
 
     try:
         weather_series = solweig.Weather.from_epw(
@@ -765,7 +784,10 @@ def load_weather_from_umep_met(
         QgsProcessingException: If file cannot be read or no data found.
     """
     try:
-        from solweig.models.weather import Weather
+        # Use the public solweig.Weather rather than reaching into
+        # solweig.models.weather — the audit flagged the deeper import as
+        # stale coupling to library internals.
+        import solweig
     except ImportError as e:
         raise QgsProcessingException("SOLWEIG library not found. Please install solweig package.") from e
 
@@ -774,32 +796,13 @@ def load_weather_from_umep_met(
 
     feedback.pushInfo(f"Loading UMEP met file: {met_path}")
 
-    # Convert QDateTime to Python naive datetime
-    if start_dt is not None and hasattr(start_dt, "toPyDateTime"):
-        start_dt = start_dt.toPyDateTime()
-    if end_dt is not None and hasattr(end_dt, "toPyDateTime"):
-        end_dt = end_dt.toPyDateTime()
-    if start_dt is not None and start_dt.tzinfo is not None:
-        start_dt = start_dt.replace(tzinfo=None)
-    if end_dt is not None and end_dt.tzinfo is not None:
-        end_dt = end_dt.replace(tzinfo=None)
-
-    # Parse hours filter
-    hours_list = None
-    if hours_filter:
-        try:
-            hours_str = hours_filter.replace(" ", "")
-            hours_list = [int(h) for h in hours_str.split(",")]
-            feedback.pushInfo(f"Hour filter: {hours_list}")
-        except ValueError:
-            feedback.reportError(
-                f"Invalid hours filter: {hours_filter}. Using all hours.",
-                fatalError=False,
-            )
+    start_dt = _qdt_to_naive_datetime(start_dt)
+    end_dt = _qdt_to_naive_datetime(end_dt)
+    hours_list = _parse_hours_filter(hours_filter, feedback)
 
     # Load via Weather.from_umep_met()
     try:
-        weather_series = Weather.from_umep_met(
+        weather_series = solweig.Weather.from_umep_met(
             paths=[met_path],
             resample_hourly=True,
             start=start_dt,

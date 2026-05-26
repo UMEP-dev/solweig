@@ -150,14 +150,22 @@ pub(crate) fn create_patches(patch_option: i32) -> (Vec<f32>, Vec<f32>) {
 pub(crate) fn compute_steradians(altitudes: &[f32]) -> Array1<f32> {
     let n = altitudes.len();
     let mut steradian = Array1::<f32>::zeros(n);
+    if n == 0 {
+        return steradian;
+    }
 
-    // Unique altitudes and counts
+    // Build unique-altitude bands and remember each altitude's band index in one
+    // pass. Tracking the index inline avoids a second `position()` lookup (and
+    // an unwrap) in the steradian loop below.
     let mut unique_alts: Vec<f32> = Vec::new();
     let mut counts: Vec<i32> = Vec::new();
+    let mut band_of: Vec<usize> = Vec::with_capacity(n);
     for &a in altitudes {
         if let Some(pos) = unique_alts.iter().position(|&u| (u - a).abs() < 1e-6) {
             counts[pos] += 1;
+            band_of.push(pos);
         } else {
+            band_of.push(unique_alts.len());
             unique_alts.push(a);
             counts.push(1);
         }
@@ -166,15 +174,12 @@ pub(crate) fn compute_steradians(altitudes: &[f32]) -> Array1<f32> {
     let first_alt = altitudes[0];
     for i in 0..n {
         let alt_i = altitudes[i];
-        let count = counts[unique_alts
-            .iter()
-            .position(|&u| (u - alt_i).abs() < 1e-6)
-            .unwrap()];
+        let count = counts[band_of[i]];
         if count > 1 {
             steradian[i] = (360.0 / count as f32)
                 * DEG2RAD
                 * (((alt_i + first_alt) * DEG2RAD).sin() - ((alt_i - first_alt) * DEG2RAD).sin());
-        } else {
+        } else if i > 0 {
             // Single patch in band (e.g. 90°)
             let prev_alt = altitudes[i - 1];
             steradian[i] = (360.0 / count as f32)
@@ -189,7 +194,10 @@ pub(crate) fn compute_steradians(altitudes: &[f32]) -> Array1<f32> {
 fn patch_layout_for_option(patch_option: i32) -> PatchLayoutCache {
     static CACHE: OnceLock<Mutex<HashMap<i32, PatchLayoutCache>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = cache.lock().expect("patch layout cache mutex poisoned");
+    // Recover from mutex poisoning instead of panicking: a poisoned lock means
+    // a previous thread panicked while holding it, but the cached PatchLayoutCache
+    // entries are immutable so the inner data is still safe to read.
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
 
     guard
         .entry(patch_option)

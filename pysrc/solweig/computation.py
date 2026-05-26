@@ -26,9 +26,37 @@ _OUT_ALL = _OUT_SHADOW | _OUT_KDOWN | _OUT_KUP | _OUT_LDOWN | _OUT_LUP
 
 
 def _arr_key(arr):
+    """Cache key for `arr` that catches in-place mutations cheaply.
+
+    Composition: data pointer + shape + dtype + bit-pattern of three
+    witness elements (first / middle / last). Pointer + shape catches
+    array replacement; witness bytes catch most in-place edits without
+    paying for a full content hash.
+
+    NOT caught: a mutation that touches only elements *other* than
+    positions 0, n//2, n-1. The documented invariant
+    (`docs/development/invariants.md` invariant 3) is "don't mutate
+    surface arrays after passing them to calculate()", and this key
+    is a defense-in-depth check, not a full guarantee.
+
+    O(1) regardless of array size. NaN-safe via uint8 bit-pattern view.
+    """
     if arr is None:
         return None
-    return (arr.ctypes.data, arr.shape)
+    n = arr.size
+    if n == 0:
+        witness = b""
+    else:
+        flat = arr.ravel()
+        mid = n // 2
+        # 1-element slices keep dimensionality so .view(uint8) is legal.
+        # Bit-pattern bytes avoid NaN equality issues.
+        witness = (
+            flat[0:1].view(np.uint8).tobytes(),
+            flat[mid : mid + 1].view(np.uint8).tobytes(),
+            flat[n - 1 : n].view(np.uint8).tobytes(),
+        )
+    return (arr.ctypes.data, arr.shape, arr.dtype.str, witness)
 
 
 if TYPE_CHECKING:
@@ -97,40 +125,41 @@ def calculate_core_fused(
 
     # === Precompute (stays in Python) ===
 
-    rows, cols = surface.dsm.shape
-    pixel_size = surface.pixel_size
+    # Access surface state through the typed views (geometry/optical/auxiliary).
+    # The views proxy to the same fields as direct attribute access; using them
+    # makes the per-concern grouping explicit at the call site.
+    geom = surface.geometry
+    optical = surface.optical
+    aux = surface.auxiliary
+
+    rows, cols = geom.shape
+    pixel_size = geom.pixel_size
 
     # Valid pixel mask (True where all layers have finite data)
     # Computed once by SurfaceData.prepare(), or derived from DSM if missing
-    valid_mask = surface.valid_mask
-    valid_source = valid_mask if valid_mask is not None else surface.dsm
+    valid_mask = aux.valid_mask
+    valid_source = valid_mask if valid_mask is not None else geom.dsm
     valid_mask_key = _arr_key(valid_source)
     cache = surface._cache
-    valid_mask_cache = cache.valid_mask_u8_cache
-    if valid_mask_cache is not None and valid_mask_cache[0] == valid_mask_key:
-        valid_mask_u8 = valid_mask_cache[1]
-    else:
-        if valid_mask is None:
-            valid_mask = np.isfinite(surface.dsm)
-        valid_mask_u8 = np.ascontiguousarray(valid_mask, dtype=np.uint8)
-        cache.valid_mask_u8_cache = valid_mask_key, valid_mask_u8
 
-    # Valid-bounds crop (ported from old main implementation):
-    # trim heavy per-timestep compute to the minimal bounding rectangle of valid pixels.
-    bbox_cache = cache.valid_bbox_cache
-    if bbox_cache is not None and bbox_cache[0] == valid_mask_key:
-        r0, r1, c0, c1 = bbox_cache[1]
-    else:
+    def _compute_valid_mask_u8():
+        vm = valid_mask if valid_mask is not None else np.isfinite(geom.dsm)
+        return np.ascontiguousarray(vm, dtype=np.uint8)
+
+    valid_mask_u8 = cache.get_or_compute("valid_mask_u8_cache", valid_mask_key, _compute_valid_mask_u8)
+
+    # Valid-bounds crop: trim heavy per-timestep compute to the minimal bounding
+    # rectangle of valid pixels.
+    def _compute_valid_bbox():
         rows_any = np.any(valid_mask_u8 != 0, axis=1)
         cols_any = np.any(valid_mask_u8 != 0, axis=0)
         if not rows_any.any() or not cols_any.any():
-            r0, r1, c0, c1 = 0, rows, 0, cols
-        else:
-            r_idx = np.flatnonzero(rows_any)
-            c_idx = np.flatnonzero(cols_any)
-            r0, r1 = int(r_idx[0]), int(r_idx[-1]) + 1
-            c0, c1 = int(c_idx[0]), int(c_idx[-1]) + 1
-        cache.valid_bbox_cache = valid_mask_key, (r0, r1, c0, c1)
+            return 0, rows, 0, cols
+        r_idx = np.flatnonzero(rows_any)
+        c_idx = np.flatnonzero(cols_any)
+        return int(r_idx[0]), int(r_idx[-1]) + 1, int(c_idx[0]), int(c_idx[-1]) + 1
+
+    r0, r1, c0, c1 = cache.get_or_compute("valid_bbox_cache", valid_mask_key, _compute_valid_bbox)
 
     full_area = rows * cols
     crop_area = (r1 - r0) * (c1 - c0)
@@ -154,35 +183,34 @@ def calculate_core_fused(
             output_mask |= _OUT_LUP
 
     # Land cover properties
-    lc_props_key = (_arr_key(surface.land_cover), _arr_key(surface.albedo), _arr_key(surface.emissivity), id(materials))
-    lc_props_cache = cache.land_cover_props_cache
-    if lc_props_cache is not None and lc_props_cache[0] == lc_props_key:
-        alb_grid, emis_grid, tgk_grid, tstart_grid, tmaxlst_grid = lc_props_cache[1]
-    else:
-        alb_grid, emis_grid, tgk_grid, tstart_grid, tmaxlst_grid = surface.get_land_cover_properties(materials)
-        cache.land_cover_props_cache = lc_props_key, (alb_grid, emis_grid, tgk_grid, tstart_grid, tmaxlst_grid)
+    lc_props_key = (_arr_key(optical.land_cover), _arr_key(optical.albedo), _arr_key(optical.emissivity), id(materials))
+    alb_grid, emis_grid, tgk_grid, tstart_grid, tmaxlst_grid = cache.get_or_compute(
+        "land_cover_props_cache",
+        lc_props_key,
+        lambda: surface.get_land_cover_properties(materials),
+    )
 
     # Vegetation inputs
-    use_veg = surface.cdsm is not None
-    cdsm = surface.cdsm if use_veg else None
-    tdsm = surface.tdsm if use_veg else None
+    use_veg = geom.cdsm is not None
+    cdsm = geom.cdsm if use_veg else None
+    tdsm = geom.tdsm if use_veg else None
     if use_veg:
         pool = surface.get_buffer_pool()
         bush = pool.get_zeros("bush")
     else:
         bush = None
 
-    # Wall inputs
-    has_walls = surface.wall_height is not None and surface.wall_aspect is not None
-    wall_ht = surface.wall_height if has_walls else None
-    wall_asp = surface.wall_aspect if has_walls else None
+    # Wall inputs (via the auxiliary view which exposes has_walls explicitly)
+    has_walls = aux.has_walls
+    wall_ht = aux.wall_height if has_walls else None
+    wall_asp = aux.wall_aspect if has_walls else None
 
     # Use full terrain relief for shadow ray termination so that mountain
     # ridges can correctly shadow valleys.  The horizontal reach is still
     # bounded by max_shadow_distance_m via max_index in Rust, so rays
     # don't run forever — they just won't terminate prematurely on the
     # vertical axis when terrain relief exceeds building heights.
-    max_height = surface.max_height
+    max_height = geom.max_height
 
     # SVF resolution (cached between timesteps)
     svf_bundle = resolve_svf(
@@ -203,7 +231,9 @@ def calculate_core_fused(
 
     svf_bundle.svfbuveg = adjust_svfbuveg_with_psi(svf_bundle.svf, svf_bundle.svf_veg, psi, use_veg)
 
-    # Wall material resolution
+    # Wall material resolution. Defaults match historical UMEP behaviour;
+    # `wall_material` takes precedence, otherwise fall back to per-property
+    # overrides under `materials.{Ts_deg,Tstart,TmaxLST}.Value.Walls`.
     tgk_wall = 0.37
     tstart_wall = -3.41
     tmaxlst_wall = 15.0
@@ -213,16 +243,12 @@ def calculate_core_fused(
         from .loaders import resolve_wall_params
 
         tgk_wall, tstart_wall, tmaxlst_wall = resolve_wall_params(wall_material, materials)
-    elif materials is not None:
-        tgk_w = getattr(getattr(getattr(materials, "Ts_deg", None), "Value", None), "Walls", None)
-        tstart_w = getattr(getattr(getattr(materials, "Tstart", None), "Value", None), "Walls", None)
-        tmaxlst_w = getattr(getattr(getattr(materials, "TmaxLST", None), "Value", None), "Walls", None)
-        if tgk_w is not None:
-            tgk_wall = tgk_w
-        if tstart_w is not None:
-            tstart_wall = tstart_w
-        if tmaxlst_w is not None:
-            tmaxlst_wall = tmaxlst_w
+    else:
+        from .models.materials import WallMaterialDefaults
+
+        tgk_wall, tstart_wall, tmaxlst_wall = WallMaterialDefaults.from_namespace(materials).apply(
+            tgk_wall, tstart_wall, tmaxlst_wall
+        )
 
     # Weather-derived scalars for ground temperature model
     _, _, _, snup = daylen(doy, location.latitude)
@@ -297,27 +323,21 @@ def calculate_core_fused(
     )
 
     # Buildings mask for GVF (computed from DSM/land_cover/walls)
-    buildings_key = (_arr_key(surface.dsm), _arr_key(surface.land_cover), _arr_key(wall_ht), float(pixel_size))
-    buildings_cache = cache.buildings_mask_cache
-    if buildings_cache is not None and buildings_cache[0] == buildings_key:
-        buildings = buildings_cache[1]
-    else:
-        buildings = detect_building_mask(
-            surface.dsm,
-            surface.land_cover,
-            wall_ht,
-            pixel_size,
-        )
-        cache.buildings_mask_cache = buildings_key, buildings
+    buildings_key = (_arr_key(geom.dsm), _arr_key(optical.land_cover), _arr_key(wall_ht), float(pixel_size))
+    buildings = cache.get_or_compute(
+        "buildings_mask_cache",
+        buildings_key,
+        lambda: detect_building_mask(geom.dsm, optical.land_cover, wall_ht, pixel_size),
+    )
 
-    if surface.land_cover is not None:
-        lc_grid_key = _arr_key(surface.land_cover)
-        lc_grid_cache = cache.lc_grid_f32_cache
-        if lc_grid_cache is not None and lc_grid_cache[0] == lc_grid_key:
-            lc_grid = lc_grid_cache[1]
-        else:
-            lc_grid = surface.land_cover.astype(np.float32)
-            cache.lc_grid_f32_cache = lc_grid_key, lc_grid
+    if optical.has_land_cover:
+        land_cover = optical.land_cover  # narrow for the lambda closure
+        assert land_cover is not None  # has_land_cover implies non-None
+        lc_grid = cache.get_or_compute(
+            "lc_grid_f32_cache",
+            _arr_key(land_cover),
+            lambda: land_cover.astype(np.float32),
+        )
     else:
         lc_grid = None
 
@@ -341,11 +361,10 @@ def calculate_core_fused(
                 float(human.height),
                 float(albedo_wall),
             )
-            gvf_crop_cache = cache.gvf_geometry_cache_crop
-            if gvf_crop_cache is not None and gvf_crop_cache[0] == gvf_crop_key:
-                gvf_cache = gvf_crop_cache[1]
-            else:
-                gvf_cache = pipeline.precompute_gvf_cache(
+            gvf_cache = cache.get_or_compute(
+                "gvf_geometry_cache_crop",
+                gvf_crop_key,
+                lambda: pipeline.precompute_gvf_cache(
                     as_float32(buildings[crop_slice]),
                     as_float32(wall_asp[crop_slice]),
                     as_float32(wall_ht[crop_slice]),
@@ -353,9 +372,11 @@ def calculate_core_fused(
                     float(pixel_size),
                     float(human.height),
                     float(albedo_wall),
-                )
-                cache.gvf_geometry_cache_crop = gvf_crop_key, gvf_cache
+                ),
+            )
         else:
+            # Full-grid case: cache slot value is the gvf_cache directly (no
+            # key needed — it's invariant across timesteps for the full grid).
             gvf_cache = cache.gvf_geometry_cache
             if gvf_cache is None:
                 gvf_cache = pipeline.precompute_gvf_cache(
@@ -380,8 +401,8 @@ def calculate_core_fused(
         shadow_mats = None
         if precomputed is not None and precomputed.shadow_matrices is not None:
             shadow_mats = precomputed.shadow_matrices
-        elif surface.shadow_matrices is not None:
-            shadow_mats = surface.shadow_matrices
+        elif aux.shadow_matrices is not None:
+            shadow_mats = aux.shadow_matrices
 
         if shadow_mats is not None:
             ws.patch_option = shadow_mats.patch_option
@@ -395,14 +416,15 @@ def calculate_core_fused(
                     c0,
                     c1,
                 )
-                aniso_crop_cache = cache.aniso_shadow_crop_cache
-                if aniso_crop_cache is not None and aniso_crop_cache[0] == aniso_crop_key:
-                    aniso_shmat, aniso_vegshmat, aniso_vbshmat = aniso_crop_cache[1]
-                else:
-                    aniso_shmat = np.ascontiguousarray(shadow_mats._shmat_u8[crop_slice])
-                    aniso_vegshmat = np.ascontiguousarray(shadow_mats._vegshmat_u8[crop_slice])
-                    aniso_vbshmat = np.ascontiguousarray(shadow_mats._vbshmat_u8[crop_slice])
-                    cache.aniso_shadow_crop_cache = aniso_crop_key, (aniso_shmat, aniso_vegshmat, aniso_vbshmat)
+                aniso_shmat, aniso_vegshmat, aniso_vbshmat = cache.get_or_compute(
+                    "aniso_shadow_crop_cache",
+                    aniso_crop_key,
+                    lambda: (
+                        np.ascontiguousarray(shadow_mats._shmat_u8[crop_slice]),
+                        np.ascontiguousarray(shadow_mats._vegshmat_u8[crop_slice]),
+                        np.ascontiguousarray(shadow_mats._vbshmat_u8[crop_slice]),
+                    ),
+                )
             else:
                 # Keep original arrays to preserve stable pointers across timesteps.
                 aniso_shmat = shadow_mats._shmat_u8
@@ -420,29 +442,35 @@ def calculate_core_fused(
             return None
         return arr[crop_slice] if use_crop else arr
 
-    dsm_call = _sel(surface.dsm)
+    dsm_call = _sel(geom.dsm)
     cdsm_call = _sel(cdsm)
     tdsm_call = _sel(tdsm)
     bush_call = _sel(bush)
     wall_ht_call = _sel(wall_ht)
     wall_asp_call = _sel(wall_asp)
-    svf_call = _sel(svf_bundle.svf)
-    svf_n_call = _sel(svf_bundle.svf_directional.north)
-    svf_e_call = _sel(svf_bundle.svf_directional.east)
-    svf_s_call = _sel(svf_bundle.svf_directional.south)
-    svf_w_call = _sel(svf_bundle.svf_directional.west)
-    svf_veg_call = _sel(svf_bundle.svf_veg)
-    svf_veg_n_call = _sel(svf_bundle.svf_veg_directional.north)
-    svf_veg_e_call = _sel(svf_bundle.svf_veg_directional.east)
-    svf_veg_s_call = _sel(svf_bundle.svf_veg_directional.south)
-    svf_veg_w_call = _sel(svf_bundle.svf_veg_directional.west)
-    svf_aveg_call = _sel(svf_bundle.svf_aveg)
-    svf_aveg_n_call = _sel(svf_bundle.svf_aveg_directional.north)
-    svf_aveg_e_call = _sel(svf_bundle.svf_aveg_directional.east)
-    svf_aveg_s_call = _sel(svf_bundle.svf_aveg_directional.south)
-    svf_aveg_w_call = _sel(svf_bundle.svf_aveg_directional.west)
-    svfbuveg_call = _sel(svf_bundle.svfbuveg)
-    svfalfa_call = _sel(svf_bundle.svfalfa)
+    # Build the Rust SvfBundle (17 contiguous f32 arrays) once per timestep.
+    # The bundle takes ownership of the numpy array refs; the per-array
+    # `.bind(py).readonly()` happens inside Rust. Eliminates 17 positional
+    # args from the FFI signature.
+    rust_svf_bundle = pipeline.SvfBundle(
+        as_float32(_sel(svf_bundle.svf)),
+        as_float32(_sel(svf_bundle.svf_directional.north)),
+        as_float32(_sel(svf_bundle.svf_directional.east)),
+        as_float32(_sel(svf_bundle.svf_directional.south)),
+        as_float32(_sel(svf_bundle.svf_directional.west)),
+        as_float32(_sel(svf_bundle.svf_veg)),
+        as_float32(_sel(svf_bundle.svf_veg_directional.north)),
+        as_float32(_sel(svf_bundle.svf_veg_directional.east)),
+        as_float32(_sel(svf_bundle.svf_veg_directional.south)),
+        as_float32(_sel(svf_bundle.svf_veg_directional.west)),
+        as_float32(_sel(svf_bundle.svf_aveg)),
+        as_float32(_sel(svf_bundle.svf_aveg_directional.north)),
+        as_float32(_sel(svf_bundle.svf_aveg_directional.east)),
+        as_float32(_sel(svf_bundle.svf_aveg_directional.south)),
+        as_float32(_sel(svf_bundle.svf_aveg_directional.west)),
+        as_float32(_sel(svf_bundle.svfbuveg)),
+        as_float32(_sel(svf_bundle.svfalfa)),
+    )
     alb_call = _sel(alb_grid)
     emis_call = _sel(emis_grid)
     tgk_call = _sel(tgk_grid)
@@ -460,6 +488,20 @@ def calculate_core_fused(
 
     # === Call fused Rust pipeline ===
 
+    # Thermal state bundle (6 arrays + 3 scalars + version).
+    rust_state_bundle = pipeline.StateBundle(
+        pipeline.STATE_BUNDLE_VERSION,
+        firstdaytime_int,
+        float(state.timeadd),
+        float(state.timestep_dec),
+        as_float32(tgmap1_call),
+        as_float32(tgmap1_e_call),
+        as_float32(tgmap1_s_call),
+        as_float32(tgmap1_w_call),
+        as_float32(tgmap1_n_call),
+        as_float32(tgout1_call),
+    )
+
     result = pipeline.compute_timestep(
         # Scalar structs
         ws,
@@ -474,24 +516,8 @@ def calculate_core_fused(
         as_float32(bush_call) if bush_call is not None else None,
         as_float32(wall_ht_call) if wall_ht_call is not None else None,
         as_float32(wall_asp_call) if wall_asp_call is not None else None,
-        # SVF arrays
-        as_float32(svf_call),
-        as_float32(svf_n_call),
-        as_float32(svf_e_call),
-        as_float32(svf_s_call),
-        as_float32(svf_w_call),
-        as_float32(svf_veg_call),
-        as_float32(svf_veg_n_call),
-        as_float32(svf_veg_e_call),
-        as_float32(svf_veg_s_call),
-        as_float32(svf_veg_w_call),
-        as_float32(svf_aveg_call),
-        as_float32(svf_aveg_n_call),
-        as_float32(svf_aveg_e_call),
-        as_float32(svf_aveg_s_call),
-        as_float32(svf_aveg_w_call),
-        as_float32(svfbuveg_call),
-        as_float32(svfalfa_call),
+        # SVF arrays (17 rasters bundled into one PyO3 SvfBundle)
+        rust_svf_bundle,
         # Land cover property grids
         as_float32(alb_call),
         as_float32(emis_call),
@@ -505,16 +531,8 @@ def calculate_core_fused(
         aniso_shmat,
         aniso_vegshmat,
         aniso_vbshmat,
-        # Thermal state
-        firstdaytime_int,
-        float(state.timeadd),
-        float(state.timestep_dec),
-        as_float32(tgmap1_call),
-        as_float32(tgmap1_e_call),
-        as_float32(tgmap1_s_call),
-        as_float32(tgmap1_w_call),
-        as_float32(tgmap1_n_call),
-        as_float32(tgout1_call),
+        # Thermal state (9 fields bundled with explicit FFI version check)
+        rust_state_bundle,
         # Valid pixel mask for early NaN exit
         valid_mask_call,
         output_mask,

@@ -113,42 +113,17 @@ class SolweigAlgorithmBase(QgsProcessingAlgorithm):
     # -------------------------------------------------------------------------
 
     def load_raster_from_layer(self, layer: QgsRasterLayer) -> tuple[NDArray[np.floating], list[float], str]:
+        """Load a QGIS raster layer to a numpy array using GDAL.
+
+        Thin instance-method wrapper around
+        :func:`solweig_qgis.utils.converters.load_raster_from_layer` to keep the
+        previous ``self.load_raster_from_layer(layer)`` call-site API while
+        eliminating the duplicate implementation. See the module-level function
+        for nodata-handling semantics and return shape.
         """
-        Load QGIS raster layer to numpy array using GDAL.
+        from ..utils.converters import load_raster_from_layer as _impl
 
-        Args:
-            layer: QGIS raster layer to load.
-
-        Returns:
-            tuple of (array, geotransform, crs_wkt):
-                - array: 2D numpy float32 array
-                - geotransform: GDAL 6-tuple [x_origin, x_res, 0, y_origin, 0, -y_res]
-                - crs_wkt: Coordinate reference system as WKT string
-
-        Raises:
-            QgsProcessingException: If raster cannot be opened.
-        """
-        source = layer.source()
-        ds = gdal.Open(source, gdal.GA_ReadOnly)
-        if ds is None:
-            raise QgsProcessingException(f"Cannot open raster: {source}")
-
-        try:
-            band = ds.GetRasterBand(1)
-            array = band.ReadAsArray().astype(np.float32)
-
-            # Match solweig.io.load_raster(): honor any explicit non-NaN nodata
-            # sentinel so QGIS and local API runs see the same valid mask.
-            nodata = band.GetNoDataValue()
-            if nodata is not None and not np.isnan(nodata):
-                array = np.where(array == nodata, np.nan, array)
-
-            geotransform = list(ds.GetGeoTransform())
-            crs_wkt = ds.GetProjection()
-
-            return array, geotransform, crs_wkt
-        finally:
-            ds = None  # Close dataset
+        return _impl(layer)
 
     def load_optional_raster(
         self,

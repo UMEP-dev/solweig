@@ -15,10 +15,17 @@ import pytest
 from tests.qgis_mocks import QgsProcessingException, install, install_osgeo, preserve_solweig_modules, uninstall_osgeo
 
 install()  # Must be called before any qgis_plugin imports
-install_osgeo()  # Temporarily needed for osgeo imports in base.py
+install_osgeo()  # Temporarily needed for osgeo imports in base.py + utils.converters
 
 with preserve_solweig_modules():
     from qgis_plugin.solweig_qgis.algorithms.base import SolweigAlgorithmBase  # noqa: E402
+
+    # Pre-import the converters module too, so the lazy `from ..utils.converters
+    # import load_raster_from_layer` call inside the base-class delegating
+    # method sees the osgeo mock when the test triggers it. Otherwise the
+    # test environment (which uninstalls osgeo immediately after this block)
+    # would hit ModuleNotFoundError when load_raster_from_layer is called.
+    from qgis_plugin.solweig_qgis.utils import converters as _converters  # noqa: E402, F401
 
 uninstall_osgeo()  # Clean up immediately after imports to avoid polluting other tests
 
@@ -220,7 +227,9 @@ class TestLoadRasterFromLayer:
         mock_gdal.Open.return_value = mock_ds
         mock_gdal.GA_ReadOnly = 0
 
-        with patch("qgis_plugin.solweig_qgis.algorithms.base.gdal", mock_gdal):
+        # The implementation lives in utils.converters now; base.load_raster_from_layer
+        # is a thin delegating wrapper. Patch the canonical home.
+        with patch("qgis_plugin.solweig_qgis.utils.converters.gdal", mock_gdal):
             array, geotransform, crs_wkt = algo.load_raster_from_layer(layer)
 
         assert np.isnan(array[0, 1])
