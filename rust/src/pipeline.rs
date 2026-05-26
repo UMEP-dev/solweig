@@ -934,6 +934,82 @@ impl SvfBundle {
     }
 }
 
+// ── Surface bundle ─────────────────────────────────────────────────────────
+
+/// Bundle of the 6 surface rasters (DSM + 5 optional auxiliaries).
+///
+/// `dsm` is required; everything else is optional and absent when the
+/// caller doesn't need vegetation or wall computation. The bundle is
+/// constant across timesteps for a given surface.
+#[pyclass]
+pub struct SurfaceBundle {
+    dsm: Py<numpy::PyArray2<f32>>,
+    cdsm: Option<Py<numpy::PyArray2<f32>>>,
+    tdsm: Option<Py<numpy::PyArray2<f32>>>,
+    bush: Option<Py<numpy::PyArray2<f32>>>,
+    wall_ht: Option<Py<numpy::PyArray2<f32>>>,
+    wall_asp: Option<Py<numpy::PyArray2<f32>>>,
+}
+
+#[pymethods]
+impl SurfaceBundle {
+    #[new]
+    #[pyo3(signature = (dsm, cdsm=None, tdsm=None, bush=None, wall_ht=None, wall_asp=None))]
+    fn new(
+        dsm: Py<numpy::PyArray2<f32>>,
+        cdsm: Option<Py<numpy::PyArray2<f32>>>,
+        tdsm: Option<Py<numpy::PyArray2<f32>>>,
+        bush: Option<Py<numpy::PyArray2<f32>>>,
+        wall_ht: Option<Py<numpy::PyArray2<f32>>>,
+        wall_asp: Option<Py<numpy::PyArray2<f32>>>,
+    ) -> Self {
+        Self {
+            dsm,
+            cdsm,
+            tdsm,
+            bush,
+            wall_ht,
+            wall_asp,
+        }
+    }
+}
+
+// ── Properties bundle ──────────────────────────────────────────────────────
+
+/// Bundle of the 5 land-cover-derived property rasters.
+///
+/// Each per-pixel property grid is computed from the land-cover class via
+/// the materials JSON lookup. They are constant across timesteps for a
+/// given surface + materials pair, so the bundle is built once and reused.
+#[pyclass]
+pub struct PropertiesBundle {
+    alb_grid: Py<numpy::PyArray2<f32>>,
+    emis_grid: Py<numpy::PyArray2<f32>>,
+    tgk_grid: Py<numpy::PyArray2<f32>>,
+    tstart_grid: Py<numpy::PyArray2<f32>>,
+    tmaxlst_grid: Py<numpy::PyArray2<f32>>,
+}
+
+#[pymethods]
+impl PropertiesBundle {
+    #[new]
+    fn new(
+        alb_grid: Py<numpy::PyArray2<f32>>,
+        emis_grid: Py<numpy::PyArray2<f32>>,
+        tgk_grid: Py<numpy::PyArray2<f32>>,
+        tstart_grid: Py<numpy::PyArray2<f32>>,
+        tmaxlst_grid: Py<numpy::PyArray2<f32>>,
+    ) -> Self {
+        Self {
+            alb_grid,
+            emis_grid,
+            tgk_grid,
+            tstart_grid,
+            tmaxlst_grid,
+        }
+    }
+}
+
 // ── State bundle ────────────────────────────────────────────────────────────
 
 /// FFI version constant for the StateBundle protocol.
@@ -1031,22 +1107,13 @@ pub fn compute_timestep(
     config: &ConfigScalars,
     // Optional GVF geometry cache (skip building ray-tracing if provided)
     gvf_cache: Option<&PyGvfGeometryCache>,
-    // Surface arrays (constant across timesteps, borrowed)
-    dsm: PyReadonlyArray2<f32>,
-    cdsm: Option<PyReadonlyArray2<f32>>,
-    tdsm: Option<PyReadonlyArray2<f32>>,
-    bush: Option<PyReadonlyArray2<f32>>,
-    wall_ht: Option<PyReadonlyArray2<f32>>,
-    wall_asp: Option<PyReadonlyArray2<f32>>,
+    // Surface arrays (6 rasters bundled into one SurfaceBundle).
+    surface_bundle: &SurfaceBundle,
     // SVF arrays (constant across timesteps; 17 rasters bundled into one
     // pyclass to keep the FFI surface manageable).
     svf_bundle: &SvfBundle,
-    // Land cover property grids (constant across timesteps, borrowed)
-    alb_grid: PyReadonlyArray2<f32>,
-    emis_grid: PyReadonlyArray2<f32>,
-    tgk_grid: PyReadonlyArray2<f32>,
-    tstart_grid: PyReadonlyArray2<f32>,
-    tmaxlst_grid: PyReadonlyArray2<f32>,
+    // Land cover property grids (5 rasters bundled into one PyO3 class).
+    properties_bundle: &PropertiesBundle,
     // Buildings mask for GVF
     buildings: PyReadonlyArray2<f32>,
     lc_grid: Option<PyReadonlyArray2<f32>>,
@@ -1063,12 +1130,20 @@ pub fn compute_timestep(
 ) -> PyResult<TimestepResult> {
     // Borrow all arrays (zero-copy from numpy)
     let valid_v = valid_mask.as_array();
-    let dsm_v = dsm.as_array();
-    let cdsm_v = cdsm.as_ref().map(|a| a.as_array());
-    let tdsm_v = tdsm.as_ref().map(|a| a.as_array());
-    let bush_v = bush.as_ref().map(|a| a.as_array());
-    let wall_ht_v = wall_ht.as_ref().map(|a| a.as_array());
-    let wall_asp_v = wall_asp.as_ref().map(|a| a.as_array());
+    // Bind surface arrays from the bundle. The *_ro readonly bindings stay
+    // alive for the function body so the *_v views are valid throughout.
+    let dsm_ro = surface_bundle.dsm.bind(py).readonly();
+    let cdsm_ro = surface_bundle.cdsm.as_ref().map(|a| a.bind(py).readonly());
+    let tdsm_ro = surface_bundle.tdsm.as_ref().map(|a| a.bind(py).readonly());
+    let bush_ro = surface_bundle.bush.as_ref().map(|a| a.bind(py).readonly());
+    let wall_ht_ro = surface_bundle.wall_ht.as_ref().map(|a| a.bind(py).readonly());
+    let wall_asp_ro = surface_bundle.wall_asp.as_ref().map(|a| a.bind(py).readonly());
+    let dsm_v = dsm_ro.as_array();
+    let cdsm_v = cdsm_ro.as_ref().map(|a| a.as_array());
+    let tdsm_v = tdsm_ro.as_ref().map(|a| a.as_array());
+    let bush_v = bush_ro.as_ref().map(|a| a.as_array());
+    let wall_ht_v = wall_ht_ro.as_ref().map(|a| a.as_array());
+    let wall_asp_v = wall_asp_ro.as_ref().map(|a| a.as_array());
     // Bind each SVF raster from the bundle. The PyReadonlyArray2 bindings
     // (svf_ro etc.) must outlive the ArrayView2s (svf_v etc.); both are
     // declared at this scope so they live for the whole function body.
@@ -1106,11 +1181,17 @@ pub fn compute_timestep(
     let svf_aveg_w_v = svf_aveg_w_ro.as_array();
     let svfbuveg_v = svfbuveg_ro.as_array();
     let svfalfa_v = svfalfa_ro.as_array();
-    let alb_grid_v = alb_grid.as_array();
-    let emis_grid_v = emis_grid.as_array();
-    let tgk_grid_v = tgk_grid.as_array();
-    let tstart_grid_v = tstart_grid.as_array();
-    let tmaxlst_grid_v = tmaxlst_grid.as_array();
+    // Bind land-cover property rasters from the bundle.
+    let alb_grid_ro = properties_bundle.alb_grid.bind(py).readonly();
+    let emis_grid_ro = properties_bundle.emis_grid.bind(py).readonly();
+    let tgk_grid_ro = properties_bundle.tgk_grid.bind(py).readonly();
+    let tstart_grid_ro = properties_bundle.tstart_grid.bind(py).readonly();
+    let tmaxlst_grid_ro = properties_bundle.tmaxlst_grid.bind(py).readonly();
+    let alb_grid_v = alb_grid_ro.as_array();
+    let emis_grid_v = emis_grid_ro.as_array();
+    let tgk_grid_v = tgk_grid_ro.as_array();
+    let tstart_grid_v = tstart_grid_ro.as_array();
+    let tmaxlst_grid_v = tmaxlst_grid_ro.as_array();
     let buildings_v = buildings.as_array();
     let lc_grid_v = lc_grid.as_ref().map(|a| a.as_array());
     // Bind thermal state arrays from the bundle. Same lifetime pattern as the

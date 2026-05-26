@@ -186,6 +186,8 @@ fn register_pipeline_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
     submodule.add_class::<pipeline::PyGvfGeometryCache>()?;
     submodule.add_class::<pipeline::SvfBundle>()?;
     submodule.add_class::<pipeline::StateBundle>()?;
+    submodule.add_class::<pipeline::PropertiesBundle>()?;
+    submodule.add_class::<pipeline::SurfaceBundle>()?;
     submodule.add("STATE_BUNDLE_VERSION", pipeline::STATE_BUNDLE_VERSION)?;
     submodule.add_function(wrap_pyfunction!(pipeline::compute_timestep, &submodule)?)?;
     submodule.add_function(wrap_pyfunction!(

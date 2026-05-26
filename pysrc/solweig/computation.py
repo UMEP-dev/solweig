@@ -488,6 +488,25 @@ def calculate_core_fused(
 
     # === Call fused Rust pipeline ===
 
+    # Surface bundle (DSM required, 5 optional auxiliaries).
+    rust_surface_bundle = pipeline.SurfaceBundle(
+        as_float32(dsm_call),
+        as_float32(cdsm_call) if cdsm_call is not None else None,
+        as_float32(tdsm_call) if tdsm_call is not None else None,
+        as_float32(bush_call) if bush_call is not None else None,
+        as_float32(wall_ht_call) if wall_ht_call is not None else None,
+        as_float32(wall_asp_call) if wall_asp_call is not None else None,
+    )
+
+    # Land-cover property bundle (5 rasters).
+    rust_properties_bundle = pipeline.PropertiesBundle(
+        as_float32(alb_call),
+        as_float32(emis_call),
+        as_float32(tgk_call),
+        as_float32(tstart_call),
+        as_float32(tmaxlst_call),
+    )
+
     # Thermal state bundle (6 arrays + 3 scalars + version).
     rust_state_bundle = pipeline.StateBundle(
         pipeline.STATE_BUNDLE_VERSION,
@@ -509,21 +528,12 @@ def calculate_core_fused(
         cs,
         # GVF geometry cache (None on first call triggers full GVF, then cached)
         gvf_cache,
-        # Surface arrays
-        as_float32(dsm_call),
-        as_float32(cdsm_call) if cdsm_call is not None else None,
-        as_float32(tdsm_call) if tdsm_call is not None else None,
-        as_float32(bush_call) if bush_call is not None else None,
-        as_float32(wall_ht_call) if wall_ht_call is not None else None,
-        as_float32(wall_asp_call) if wall_asp_call is not None else None,
+        # Surface arrays (6 rasters bundled into one SurfaceBundle)
+        rust_surface_bundle,
         # SVF arrays (17 rasters bundled into one PyO3 SvfBundle)
         rust_svf_bundle,
-        # Land cover property grids
-        as_float32(alb_call),
-        as_float32(emis_call),
-        as_float32(tgk_call),
-        as_float32(tstart_call),
-        as_float32(tmaxlst_call),
+        # Land cover property grids (5 rasters bundled into one PropertiesBundle)
+        rust_properties_bundle,
         # Buildings mask + land cover
         as_float32(buildings_call),
         as_float32(lc_grid_call) if lc_grid_call is not None else None,
