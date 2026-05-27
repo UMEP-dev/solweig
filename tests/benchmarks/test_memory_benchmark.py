@@ -3,8 +3,15 @@
 These tests verify that memory usage stays within expected bounds.
 They run on small grids to be fast in CI while still detecting regressions.
 
-Memory target: ~370 bytes/pixel (measured Feb 2026 baseline)
-Regression threshold: 500 bytes/pixel (35% headroom for variance)
+Memory target: ~377 bytes/pixel (re-measured 2026-05-27 — Feb 2026
+baseline was ~370; the b85 architecture-stabilisation refactors moved
+the number by under 2%, confirming the typed views / FFI bundling
+don't add measurable memory overhead).
+
+Regression threshold: 500 bytes/pixel (~32% headroom for CI variance).
+Local runs are deterministic across repeated invocations (5/5 identical
+in re-measurement); the headroom exists for OS/Python-version drift
+in CI, not local variance.
 """
 
 import tracemalloc
@@ -20,8 +27,8 @@ pytestmark = pytest.mark.slow
 class TestMemoryBenchmark:
     """Memory usage benchmarks for CI."""
 
-    # Target: ~370 bytes/pixel (Feb 2026 baseline)
-    # Threshold: 500 bytes/pixel (35% headroom for CI variance)
+    # Target: ~377 bytes/pixel (2026-05-27 re-measurement, stable
+    # across 5 repeated runs). Threshold leaves room for CI/OS drift.
     MAX_BYTES_PER_PIXEL = 500
 
     @pytest.fixture
