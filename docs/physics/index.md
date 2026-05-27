@@ -32,43 +32,45 @@ graph LR
 
 ## Component Models
 
-Detailed specifications for each component are maintained in the [`specs/`](https://github.com/UMEP-dev/solweig/tree/main/specs) directory.
+The canonical specifications live in [`specs/`](https://github.com/UMEP-dev/solweig/tree/main/specs)
+alongside the source code; each page below renders that spec directly so
+parity tests in `tests/spec/` and the public docs share a single source.
 
 ### 1. Sky View Factor (SVF)
 
 Fraction of sky visible from each point, accounting for buildings and vegetation.
 
-[:octicons-arrow-right-24: SVF Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/svf.md){target=_blank}
+[:octicons-arrow-right-24: SVF specification](svf.md)
 
 ### 2. Shadow Calculation
 
 Sun position and ray tracing to determine shadow patterns.
 
-[:octicons-arrow-right-24: Shadow Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/shadows.md){target=_blank}
+[:octicons-arrow-right-24: Shadow specification](shadows.md)
 
 ### 3. Ground View Factor (GVF)
 
 View factor from point to ground surface, computing thermal emission from surrounding ground and walls.
 
-[:octicons-arrow-right-24: GVF Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/gvf.md){target=_blank}
+[:octicons-arrow-right-24: GVF specification](gvf.md)
 
 ### 4. Radiation Model
 
 Complete shortwave and longwave radiation budget.
 
-[:octicons-arrow-right-24: Radiation Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/radiation.md){target=_blank}
+[:octicons-arrow-right-24: Radiation specification](radiation.md)
 
 ### 5. Ground Temperature
 
 Surface temperature model with thermal inertia.
 
-[:octicons-arrow-right-24: Ground Temperature Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/ground_temperature.md){target=_blank}
+[:octicons-arrow-right-24: Ground temperature specification](ground_temperature.md)
 
 ### 6. Mean Radiant Temperature
 
 Integration of all radiation fluxes into Tmrt.
 
-[:octicons-arrow-right-24: Tmrt Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/tmrt.md){target=_blank}
+[:octicons-arrow-right-24: Tmrt specification](tmrt.md)
 
 ## Thermal Comfort Indices
 
@@ -76,13 +78,13 @@ Integration of all radiation fluxes into Tmrt.
 
 Fast polynomial approximation for outdoor thermal comfort.
 
-[:octicons-arrow-right-24: UTCI Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/utci.md){target=_blank}
+[:octicons-arrow-right-24: UTCI specification](utci.md)
 
 ### PET (Physiological Equivalent Temperature)
 
 Iterative solver based on human energy balance.
 
-[:octicons-arrow-right-24: PET Specification](https://github.com/UMEP-dev/solweig/blob/main/specs/pet.md){target=_blank}
+[:octicons-arrow-right-24: PET specification](pet.md)
 
 ## References
 

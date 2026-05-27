@@ -34,6 +34,7 @@ theme:
 
 plugins:
   - search
+  - include-markdown
   - mkdocstrings:
       handlers:
         python:
@@ -100,6 +101,14 @@ nav:
       - Errors: api/errors.md
   - Physics:
       - Overview: physics/index.md
+      - Sky View Factor: physics/svf.md
+      - Shadows: physics/shadows.md
+      - Ground View Factor: physics/gvf.md
+      - Radiation: physics/radiation.md
+      - Ground Temperature: physics/ground_temperature.md
+      - Mean Radiant Temperature: physics/tmrt.md
+      - UTCI: physics/utci.md
+      - PET: physics/pet.md
   - Development:
       - Contributing: development/contributing.md
   - About:
