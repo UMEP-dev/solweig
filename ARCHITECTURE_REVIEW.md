@@ -5,7 +5,21 @@ Not a punch list. Not a scorecard. The goal is to surface what kind of system th
 **is** (vs what it's currently shaped like), and identify the few changes that
 would matter most. Written to be discussed, not adopted wholesale._
 
-_Author: Claude · Reviewed against commit `<HEAD>` on the `main` branch._
+_Author: Claude · Reviewed against pre-b85 commit on the `main` branch._
+
+---
+
+## Status note (post-b85)
+
+> All five recommendations at the bottom of this document (A–E) shipped in
+> the b85 architecture-stabilisation pass. The structural critique in
+> §§1–6 still reads as the rationale for what was changed; numerical
+> claims (line counts, FFI arg counts, "no versioning", etc.) are
+> **pre-b85** and have been overtaken by the implementation. Each affected
+> section now carries an inline "Status update (post-b85)" callout. The
+> document is preserved in its original form so the _why_ remains visible;
+> for the live structural state see [ARCHITECTURE.md](ARCHITECTURE.md),
+> and for ongoing measured signals see [AUDIT.md](AUDIT.md).
 
 ---
 
@@ -147,6 +161,13 @@ inputs vs derived. The types carry the contract.
 
 ## 2. The Rust/Python boundary was optimised for one concern and accumulated debt elsewhere
 
+> **Status update (post-b85):** Recommendation A (Bundle the args) landed.
+> `compute_timestep` now takes 18 args via `SvfBundle` / `StateBundle` /
+> `PropertiesBundle` / `SurfaceBundle`, and the bundles carry a `version: u32`
+> field that fails fast on Python↔Rust mismatch — addressing both the
+> brittleness critique below and the "no FFI versioning" exposure flagged at
+> the end of the section.
+
 The current `pipeline.compute_timestep` has 43 parameters. That number is
 the smoking gun. It exists because the design optimised for **FFI
 overhead minimisation** — fuse the entire per-timestep pipeline into a
@@ -209,6 +230,16 @@ add a `version: u32` field to each bundle and check it on entry.
 
 ## 3. State management is five parallel models, not one
 
+> **Status update (post-b85):** Recommendation D (`_ComputationCache`
+> hardening) landed. The cache key now mixes in witness bytes from the
+> array's first / middle / last element (`_arr_key` in
+> `pysrc/solweig/computation.py`), catching in-place mutations that the old
+> `(ctypes.data, shape)` key missed. Lifecycle was not moved off
+> `SurfaceData` in the end — the documented invariant ("don't mutate
+> surface arrays after passing them to `calculate()`") plus the witness
+> bytes was judged sufficient. The other four state layers below are
+> unchanged.
+
 There are five distinct kinds of state/cache in the codebase, each with
 its own lifecycle, ownership, invalidation rule, and failure mode. They
 don't communicate with each other. This is the most pervasive
@@ -252,6 +283,15 @@ surface.
 ---
 
 ## 4. The configuration model is fragmented
+
+> **Status update (post-b85):** Recommendation E landed. The merged
+> `Settings` dataclass lives at `pysrc/solweig/models/settings.py`, the
+> 50-line override block was replaced with `Settings.resolve()`, and the
+> resolution rules are documented at
+> [docs/guide/settings.md](docs/guide/settings.md). The five input
+> mechanisms (`ModelConfig`, `HumanParams`, JSON files, kwargs, defaults)
+> still exist as inputs — they all funnel through the typed merge
+> exactly once, then `calculate()` works from `Settings` internally.
 
 A user calling `calculate()` can configure the run via five different mechanisms:
 
@@ -315,6 +355,15 @@ These are individually small but together produce the feeling that
 ---
 
 ## 6. Public API surface is conflated with QGIS-plugin needs
+
+> **Status update (post-b85):** The 8 QGIS-plugin-support helpers flagged
+> below moved to a dedicated `solweig.geospatial` submodule
+> (`pysrc/solweig/geospatial.py`); top-level access still works but emits
+> a `DeprecationWarning` with removal target 0.1.0b88 / 0.2.x.
+> `__all__` was also tightened — `ThermalState` is now a deliberate top-level
+> export because it appears in the `calculate()` signature. Docstring
+> coverage of the public surface is at 100% (279 symbols, per
+> [AUDIT.md](AUDIT.md)).
 
 [`solweig/__init__.py`](pysrc/solweig/__init__.py) exports 38 names in
 `__all__`. The intent is the user-facing API, but in practice it
@@ -446,6 +495,10 @@ who didn't know the rule. Cheap to write, high value.
 ---
 
 # The 3-5 changes that would matter most
+
+> **Status update (post-b85):** All five recommendations below shipped.
+> See the per-section callouts above for the implementation details.
+> This block is preserved as the original ranking / rationale.
 
 Stack-ranked by (impact × ease):
 

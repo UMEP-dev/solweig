@@ -4,6 +4,70 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
+## 0.1.0b86 — unreleased
+
+Internal tidy-and-tighten pass following b85. **No numerical change** — golden
+tests pass byte-identical, validation site numbers unchanged from b82
+baseline.
+
+- **Hot-file decomposition (continued).** Five Python modules split below
+  the 700-line audit threshold; every public symbol re-exported from its
+  original module so no caller breaks:
+  - `models/surface.py` 3,016 → 1,731 (extracted `surface_loading`,
+    `surface_compute`, `surface_svf_tiled`, `surface_serialization`,
+    `surface_views`)
+  - `io.py` 1,259 → 678 (extracted `io_epw`, `io_preview`)
+  - `summary.py` 935 → 493 (extracted `grid_accumulator`)
+  - `models/weather.py` 848 → 642 (extracted `models/location`)
+  - `models/precomputed.py` 804 → 560 (extracted `models/shadow_arrays`)
+  Audit hot-file count: 16 → 11 (remaining are Rust + `surface.py` +
+  `physics/sun_position.py`).
+- **Test coverage 75% → 81%.** 117 new focused unit tests across
+  `models/results`, `models/location`, `models/config`,
+  `components/gvf`, `components/svf_resolution`, `io_epw`,
+  `models/weather` (UMEP met parser), `models/shadow_arrays`,
+  `models/precomputed` (zip + memmap fixtures), `io` (bbox helpers,
+  preview, north-up guards), and `errors`. Coverage axis flips green
+  for the first time.
+- **`ThermalState` top-level export.** Now reachable at
+  `solweig.ThermalState` — previously only at
+  `solweig.models.state.ThermalState` despite appearing in the public
+  `calculate(state=…)` signature.
+- **QGIS plugin: 349 LOC of dead code removed.** Deleted
+  `create_surface_from_parameters` and three helpers (the fossilised
+  pre-`prepare()` loader). The production path already used
+  `SurfaceData.prepare()` directly; the dead function was only kept
+  alive by its own tests. Plugin metadata changelog also trimmed from
+  254 → 96 lines.
+- **Public docs reshaped.**
+  - Physics nav now renders the 8 component specs inline (SVF, shadows,
+    GVF, radiation, ground temperature, Tmrt, UTCI, PET) via
+    `mkdocs-include-markdown-plugin`. `specs/` remains the canonical
+    source so parity tests in `tests/spec/` and the public docs share
+    one file.
+  - Developer-focused docs (`PRINCIPLES.md`, `INVARIANTS.md`,
+    `ARCHITECTURE.md`) moved to repo root; the public site's Development
+    section is now just Contributing. The `docs/development/audit.md`
+    wrapper page was deleted (`AUDIT.md` is already generated at root).
+  - API docs gain `SurfaceData.prepare`, the four GPU helpers
+    (`is_gpu_available`, `get_compute_backend`, `disable_gpu`,
+    `get_gpu_limits`), and the `Settings` dataclass entry.
+- **Audit script gains a 9th axis.** `axis_canonical_docs` validates
+  that the 10 repo-root canonical docs are present, have inbound
+  references from other canonical docs (no orphans), and that every
+  relative `.md` link inside them resolves to an existing file.
+  Catches the kind of drift the `docs/development/principles.md` →
+  `PRINCIPLES.md` move would otherwise have created.
+- **Benchmark gates tightened.** `tests/benchmarks/test_performance_matrix_benchmark.py`
+  absolute budgets cut from 1.5–4.0 s to 0.5–0.85 s (observed medians
+  are 0.10–0.15 s on M-series Mac; ~4× headroom locally, ~8× in CI
+  under `SOLWEIG_PERF_BUDGET_SCALE=2.0`). Ratio caps tightened too:
+  aniso/iso 5→2, tiled/non-tiled 4→2.5, plugin/api 6→2. The old values
+  would have masked any regression under ~10×.
+- **Plugin wrapper cleanup.** Inlined the 10-line
+  `_looks_like_relative_heights` wrapper; callers now import
+  `solweig.geospatial.looks_like_relative` directly.
+
 ## 0.1.0b85 — 2026-05-26
 
 Architecture stabilisation pass. **No numerical change** — golden tests pass

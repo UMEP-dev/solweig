@@ -690,6 +690,126 @@ def axis_dependency_freshness() -> AxisResult:
     )
 
 
+# ── Axis 9: Repo-root canonical docs ────────────────────────────────────────
+
+# Docs that contributors and tooling rely on being at the repo root with
+# these exact names. If any of these disappear or are renamed without
+# updating cross-refs, this axis goes red. Adding new canonical docs:
+# extend this list, then make sure inbound refs exist from CLAUDE.md or
+# similar so they aren't orphaned.
+_CANONICAL_REPO_DOCS = [
+    "README.md",
+    "CLAUDE.md",
+    "PRINCIPLES.md",
+    "INVARIANTS.md",
+    "ARCHITECTURE.md",
+    "ARCHITECTURE_REVIEW.md",
+    "VALIDATION.md",
+    "AUDIT.md",
+    "CITATION.cff",
+    "LICENSE",
+]
+
+# Markdown link target: [text](path) where path is relative and ends in .md
+# (we only check intra-repo .md links here — external URLs are out of scope).
+_MD_REL_LINK_PAT = re.compile(r"\]\(([^)#]+\.md)(?:#[^)]*)?\)")
+
+
+def axis_canonical_docs() -> AxisResult:
+    """Validate the repo-root canonical docs exist + cross-link cleanly.
+
+    Three sub-checks:
+      1. **Presence** — every name in `_CANONICAL_REPO_DOCS` exists at the
+         repo root.
+      2. **Inbound refs** — every canonical .md (except README/CLAUDE which
+         are entry points) is mentioned by name in at least one other
+         canonical doc. Catches orphans created by future renames.
+      3. **Relative link resolution** — every `[text](relative/path.md)`
+         link inside any canonical .md points at an existing file. Catches
+         the kind of drift where a doc gets moved but its inbound links
+         aren't updated (the `docs/development/principles.md` →
+         `PRINCIPLES.md` move was a recent example).
+    """
+    detail: list[str] = []
+    missing: list[str] = []
+    orphans: list[str] = []
+    broken_links: list[str] = []
+
+    # 1. Presence
+    present: dict[str, Path] = {}
+    for name in _CANONICAL_REPO_DOCS:
+        p = REPO / name
+        if p.is_file():
+            present[name] = p
+        else:
+            missing.append(name)
+
+    # 2. Inbound refs (only for .md docs that aren't README/CLAUDE — those
+    # are entry points and never need inbound refs themselves, but they
+    # often link OUT to the others, so include them in the haystack).
+    md_present = {n: p for n, p in present.items() if n.endswith(".md")}
+    skip_inbound = {"README.md", "CLAUDE.md"}
+    haystack = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in md_present.values())
+    for name in md_present:
+        if name in skip_inbound:
+            continue
+        # Match `name` as a token: must be preceded by non-word char and
+        # followed by non-word/non-dot (to avoid matching a longer filename).
+        pat = re.compile(rf"(?<![\w/]){re.escape(name)}(?![\w])")
+        # Exclude the file's own self-references.
+        own = md_present[name].read_text(encoding="utf-8", errors="replace")
+        outside = haystack.replace(own, "")
+        if not pat.search(outside):
+            orphans.append(name)
+
+    # 3. Relative-link resolution inside each canonical .md.
+    for name, p in md_present.items():
+        try:
+            src = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for m in _MD_REL_LINK_PAT.finditer(src):
+            target = m.group(1)
+            if target.startswith(("http://", "https://", "mailto:")):
+                continue
+            # Resolve relative to the file's directory.
+            target_path = (p.parent / target).resolve()
+            if not target_path.exists():
+                broken_links.append(f"{name} → `{target}`")
+
+    detail.append(f"Canonical docs checked: **{len(_CANONICAL_REPO_DOCS)}**")
+    detail.append(f"Missing: **{len(missing)}**")
+    detail.append(f"Orphans (no inbound canonical ref): **{len(orphans)}**")
+    detail.append(f"Broken relative .md links inside canonical docs: **{len(broken_links)}**")
+    if missing:
+        detail += ["", "Missing files:"] + [f"- `{n}`" for n in missing]
+    if orphans:
+        detail += ["", "Orphaned canonical docs (add a reference from CLAUDE.md or another canonical doc):"]
+        detail += [f"- `{n}`" for n in orphans]
+    if broken_links:
+        detail += ["", "Broken relative links:"]
+        detail += [f"- {ln}" for ln in broken_links]
+
+    if missing or broken_links:
+        status = "fail"
+    elif orphans:
+        status = "warn"
+    else:
+        status = "ok"
+
+    summary = (
+        f"{len(present)}/{len(_CANONICAL_REPO_DOCS)} present, "
+        f"{len(orphans)} orphan(s), {len(broken_links)} broken link(s)"
+    )
+    return AxisResult(
+        name="Canonical repo-root docs",
+        summary=summary,
+        detail=detail,
+        status=status,
+        metric=f"{len(missing) + len(broken_links)}",
+    )
+
+
 # ── Report rendering ────────────────────────────────────────────────────────
 
 
@@ -814,6 +934,7 @@ def main() -> int:
         axis_docstring_coverage,
         axis_hot_files,
         axis_dependency_freshness,
+        axis_canonical_docs,
     ]
     results: list[AxisResult] = []
     for fn in axes:
