@@ -4,7 +4,7 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
-## 0.1.0b86 — unreleased
+## 0.1.0b86 — 2026-05-27
 
 Internal tidy-and-tighten pass following b85. **No numerical change** — golden
 tests pass byte-identical, validation site numbers unchanged from b82
