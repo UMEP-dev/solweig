@@ -220,6 +220,11 @@ def axis_python_type_strictness() -> AxisResult:
 
 
 def axis_test_coverage() -> AxisResult:
+    """Two-track coverage: fast tests (every PR) and full suite (release gate).
+
+    The fast number is the per-PR floor; the full number is what gets
+    exercised when slow + golden + validation tests run.
+    """
     rc, _, _ = _run(["uv", "run", "python", "-c", "import coverage"], timeout=10)
     if rc != 0:
         return AxisResult(
@@ -229,64 +234,76 @@ def axis_test_coverage() -> AxisResult:
             status="n/a",
         )
 
-    rc, _, _ = _run(
-        [
-            "uv",
-            "run",
-            "coverage",
-            "run",
-            "--source=pysrc/solweig",
-            "-m",
-            "pytest",
-            "tests/",
-            "-m",
-            "not slow",
-            "-q",
-            "--no-header",
-            "-x",
-        ],
-        timeout=600,
-    )
-    if rc not in (0, 5):  # 5 = no tests collected after filter
-        return AxisResult(
-            name="Test coverage (pysrc/)",
-            summary="coverage run failed (see CI for fast-test status)",
-            detail=[f"`coverage run` exit code: {rc}"],
-            status="n/a",
+    def _measure(marker_args: list[str], label: str) -> tuple[float | None, list[str]]:
+        rc, _, _ = _run(
+            [
+                "uv",
+                "run",
+                "coverage",
+                "run",
+                "--source=pysrc/solweig",
+                "-m",
+                "pytest",
+                "tests/",
+                *marker_args,
+                "-q",
+                "--no-header",
+                "-x",
+            ],
+            timeout=1800,
         )
+        if rc not in (0, 5):
+            return None, [f"`coverage run` ({label}) exit code: {rc}"]
+        rc, out, _ = _run(["uv", "run", "coverage", "report", "--format=total"], timeout=30)
+        if rc != 0:
+            return None, [f"`coverage report` ({label}) failed"]
+        try:
+            return float(out.strip()), []
+        except ValueError:
+            return None, [f"unparseable {label} output: {out!r}"]
 
-    rc, out, _ = _run(["uv", "run", "coverage", "report", "--format=total"], timeout=30)
-    if rc != 0:
-        return AxisResult(
-            name="Test coverage (pysrc/)",
-            summary="coverage report failed",
-            status="n/a",
-        )
-    try:
-        pct = float(out.strip())
-    except ValueError:
-        return AxisResult(name="Test coverage (pysrc/)", summary=f"unparseable output: {out!r}", status="n/a")
+    fast_pct, fast_err = _measure(["-m", "not slow"], "fast")
+    # Snapshot per-file breakdown from the fast run before we overwrite .coverage.
+    _, fast_breakdown, _ = _run(["uv", "run", "coverage", "report", "--skip-covered", "--sort=Cover"], timeout=30)
+    fast_rows = [ln for ln in fast_breakdown.splitlines() if ln.startswith("pysrc/")][:10]
+    full_pct, full_err = _measure([], "full")
+    _, full_breakdown, _ = _run(["uv", "run", "coverage", "report", "--skip-covered", "--sort=Cover"], timeout=30)
+    full_rows = [ln for ln in full_breakdown.splitlines() if ln.startswith("pysrc/")][:10]
 
-    # Per-file breakdown for the lowest-covered modules.
-    _, breakdown, _ = _run(["uv", "run", "coverage", "report", "--skip-covered", "--sort=Cover"], timeout=30)
-    rows = [ln for ln in breakdown.splitlines() if ln.startswith("pysrc/")][:10]
-
-    status = "ok" if pct >= THRESHOLDS["test_coverage_pct"] else "warn"
     target_pct = THRESHOLDS["test_coverage_pct"]
+    # Gate on full-suite coverage (the audit's primary concern is "is the code
+    # tested at all"); display fast coverage as the per-PR floor.
+    if full_pct is None:
+        status = "n/a"
+        summary = "coverage run failed"
+        metric = "n/a"
+    else:
+        status = "ok" if full_pct >= target_pct else "warn"
+        summary = (
+            f"{full_pct:.1f}% (full suite) / {fast_pct:.1f}% (fast tests only) — target ≥ {target_pct:.0f}%"
+            if fast_pct is not None
+            else f"{full_pct:.1f}% (full suite) — target ≥ {target_pct:.0f}%"
+        )
+        metric = f"{full_pct:.1f}"
+
     detail = [
-        f"Line coverage on pysrc/solweig (fast tests only): **{pct:.1f}%** (target ≥ {target_pct:.0f}%)",
-        "",
-        "Lowest-covered modules:",
-        "```",
-        *rows,
-        "```",
+        f"**Full-suite coverage:** {f'{full_pct:.1f}%' if full_pct is not None else 'n/a'}",
+        f"**Fast-tests coverage:** {f'{fast_pct:.1f}%' if fast_pct is not None else 'n/a'} (per-PR CI floor)",
+        f"Target: ≥ {target_pct:.0f}% on full suite",
+        *fast_err,
+        *full_err,
     ]
+    if full_rows:
+        detail += ["", "Lowest-covered modules (full suite):", "```", *full_rows, "```"]
+    if fast_rows and fast_rows != full_rows:
+        detail += ["", "Lowest-covered modules (fast tests only):", "```", *fast_rows, "```"]
+
     return AxisResult(
         name="Test coverage (pysrc/)",
-        summary=f"{pct:.1f}% line coverage on pysrc/solweig (fast tests)",
+        summary=summary,
         detail=detail,
         status=status,
-        metric=f"{pct:.1f}",
+        metric=metric,
     )
 
 
