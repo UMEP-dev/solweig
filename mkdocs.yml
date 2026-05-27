@@ -87,6 +87,8 @@ nav:
       - Timeseries Calculations: guide/timeseries.md
       - Thermal Comfort (UTCI/PET): guide/thermal-comfort.md
       - QGIS Plugin: guide/qgis-plugin.md
+      - Surface Views: guide/surface-views.md
+      - Settings: guide/settings.md
       - Configuration: PARAMS_SIMPLE.md
       - Reproducibility: RUN_METADATA.md
   - API Reference:
@@ -103,6 +105,7 @@ nav:
       - Architecture: development/architecture.md
       - Principles: development/principles.md
       - Invariants: development/invariants.md
+      - Repository audit: development/audit.md
   - About:
       - Release notes: about/changelog.md
 

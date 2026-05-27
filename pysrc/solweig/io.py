@@ -10,11 +10,15 @@ from __future__ import annotations
 import logging
 import math
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from ._compat import GDAL_ENV
 from .buffers import as_float32
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +121,13 @@ def _normalise_bbox(bbox_sequence) -> tuple[float, float, float, float]:
     return float(minx), float(miny), float(maxx), float(maxy)
 
 
-def rasterise_gdf(gdf, geom_col, ht_col, bbox=None, pixel_size: float = 1.0):
+def rasterise_gdf(
+    gdf: Any,
+    geom_col: str,
+    ht_col: str,
+    bbox: tuple[float, float, float, float] | list[float] | None = None,
+    pixel_size: float = 1.0,
+) -> tuple[NDArray[np.float32], Any]:
     """Burn vector geometries into a raster, keyed by an attribute column.
 
     Args:
@@ -129,8 +139,9 @@ def rasterise_gdf(gdf, geom_col, ht_col, bbox=None, pixel_size: float = 1.0):
         pixel_size: Output pixel size in CRS units. Default 1.0.
 
     Returns:
-        (raster, transform) — `raster` is a `float32` numpy array shaped
-        `(height, width)`; `transform` is the corresponding rasterio Affine.
+        ``(raster, transform)`` — ``raster`` is a ``float32`` numpy array shaped
+        ``(height, width)``; ``transform`` is the corresponding rasterio
+        :class:`Affine`.
 
     Raises:
         ValueError: If ``pixel_size`` is non-positive or the bounding box
