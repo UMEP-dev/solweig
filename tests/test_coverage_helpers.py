@@ -974,6 +974,132 @@ def test_location_from_dsm_crs_missing_crs_raises(tmp_path):
         Location.from_dsm_crs(tif)
 
 
+# ---------------------------------------------------------------------------
+# SvfArrays.from_zip + PrecomputedData.prepare — synthetic fixtures
+# ---------------------------------------------------------------------------
+from solweig.models.precomputed import PrecomputedData, SvfArrays  # noqa: E402
+
+
+def _write_svf_geotiff(path: Path, value: float = 0.8, shape=(8, 8)) -> None:
+    """Write a small all-`value` GeoTIFF for SVF fixture use."""
+    from solweig.io import save_raster
+
+    save_raster(
+        str(path),
+        np.full(shape, value, dtype=np.float32),
+        [0.0, 1.0, 0.0, float(shape[0]), 0.0, -1.0],
+        crs_wkt=None,
+        use_cog=False,
+        generate_preview=False,
+    )
+
+
+def _make_svfs_zip(zip_path: Path, *, with_veg: bool, shape=(8, 8)) -> None:
+    """Build a synthetic svfs.zip with the file names from_zip expects."""
+    import tempfile
+    import zipfile
+
+    members = ["svf.tif", "svfN.tif", "svfE.tif", "svfS.tif", "svfW.tif"]
+    if with_veg:
+        members += [
+            "svfveg.tif",
+            "svfNveg.tif",
+            "svfEveg.tif",
+            "svfSveg.tif",
+            "svfWveg.tif",
+            "svfaveg.tif",
+            "svfNaveg.tif",
+            "svfEaveg.tif",
+            "svfSaveg.tif",
+            "svfWaveg.tif",
+        ]
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        for name in members:
+            _write_svf_geotiff(td_path / name, value=0.8, shape=shape)
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            for name in members:
+                zf.write(td_path / name, arcname=name)
+
+
+def test_svf_arrays_from_zip_with_vegetation(tmp_path):
+    zp = tmp_path / "svfs.zip"
+    _make_svfs_zip(zp, with_veg=True)
+    svf = SvfArrays.from_zip(zp, use_vegetation=True)
+    assert svf.svf.shape == (8, 8)
+    assert svf.svf_veg.shape == (8, 8)
+    assert np.allclose(svf.svf, 0.8, atol=1e-3)
+
+
+def test_svf_arrays_from_zip_without_vegetation_fills_ones(tmp_path):
+    """use_vegetation=False → veg arrays default to ones (no zip lookup)."""
+    zp = tmp_path / "svfs.zip"
+    _make_svfs_zip(zp, with_veg=False)
+    svf = SvfArrays.from_zip(zp, use_vegetation=False)
+    assert np.all(svf.svf_veg == 1.0)
+    assert np.all(svf.svf_aveg == 1.0)
+
+
+def test_svf_arrays_from_zip_missing_file_raises(tmp_path):
+    with pytest.raises(FileNotFoundError, match="SVF zip"):
+        SvfArrays.from_zip(tmp_path / "missing.zip")
+
+
+def test_svf_arrays_from_zip_missing_member_raises(tmp_path):
+    """Zip missing a required raster → FileNotFoundError from the loader."""
+    import tempfile
+    import zipfile
+
+    zp = tmp_path / "incomplete.zip"
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        _write_svf_geotiff(td_path / "svf.tif", value=0.5)  # valid raster
+        with zipfile.ZipFile(zp, "w") as zf:
+            zf.write(td_path / "svf.tif", arcname="svf.tif")
+        # svfN.tif intentionally not included
+    with pytest.raises(FileNotFoundError, match="svfN"):
+        SvfArrays.from_zip(zp, use_vegetation=False)
+
+
+def test_precomputed_prepare_with_nothing_returns_empty():
+    pc = PrecomputedData.prepare()
+    assert pc.wall_height is None
+    assert pc.wall_aspect is None
+    assert pc.svf is None
+    assert pc.shadow_matrices is None
+
+
+def test_precomputed_prepare_walls_dir_missing_files_logs_debug(tmp_path):
+    """walls_dir exists but no rasters → both fields remain None, no crash."""
+    walls = tmp_path / "walls"
+    walls.mkdir()
+    pc = PrecomputedData.prepare(walls_dir=walls)
+    assert pc.wall_height is None
+    assert pc.wall_aspect is None
+
+
+def test_precomputed_prepare_loads_wall_rasters(tmp_path):
+    walls = tmp_path / "walls"
+    walls.mkdir()
+    _write_svf_geotiff(walls / "wall_hts.tif", value=3.0)
+    _write_svf_geotiff(walls / "wall_aspects.tif", value=90.0)
+    pc = PrecomputedData.prepare(walls_dir=walls)
+    assert pc.wall_height is not None
+    assert pc.wall_aspect is not None
+    assert np.allclose(pc.wall_height, 3.0, atol=1e-3)
+    assert np.allclose(pc.wall_aspect, 90.0, atol=1e-3)
+
+
+def test_precomputed_prepare_loads_svf_zip(tmp_path):
+    svf_dir = tmp_path / "svf"
+    svf_dir.mkdir()
+    _make_svfs_zip(svf_dir / "svfs.zip", with_veg=True)
+    pc = PrecomputedData.prepare(svf_dir=svf_dir)
+    assert pc.svf is not None
+    assert pc.svf.svf.shape == (8, 8)
+
+
 def test_shadow_arrays_diffsh_with_vegetation_combines_arrays():
     """diffsh formula: shmat - (1 - vegshmat) * (1 - psi)."""
     rows, cols, n_patches = 2, 2, 8
