@@ -36,9 +36,10 @@ Complete reference for the SOLWEIG public API.
 
 | Function | Description |
 | -------- | ----------- |
-| `is_gpu_available()` | Check whether GPU acceleration is available |
-| `get_compute_backend()` | Returns `"gpu"` or `"cpu"` |
-| `disable_gpu()` | Disable GPU, fall back to CPU |
+| [`is_gpu_available()`](functions.md#is_gpu_available) | Check whether GPU acceleration is available |
+| [`get_compute_backend()`](functions.md#get_compute_backend) | Returns `"gpu"` or `"cpu"` |
+| [`disable_gpu()`](functions.md#disable_gpu) | Disable GPU, fall back to CPU |
+| [`get_gpu_limits()`](functions.md#get_gpu_limits) | Inspect GPU device limits |
 
 ## Import Pattern
 

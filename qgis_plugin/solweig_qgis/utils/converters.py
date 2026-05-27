@@ -122,19 +122,6 @@ def _read_height_mode(
     return (int(value) if isinstance(value, (int, float)) else default) == 0
 
 
-def _looks_like_relative_heights(
-    layer: NDArray[np.floating] | None,
-    reference_surface: NDArray[np.floating] | None,
-) -> bool:
-    """Heuristically detect height-above-ground rasters passed as absolute.
-
-    Delegates to the canonical implementation in the core API.
-    """
-    from solweig.geospatial import looks_like_relative
-
-    return looks_like_relative(layer, reference_surface)
-
-
 def _load_optional_raster(
     parameters: dict[str, Any],
     param_name: str,

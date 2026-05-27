@@ -49,6 +49,7 @@ from .api import (  # noqa: E402
     PrecomputedData,
     SolweigResult,
     SurfaceData,
+    ThermalState,
     TileSpec,
     Timeseries,
     TimeseriesSummary,
@@ -258,6 +259,7 @@ __all__ = [
     # plumbing and lives in solweig.geospatial)
     "calculate_buffer_distance",
     "TileSpec",
+    "ThermalState",
     "generate_tiles",
     # Run metadata/provenance
     "create_run_metadata",

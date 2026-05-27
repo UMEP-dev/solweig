@@ -83,7 +83,7 @@
 
 ## ThermalState
 
-::: solweig.models.state.ThermalState
+::: solweig.ThermalState
     options:
       show_source: false
       heading_level: 3

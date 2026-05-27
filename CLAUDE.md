@@ -212,13 +212,13 @@ Conventional commits: `<type>: <description> (<version>)`
 ## Known Gotchas
 
 - `solweig_logging.py` is the logging module, NOT `logging.py` — stale references will shadow stdlib
-- `physics/` was renamed from `algorithms/` (Feb 2026) — watch for stale imports
-- `loaders.py` was renamed from `config.py` — but `models/config.py` (HumanParams, ModelConfig) is UNCHANGED
-- `test_thermal_comfort.py` was split into `test_utci.py` + `test_pet.py`
+- `loaders.py` (top-level) loads JSON params; `models/config.py` holds the `HumanParams` / `ModelConfig` dataclasses — different files, easy to confuse
 - `_compat.py` lazy eval: tests that temporarily modify `sys.modules` must access attrs BEFORE restoring mocks
-- The QGIS plugin's `algorithms/` directory is CORRECT — it uses QGIS Processing terminology, distinct from the renamed `physics/` directory
+- The QGIS plugin's `algorithms/` directory is QGIS Processing terminology, distinct from `pysrc/solweig/physics/` (the scientific algorithm modules)
 - GPU context is recreated per call (known optimisation opportunity)
-- SVF is the #1 bottleneck (calls shadowing 32-248x per pixel)
+- SVF is the #1 bottleneck (calls shadowing 32–248× per pixel)
+- The `surface.py` decomposition (b85) moved loaders/compute/tiled-SVF/views into sibling modules but kept `SurfaceData` public — internal callers may reach into `surface_loading`, `surface_compute`, `surface_svf_tiled`, `surface_views` directly
+- `solweig.geospatial` is the canonical home for plugin-style helpers (`extract_bounds`, `intersect_bounds`, `resample_to_grid`, `looks_like_relative`, etc.); top-level access still works but emits a `DeprecationWarning` (removal target: 0.1.0b88 / 0.2.x)
 
 ---
 
@@ -254,38 +254,29 @@ This is a **scientific library**. All code decisions must be driven by scientifi
 
 ---
 
-## Documentation Health (audited 2026-04-11)
+## Documentation Health
 
-### Fixed (2026-04-11 — v0.1.0b82)
+`VALIDATION.md` is the single source of truth for per-release numerical
+changes — its version-history table records every commit that touched
+physics, algorithms, or model defaults. Don't duplicate that log here.
 
-- `README.md`: validation table updated with b82 numbers (Gustav Adolfs RMSE 9.3–18.9 → 5.7–7.5, GVC 11.5–15.6 → 1.5–6.1 after the scale convention fix). Demos list now includes Bilbao and Madrid demos.
-- `VALIDATION.md`: full post-b82 numbers for all three sites + new version history row. Removed the duplicated "b82 change summary" paragraph; the version history table is the single source of truth for changelog.
-- `docs/getting-started/quick-start.md`: added surface preparation steps for DEM stair-step smoothing and the warm-run fast-path (100× speedup).
-- `docs/guide/qgis-plugin.md`: corrected output directory structure (now shows `cleaned/`, `walls/px<size>/`, `svf/px<size>/`). Added warm-run cache description.
-- `qgis_plugin/.../surface_preprocessing.py`: final summary log line no longer claims "Walls computed: yes / SVF computed: yes" unconditionally (misleading on warm cache hits); now reports "Walls: present / SVF: present".
-- `surface.py` fast-path: emits `setProgressText("Loading cached surface...")` via feedback so QGIS users see context during the otherwise-silent ~50 ms warm load.
-- `specs/shadows.md`: ray-march `dz` formula corrected to `ds × step × tan(α) × scale` and annotated with the solweig/UMEP convention difference (solweig: `scale = pixel_size_m`; UMEP: `scale = 1/pixel_size`). This matches the `shadowing.rs` / `shadow_gpu.rs` b82 fix (`tan().* scale`, was `/ scale`) and explains why shadow length was physically wrong at non-1m pixel sizes before b82.
-- `qgis_plugin/.../metadata.txt`: bumped to `0.1.0-beta82` with a b82 changelog entry.
-- `pyproject.toml`: bumped version to `0.1.0b82`.
-- Progress-reporting audit: surface prep walls=10→30%, SVF=30→75%, plugin finalises at 80/95/100; calculation phases 5/10/15/20/25 then callback 25→80 then 80/100. Tile-granular callback in timeseries.py correctly maps `(tile_idx * n_steps + t_idx + 1, n_tiles * n_steps)` to tile-agnostic percentage. No stale setProgress patterns observed.
+For documentation-only / docstring / nav fixes, the commit history
+(`git log -- docs/ README.md VALIDATION.md`) is authoritative. Add an
+entry below only when a fix sets a non-obvious convention that future
+sessions should know about.
 
-### Fixed (2026-03-14)
+### Standing conventions (live)
 
-- All user docs: `calculate()` argument order corrected (surface, weather, location)
-- All user docs: return type corrected to `TimeseriesSummary` (not `SolweigResult`)
-- `README.md`: validation table updated to match VALIDATION.md v0.1.0b66 numbers
-- `README.md`: minimal example uses `prepare()` instead of manual `compute_svf()`
-- `docs/PARAMS_SIMPLE.md`: height default corrected (180 -> 175 cm), removed nonexistent `solweig.svf.generate_svf()`
-- `docs/development/contributing.md`: Python version corrected (3.10+ -> 3.11+)
-- All license references corrected to GPL-3.0 (was incorrectly labelled AGPL-3.0; LICENSE file was always GPL-3.0, matching upstream UMEP)
-- `surface.py` docstring: `min_object_height` default corrected (1.5 -> 1.0)
-- `specs/svf.md`: Option 3/4 patch counts corrected (305/609, verified against upstream UMEP)
-- `specs/svf.md`: LAST_ANNULUS_CORRECTION documented as S/W-only with azimuth-bucketing rationale
-- `specs/pet.md`: "7-mode" corrected to "6-mode" (verified: `while j < 7` matches UMEP)
-- `skyview.rs`: Options 3/4 last annulus band fixed from 2 to 1 (matches UMEP; only affects non-default options)
-- `precomputed.py`, `create_patches.py`, `test_perez_parity.py`: patch count references updated
-- CI matrix: removed Python 3.10 (below requires-python), added 3.13
-- `Cargo.toml`: `abi3-py39` replaced with `abi3-py311` (matches pyproject.toml)
-- `pyproject.toml`: removed vestigial `[tool.setuptools]` section
-- `geopandas` moved from core deps to `[project.optional-dependencies] geo`
-- Validation suite re-run: all 28 tests pass (b68)
+- `calculate()` signature is `calculate(surface, weather, location, *, output_dir, ...)` and returns `TimeseriesSummary` — historically many examples had the argument order wrong; always verify generated examples match this.
+- Validation table in `README.md` mirrors the latest row of `VALIDATION.md`'s version history; update both together.
+- Quick-start docs assume `SurfaceData.prepare()` is the entry point, not manual `compute_svf()`.
+- License is GPL-3.0 throughout (matching upstream UMEP); never write "AGPL".
+- Tutorials in `docs/tutorials/*.ipynb` are accessibility-flagged for missing alt text — `mkdocs build --strict` passes but emits `traitlets:` warnings; add alt text when re-exporting cells.
+
+### Architecture refactors (post-b82, internal-only)
+
+- **b85** Decomposed `SurfaceData` (3000 → 1731 lines) into `surface_loading`, `surface_compute`, `surface_svf_tiled`, `surface_views`. Public API unchanged; internal callers should prefer the focused modules.
+- **b85** Split `io.py` → `io_epw.py` + `io_preview.py`; `summary.py` → `grid_accumulator.py`; `models/weather.py` → `models/location.py`; `models/precomputed.py` → `models/shadow_arrays.py`. All originals re-export so downstream imports keep working.
+- **b85** Added `solweig.geospatial` submodule as the canonical home for plugin-style helpers; top-level access is deprecated (see Known Gotchas).
+- **b85** `Settings` dataclass (`models/settings.py`) replaces the five-way merge of `ModelConfig` / `HumanParams` / `physics` / `materials` / kwargs.
+- **b85** Rust FFI bundling: `compute_timestep` now takes typed bundles instead of 43 positional args; `pipeline.rs` was split into three submodules.

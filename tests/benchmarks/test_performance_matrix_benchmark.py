@@ -36,23 +36,25 @@ pytestmark = pytest.mark.slow
 PERF_BUDGET_SCALE = float(os.environ.get("SOLWEIG_PERF_BUDGET_SCALE", "1.0"))
 
 ABSOLUTE_BUDGET_SECONDS = {
-    # All calls now go through calculate() → _calculate_timeseries() which
-    # adds overhead (sun position pre-computation, summary construction).
-    # Budgets updated Feb 2026 after API unification.
-    "api_non_tiled_isotropic": 1.50,
-    "api_non_tiled_anisotropic": 2.00,
-    "api_tiled_isotropic": 2.00,
-    "api_tiled_anisotropic": 3.00,
-    # Plugin cases now call calculate() directly (2 timesteps).
-    "plugin_non_tiled_isotropic": 2.50,
-    "plugin_non_tiled_anisotropic": 3.00,
-    "plugin_tiled_isotropic": 3.00,
-    "plugin_tiled_anisotropic": 4.00,
+    # Budgets tightened May 2026: history shows medians at 0.10–0.15 s on an
+    # M-series Mac. Local budgets sit ~4× over observed median to absorb
+    # micro-variance; CI uses SOLWEIG_PERF_BUDGET_SCALE=2.0 → ~8× headroom,
+    # still 5–10× tighter than the previous values which let any regression
+    # under 10× pass silently.
+    "api_non_tiled_isotropic": 0.50,
+    "api_non_tiled_anisotropic": 0.60,
+    "api_tiled_isotropic": 0.60,
+    "api_tiled_anisotropic": 0.80,
+    "plugin_non_tiled_isotropic": 0.55,
+    "plugin_non_tiled_anisotropic": 0.65,
+    "plugin_tiled_isotropic": 0.65,
+    "plugin_tiled_anisotropic": 0.85,
 }
 
-MAX_RATIO_ANISO_OVER_ISO = 5.0
-MAX_RATIO_TILED_OVER_NON_TILED = 4.0
-MAX_RATIO_PLUGIN_OVER_API = 6.0
+# Ratio gates also tightened — actual observed ratios are ~1.0–1.3, not 4–6.
+MAX_RATIO_ANISO_OVER_ISO = 2.0
+MAX_RATIO_TILED_OVER_NON_TILED = 2.5
+MAX_RATIO_PLUGIN_OVER_API = 2.0
 
 _LOG_DIR = Path(__file__).resolve().parent / "logs"
 _CSV_LOG_PATH = _LOG_DIR / "performance_matrix_history.csv"

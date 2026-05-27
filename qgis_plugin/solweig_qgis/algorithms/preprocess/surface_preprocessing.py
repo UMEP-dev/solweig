@@ -24,8 +24,8 @@ from qgis.core import (
     QgsProcessingParameterFolderDestination,
     QgsProcessingParameterNumber,
 )
+from solweig.geospatial import looks_like_relative
 
-from ...utils.converters import _looks_like_relative_heights
 from ...utils.parameters import (
     add_land_cover_mapping_parameters,
     add_surface_parameters,
@@ -48,10 +48,10 @@ def _needs_relative_retry(
     base_surface = dem if dem is not None else dsm
 
     retry_cdsm = bool(
-        cdsm_path and not cdsm_relative and _looks_like_relative_heights(getattr(surface, "cdsm", None), base_surface)
+        cdsm_path and not cdsm_relative and looks_like_relative(getattr(surface, "cdsm", None), base_surface)
     )
     retry_tdsm = bool(
-        tdsm_path and not tdsm_relative and _looks_like_relative_heights(getattr(surface, "tdsm", None), base_surface)
+        tdsm_path and not tdsm_relative and looks_like_relative(getattr(surface, "tdsm", None), base_surface)
     )
     return retry_cdsm, retry_tdsm
 

@@ -21,8 +21,8 @@ install()  # Must be called before any qgis_plugin imports
 install_osgeo()  # Temporarily needed for osgeo imports in converters.py
 
 with preserve_solweig_modules():
+    from solweig.geospatial import looks_like_relative as _looks_like_relative_heights  # noqa: E402
     from qgis_plugin.solweig_qgis.utils.converters import (  # noqa: E402
-        _looks_like_relative_heights,
         create_human_params_from_parameters,
         create_location_from_parameters,
         create_surface_from_parameters,
