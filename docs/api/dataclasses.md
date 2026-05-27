@@ -53,7 +53,7 @@ this directly — see the [Settings guide](../guide/settings.md) for the
 resolution rules — but the dataclass is documented here for callers
 who want to inspect the resolved values.
 
-::: solweig.models.settings.Settings
+::: solweig.Settings
     options:
       show_source: false
       heading_level: 3

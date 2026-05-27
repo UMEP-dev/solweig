@@ -51,6 +51,22 @@ surface = solweig.SurfaceData.prepare(dsm=my_dsm, pixel_size=1.0)
 summary = solweig.calculate(surface, weather=[weather], location=location, output_dir="output/")
 ```
 
+The top-level namespace is the documented import surface — every class and
+function on this reference page is reachable as `solweig.<name>`. The
+sub-modules listed in the [repository
+layout](https://github.com/UMEP-dev/solweig#repository-layout)
+(`solweig.models.surface`, `solweig.io_epw`, `solweig.grid_accumulator`,
+…) exist for code-organisation reasons and may be reorganised between
+releases; depend on `solweig.<name>` rather than the sub-module path
+to stay forward-compatible.
+
+For QGIS-plugin / batch-pipeline authors who need geospatial helpers
+(`extract_bounds`, `intersect_bounds`, `resample_to_grid`,
+`looks_like_relative`, …), the documented entry point is
+[`solweig.geospatial`](geospatial.md), not the top-level. Top-level
+access still works in 0.1.0bN but emits a `DeprecationWarning` with a
+removal target.
+
 ## Type Annotations
 
 SOLWEIG is fully typed. Type checking can be enabled in any IDE:

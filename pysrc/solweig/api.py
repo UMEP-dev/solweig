@@ -55,6 +55,7 @@ from .models import (
     TileSpec,
     Weather,
 )
+from .models.settings import Settings
 from .solweig_logging import get_logger
 from .summary import Timeseries, TimeseriesSummary
 from .tiling import (
@@ -467,6 +468,7 @@ __all__ = [
     # Dataclasses - Configuration
     "ModelConfig",
     "PrecomputedData",
+    "Settings",
     "ThermalState",
     "TileSpec",
     # Dataclasses - Internal (for advanced use)

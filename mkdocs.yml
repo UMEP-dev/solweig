@@ -32,6 +32,9 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+hooks:
+  - mkdocs_hooks/notebook_alt_text.py
+
 plugins:
   - search
   - include-markdown

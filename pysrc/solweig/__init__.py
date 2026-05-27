@@ -47,6 +47,7 @@ from .api import (  # noqa: E402
     Location,
     ModelConfig,
     PrecomputedData,
+    Settings,
     SolweigResult,
     SurfaceData,
     ThermalState,
@@ -258,6 +259,7 @@ __all__ = [
     # are part of the documented public API; compute_max_tile_pixels is plugin
     # plumbing and lives in solweig.geospatial)
     "calculate_buffer_distance",
+    "Settings",
     "TileSpec",
     "ThermalState",
     "generate_tiles",
