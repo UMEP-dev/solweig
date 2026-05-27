@@ -34,10 +34,10 @@ def _arr_key(arr):
     paying for a full content hash.
 
     NOT caught: a mutation that touches only elements *other* than
-    positions 0, n//2, n-1. The documented invariant
-    (`docs/development/invariants.md` invariant 3) is "don't mutate
-    surface arrays after passing them to calculate()", and this key
-    is a defense-in-depth check, not a full guarantee.
+    positions 0, n//2, n-1. The documented invariant (`INVARIANTS.md`
+    invariant 3) is "don't mutate surface arrays after passing them to
+    calculate()", and this key is a defense-in-depth check, not a full
+    guarantee.
 
     O(1) regardless of array size. NaN-safe via uint8 bit-pattern view.
     """

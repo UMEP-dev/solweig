@@ -14,11 +14,11 @@ SOLWEIG (SOlar and LongWave Environmental Irradiance Geometry-model) is a high-p
 
 Before making any non-trivial change, skim:
 
-- **[docs/development/principles.md](docs/development/principles.md)** — what this
+- **[PRINCIPLES.md](PRINCIPLES.md)** — what this
   library is for, the four identities it serves, the architectural rules that
   follow. When facing a "should this go here or there?" question, work from
   this page first.
-- **[docs/development/invariants.md](docs/development/invariants.md)** — the
+- **[INVARIANTS.md](INVARIANTS.md)** — the
   load-bearing assumptions the code makes but does not always enforce
   (array layout, immutability, GIL ownership, etc). Violating these
   produces silently wrong results, not crashes.

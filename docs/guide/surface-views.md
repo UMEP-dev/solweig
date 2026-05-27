@@ -63,7 +63,7 @@ The views are frozen dataclasses — you cannot assign to
 ``surface.geometry.dsm = …``. To change a field, mutate the underlying
 ``SurfaceData`` directly (and observe the
 [invariant about not mutating arrays after passing them to
-calculate()](../development/invariants.md)).
+calculate()](https://github.com/UMEP-dev/solweig/blob/main/INVARIANTS.md)).
 
 ## Why this exists
 

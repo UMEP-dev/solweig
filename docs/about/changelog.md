@@ -38,12 +38,13 @@ byte-identical, validation site numbers unchanged.
   mutations that the previous `(ctypes.data, shape)` key missed. The
   documented invariant remains "don't mutate surface arrays after
   passing them to `calculate()`" — see
-  [docs/development/invariants.md](../development/invariants.md).
-- **Foundation docs:**
-  [docs/development/principles.md](../development/principles.md) (what the
-  library is for, the four identities it serves, the architectural rules)
-  and [docs/development/invariants.md](../development/invariants.md) (the
-  seven load-bearing assumptions the code relies on but does not always
+  [INVARIANTS.md](https://github.com/UMEP-dev/solweig/blob/main/INVARIANTS.md).
+- **Foundation docs (repo-only):**
+  [PRINCIPLES.md](https://github.com/UMEP-dev/solweig/blob/main/PRINCIPLES.md)
+  (what the library is for, the four identities it serves, the architectural
+  rules) and
+  [INVARIANTS.md](https://github.com/UMEP-dev/solweig/blob/main/INVARIANTS.md)
+  (the seven load-bearing assumptions the code relies on but does not always
   enforce).
 - **Repository audit script.** `poe audit` runs eight measured signals
   and writes `AUDIT.md` at the repo root. Wired into CI as an

@@ -102,10 +102,6 @@ nav:
       - Overview: physics/index.md
   - Development:
       - Contributing: development/contributing.md
-      - Architecture: development/architecture.md
-      - Principles: development/principles.md
-      - Invariants: development/invariants.md
-      - Repository audit: development/audit.md
   - About:
       - Release notes: about/changelog.md
 

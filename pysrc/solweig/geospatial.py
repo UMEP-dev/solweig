@@ -1,6 +1,6 @@
 """Geospatial helpers for downstream consumers (QGIS plugin, batch pipelines).
 
-Per [docs/development/principles.md](development/principles.md), the QGIS
+Per `PRINCIPLES.md` (at the repo root), the QGIS
 plugin is a downstream consumer of the SOLWEIG library — not part of it.
 The plugin needs a handful of raster-bounds / resampling utilities that
 SOLWEIG itself uses internally. Rather than have the plugin reach into

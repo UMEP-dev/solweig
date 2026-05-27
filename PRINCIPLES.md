@@ -128,7 +128,7 @@ The corollary: the library will not defensively copy arrays at its
 boundary (that would defeat the zero-copy FFI). The contract goes the
 other way — callers don't mutate.
 
-See [invariants.md](invariants.md) for the full list of load-bearing
+See [INVARIANTS.md](INVARIANTS.md) for the full list of load-bearing
 assumptions like this one.
 
 ## When to revisit this document
