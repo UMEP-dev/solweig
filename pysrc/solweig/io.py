@@ -118,6 +118,24 @@ def _normalise_bbox(bbox_sequence) -> tuple[float, float, float, float]:
 
 
 def rasterise_gdf(gdf, geom_col, ht_col, bbox=None, pixel_size: float = 1.0):
+    """Burn vector geometries into a raster, keyed by an attribute column.
+
+    Args:
+        gdf: GeoDataFrame containing polygon geometries.
+        geom_col: Column name holding the geometry.
+        ht_col: Column name holding the per-feature value (e.g. building height).
+        bbox: Optional (minx, miny, maxx, maxy) bounding box. Defaults to
+            the GeoDataFrame's total bounds.
+        pixel_size: Output pixel size in CRS units. Default 1.0.
+
+    Returns:
+        (raster, transform) — `raster` is a `float32` numpy array shaped
+        `(height, width)`; `transform` is the corresponding rasterio Affine.
+
+    Raises:
+        ValueError: If ``pixel_size`` is non-positive or the bounding box
+            collapses after pixel-grid snapping.
+    """
     # Define raster parameters
     if bbox is not None:
         # Unpack bbox values
@@ -149,6 +167,18 @@ def rasterise_gdf(gdf, geom_col, ht_col, bbox=None, pixel_size: float = 1.0):
 
 
 def check_path(path_str: str | Path, make_dir: bool = False) -> Path:
+    """Resolve ``path_str`` to an absolute :class:`Path`, optionally creating its parent.
+
+    Args:
+        path_str: Path-like input.
+        make_dir: If True, create the parent directory chain if missing.
+
+    Returns:
+        Absolute :class:`Path`.
+
+    Raises:
+        OSError: If the parent doesn't exist and ``make_dir`` is False.
+    """
     # Ensure path exists
     path = Path(path_str).absolute()
     if not path.parent.exists():

@@ -46,42 +46,55 @@ class SurfaceGeometryView:
 
     @property
     def dsm(self) -> NDArray[np.floating]:
+        """Digital Surface Model raster (required, absolute elevations)."""
         return self._surface.dsm
 
     @property
     def cdsm(self) -> NDArray[np.floating] | None:
+        """Canopy DSM raster — vegetation top heights, or ``None`` if absent."""
         return self._surface.cdsm
 
     @property
     def dem(self) -> NDArray[np.floating] | None:
+        """Digital Elevation Model (bare-earth) raster, or ``None`` if absent."""
         return self._surface.dem
 
     @property
     def tdsm(self) -> NDArray[np.floating] | None:
+        """Trunk-zone DSM raster — vegetation trunk heights, or ``None`` if absent."""
         return self._surface.tdsm
 
     @property
     def pixel_size(self) -> float:
+        """Grid pixel size in metres (assumes square pixels)."""
         return self._surface.pixel_size
 
     @property
     def shape(self) -> tuple[int, int]:
+        """``(rows, cols)`` of the surface grid."""
         return self._surface.shape
 
     @property
     def max_height(self) -> float:
+        """Maximum elevation across DSM (and CDSM if present), in metres.
+
+        Used by the shadow ray-marcher to bound vertical reach.
+        """
         return self._surface.max_height
 
     @property
     def dsm_relative(self) -> bool:
+        """``True`` when the DSM contains height-above-DEM (relative) values."""
         return self._surface.dsm_relative
 
     @property
     def cdsm_relative(self) -> bool:
+        """``True`` when the CDSM contains height-above-ground (relative) values."""
         return self._surface.cdsm_relative
 
     @property
     def tdsm_relative(self) -> bool:
+        """``True`` when the TDSM contains height-above-ground (relative) values."""
         return self._surface.tdsm_relative
 
 
@@ -93,18 +106,22 @@ class OpticalPropertiesView:
 
     @property
     def albedo(self) -> NDArray[np.floating] | None:
+        """Per-pixel shortwave albedo raster, or ``None`` if derived from land-cover."""
         return self._surface.albedo
 
     @property
     def emissivity(self) -> NDArray[np.floating] | None:
+        """Per-pixel longwave emissivity raster, or ``None`` if derived from land-cover."""
         return self._surface.emissivity
 
     @property
     def land_cover(self) -> NDArray[np.integer] | None:
+        """UMEP land-cover classification grid, or ``None`` if optical grids are provided directly."""
         return self._surface.land_cover
 
     @property
     def has_land_cover(self) -> bool:
+        """``True`` when a land-cover classification grid is present."""
         return self._surface.land_cover is not None
 
 
@@ -121,31 +138,37 @@ class PreprocessedAuxiliaryView:
 
     @property
     def wall_height(self) -> NDArray[np.floating] | None:
+        """Per-pixel wall height raster (metres above ground), or ``None``."""
         return self._surface.wall_height
 
     @property
     def wall_aspect(self) -> NDArray[np.floating] | None:
+        """Per-pixel wall facing direction (radians, 0 = east), or ``None``."""
         return self._surface.wall_aspect
 
     @property
     def svf(self) -> SvfArrays | None:
+        """Bundle of Sky View Factor rasters, or ``None`` before preprocessing."""
         return self._surface.svf
 
     @property
     def shadow_matrices(self) -> ShadowArrays | None:
+        """Bitpacked patch-shadow matrices for the anisotropic sky model, or ``None``."""
         return self._surface.shadow_matrices
 
     @property
     def valid_mask(self) -> NDArray[np.bool_] | None:
+        """Boolean mask of pixels with finite data across all required layers."""
         return self._surface.valid_mask
 
     @property
     def has_walls(self) -> bool:
-        """True when both wall_height and wall_aspect are populated."""
+        """``True`` when both wall_height and wall_aspect are populated."""
         return self._surface.wall_height is not None and self._surface.wall_aspect is not None
 
     @property
     def has_svf(self) -> bool:
+        """``True`` when the SVF bundle has been populated."""
         return self._surface.svf is not None
 
     @property

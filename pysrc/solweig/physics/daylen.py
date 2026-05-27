@@ -4,6 +4,16 @@ import numpy as np
 
 
 def daylen(DOY: int, XLAT: float) -> tuple[float, float, float, float]:
+    """Compute day length, sunrise, sunset, and noon for a date and latitude.
+
+    Args:
+        DOY: Day of year (1-365 / 366).
+        XLAT: Latitude in decimal degrees (positive north).
+
+    Returns:
+        ``(daylength, sunrise, sunset, noon)`` in decimal hours UTC.
+        Beyond the polar circles the values are clamped to 0 or 24.
+    """
     # Calculation of declination of sun (Eqn. 16). Amplitude= +/-23.45
     # deg. Minimum = DOY 355 (DEC 21), maximum = DOY 172.5 (JUN 21/22).
     # Sun angles.  SOC limited for latitudes above polar circles.

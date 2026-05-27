@@ -512,25 +512,51 @@ def axis_public_api() -> AxisResult:
 
 
 def axis_docstring_coverage() -> AxisResult:
-    """% of public functions/classes (no leading _) with a docstring."""
+    """% of public functions/classes (no leading _) with a docstring.
+
+    Symbols are counted as "public" only when neither the symbol itself nor
+    any enclosing class is private (leading underscore). Methods of a
+    private class like `_BooleanArray.all()` are NOT public API and don't
+    count toward the denominator. Nested public-in-private also doesn't
+    count — if the outer wrapper isn't public, neither is the inner detail.
+    """
     total = 0
     documented = 0
     undocumented_examples: list[str] = []
+
+    def _walk(node, parent_is_private: bool, fp):
+        nonlocal total, documented
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                child_private = parent_is_private or child.name.startswith("_")
+                if not child_private:
+                    total += 1
+                    if ast.get_docstring(child):
+                        documented += 1
+                    elif len(undocumented_examples) < 15:
+                        rel = fp.relative_to(REPO)
+                        undocumented_examples.append(f"{rel}:{child.lineno} `{child.name}`")
+                _walk(child, child_private, fp)
+            elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                fn_private = parent_is_private or child.name.startswith("_")
+                if not fn_private:
+                    total += 1
+                    if ast.get_docstring(child):
+                        documented += 1
+                    elif len(undocumented_examples) < 15:
+                        rel = fp.relative_to(REPO)
+                        undocumented_examples.append(f"{rel}:{child.lineno} `{child.name}`")
+                # No need to recurse into function bodies for docstring coverage.
+            else:
+                _walk(child, parent_is_private, fp)
+
     for fp in _files_under(PYSRC, ".py"):
         try:
             tree = ast.parse(fp.read_text(encoding="utf-8", errors="replace"))
         except SyntaxError:
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                if node.name.startswith("_"):
-                    continue
-                total += 1
-                if ast.get_docstring(node):
-                    documented += 1
-                elif len(undocumented_examples) < 15:
-                    rel = fp.relative_to(REPO)
-                    undocumented_examples.append(f"{rel}:{node.lineno} `{node.name}`")
+        _walk(tree, parent_is_private=False, fp=fp)
+
     pct = (documented / total * 100) if total else 100.0
     status = "ok" if pct >= THRESHOLDS["public_api_documented_pct"] else "warn"
     detail = [

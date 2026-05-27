@@ -24,6 +24,16 @@ def create_patches(
     NDArray[np.floating],
     NDArray[np.integer],
 ]:
+    """Generate sky-patch geometry for the anisotropic sky model.
+
+    Args:
+        patch_option: Decomposition variant — 1 (145 patches, Robinson &
+            Stone 2004), 2 (153, Wallenberg et al. 2022), 3 (305), 4 (609).
+
+    Returns:
+        Tuple of 7 arrays describing the patch layout (altitudes, azimuths,
+        band indices, etc.). See module docstring for the per-array meaning.
+    """
     # patch_option = 1 = 145 patches (Robinson & Stone, 2004)
     # patch_option = 2 = 153 patches (Wallenberg et al., 2022)
     # patch_option = 3 = 305 patches -> test

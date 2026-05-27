@@ -8,6 +8,21 @@ from numpy.typing import NDArray
 
 
 def findwalls(a: NDArray[np.floating], walllimit: float) -> NDArray[np.float32]:
+    """Identify wall pixels from a DSM (Lindberg / Goodwin algorithm).
+
+    A wall pixel sits on the outer edge of a building footprint; its
+    "wall height" is the elevation difference to its tallest cardinal
+    neighbour, clipped to ``walllimit`` (e.g. 0.0 — only count pixels
+    taller than ``walllimit`` above a neighbour).
+
+    Args:
+        a: DSM raster (absolute heights, metres).
+        walllimit: Minimum height difference to count as a wall.
+
+    Returns:
+        ``float32`` array same shape as ``a``: per-pixel wall height
+        (0 outside walls).
+    """
     # This function identifies walls based on a DSM and a wall-height limit
     # Walls are represented by outer pixels within building footprints
     #

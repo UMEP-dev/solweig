@@ -59,6 +59,10 @@ def shortwave_from_sky(sky, angle_of_incidence, lumChi, steradian, patch_azimuth
 
 
 def longwave_from_sky(sky, Lsky_side, Lsky_down, patch_azimuth):
+    """Per-patch longwave from a sky patch into 4 cardinal directions + down.
+
+    Returns ``(Lside_sky, Ldown_sky, Least, Lsouth, Lwest, Lnorth)``.
+    """
     Ldown_sky = sky * Lsky_down
     Lside_sky = sky * Lsky_side
     Least, Lsouth, Lwest, Lnorth = _cardinal_components(sky * Lsky_side, patch_azimuth)
@@ -93,6 +97,12 @@ def longwave_from_buildings(
     Ta,
     Tgwall,
 ):
+    """Per-patch longwave from sunlit + shaded building walls.
+
+    Splits each patch into sunlit and shaded surface contributions and
+    returns ``(Lside_sun, Lside_sh, Ldown_sun, Ldown_sh, Least, Lsouth,
+    Lwest, Lnorth)``.
+    """
     sunlit_surface = (ewall * SBC * ((Ta + Tgwall + KELVIN_OFFSET) ** 4)) / np.pi
     shaded_surface = (ewall * SBC * ((Ta + KELVIN_OFFSET) ** 4)) / np.pi
 
@@ -126,6 +136,13 @@ def longwave_from_buildings(
 def longwave_from_buildings_wallScheme(
     voxelMaps, voxelTable, steradian, angle_of_incidence, angle_of_incidence_h, patch_azimuth
 ):
+    """Per-patch longwave using the voxel-based wall-temperature scheme.
+
+    Looks up per-voxel surface temperature from ``voxelTable`` and applies
+    it to the patch geometry. Returns ``(Lside, Lside_sh, Ldown, Ldown_sh,
+    Least, Lsouth, Lwest, Lnorth)`` with ``_sh`` arrays zeroed (this scheme
+    doesn't split sunlit/shaded).
+    """
     unique_ids = list(np.unique(voxelMaps)[1:])
     lw_rad_dict = dict(voxelTable.loc[unique_ids, "LongwaveRadiation"])
     patch_radiation = np.vectorize(lw_rad_dict.get)(voxelMaps).astype(float)
@@ -145,6 +162,10 @@ def longwave_from_buildings_wallScheme(
 def reflected_longwave(
     reflecting_surface, steradian, angle_of_incidence, angle_of_incidence_h, patch_azimuth, Ldown_sky, Lup, ewall
 ):
+    """Per-patch longwave reflected off a surface (1-ewall fraction of incident).
+
+    Returns ``(Lside_ref, Ldown_ref, Least, Lsouth, Lwest, Lnorth)``.
+    """
     reflected_radiation = ((Ldown_sky + Lup) * (1 - ewall) * 0.5) / np.pi
     Lside_ref = reflected_radiation * steradian * angle_of_incidence * reflecting_surface
     Ldown_ref = reflected_radiation * steradian * angle_of_incidence_h * reflecting_surface
