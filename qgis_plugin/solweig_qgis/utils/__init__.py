@@ -2,7 +2,6 @@
 
 from .converters import (
     create_location_from_parameters,
-    create_surface_from_parameters,
     create_weather_from_parameters,
     load_raster_from_layer,
 )
@@ -14,7 +13,6 @@ from .parameters import (
 )
 
 __all__ = [
-    "create_surface_from_parameters",
     "create_location_from_parameters",
     "create_weather_from_parameters",
     "load_raster_from_layer",
