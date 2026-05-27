@@ -346,5 +346,157 @@ class TestWindowedWriteRoundTrip:
         assert data.shape == (10, 10)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Raster I/O + pixel-grid helpers — coverage extensions
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+from solweig.io import (  # noqa: E402
+    check_path,
+    create_empty_raster,
+    get_raster_metadata,
+    load_raster,
+    read_raster_window,
+    save_raster,
+    shrink_bbox_to_pixel_grid,
+    write_raster_window,
+)
+
+# ── shrink_bbox_to_pixel_grid ──
+
+
+def test_shrink_bbox_already_on_grid_is_unchanged():
+    """An exactly-on-grid bbox should snap to itself."""
+    result = shrink_bbox_to_pixel_grid(
+        (0.0, 0.0, 10.0, 10.0), origin_x=0.0, origin_y=10.0, pixel_width=1.0, pixel_height=1.0
+    )
+    assert result == (0.0, 0.0, 10.0, 10.0)
+
+
+def test_shrink_bbox_inwards_when_misaligned():
+    """A misaligned bbox should shrink toward the next aligned cell (no expansion)."""
+    minx, miny, maxx, maxy = shrink_bbox_to_pixel_grid(
+        (0.3, 0.3, 10.7, 10.7), origin_x=0.0, origin_y=10.0, pixel_width=1.0, pixel_height=1.0
+    )
+    assert minx >= 0.3 and miny >= 0.3
+    assert maxx <= 10.7 and maxy <= 10.7
+
+
+def test_shrink_bbox_invalid_raises():
+    """min >= max should raise ValueError."""
+    with pytest.raises(ValueError, match="Bounding box is invalid"):
+        shrink_bbox_to_pixel_grid((5.0, 0.0, 5.0, 10.0), 0.0, 10.0, 1.0, 1.0)
+    with pytest.raises(ValueError):
+        shrink_bbox_to_pixel_grid((0.0, 10.0, 10.0, 0.0), 0.0, 10.0, 1.0, 1.0)
+
+
+# ── check_path ──
+
+
+def test_check_path_existing_parent_returns_absolute(tmp_path):
+    assert check_path(tmp_path / "out.tif").is_absolute()
+
+
+def test_check_path_make_dir_creates_parents(tmp_path):
+    target = tmp_path / "a" / "b" / "c" / "x.tif"
+    check_path(target, make_dir=True)
+    assert target.parent.is_dir()
+
+
+def test_check_path_missing_parent_raises_without_make_dir(tmp_path):
+    target = tmp_path / "does" / "not" / "exist" / "f.tif"
+    with pytest.raises(OSError, match="does not exist"):
+        check_path(target)
+
+
+def test_check_path_accepts_str(tmp_path):
+    p = check_path(str(tmp_path / "x.tif"))
+    assert p.parent == tmp_path
+
+
+# ── save_raster / load_raster / get_raster_metadata round-trip ──
+
+
+def _sample_raster() -> tuple[np.ndarray, list[float], str]:
+    arr = np.array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], dtype=np.float32)
+    gt = [100.0, 1.0, 0.0, 50.0, 0.0, -1.0]
+    crs_wkt = (
+        'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",'
+        'SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],'
+        'UNIT["degree",0.0174532925199433]],PROJECTION["Mercator_1SP"],'
+        'UNIT["metre",1]]'
+    )
+    return arr, gt, crs_wkt
+
+
+def test_save_then_load_raster_roundtrip(tmp_path):
+    arr, gt, crs = _sample_raster()
+    path = tmp_path / "rt.tif"
+    save_raster(str(path), arr, gt, crs, use_cog=False, generate_preview=False)
+    assert path.exists()
+    loaded, loaded_gt, loaded_crs, _ = load_raster(str(path))
+    np.testing.assert_allclose(loaded, arr)
+    assert list(loaded_gt)[:6] == list(gt)[:6]
+    assert "Mercator" in (loaded_crs or "")
+
+
+def test_save_raster_writes_nan_as_nodata_sentinel(tmp_path):
+    arr, gt, crs = _sample_raster()
+    arr = arr.copy()
+    arr[0, 0] = np.nan
+    path = tmp_path / "with_nan.tif"
+    save_raster(str(path), arr, gt, crs, use_cog=False, generate_preview=False)
+    loaded, _, _, _ = load_raster(str(path))
+    assert np.isnan(loaded[0, 0])
+    np.testing.assert_allclose(loaded[0, 1:], arr[0, 1:])
+
+
+def test_get_raster_metadata_shape_pixel_size(tmp_path):
+    arr, gt, crs = _sample_raster()
+    path = tmp_path / "meta.tif"
+    save_raster(str(path), arr, gt, crs, use_cog=False, generate_preview=False)
+    meta = get_raster_metadata(str(path))
+    # The docstring says rows/cols; transform is a GDAL list.
+    assert meta["cols"] == 4
+    assert meta["rows"] == 2
+    assert abs(meta["transform"][1]) == pytest.approx(1.0)
+
+
+# ── create_empty_raster ──
+
+
+def test_create_empty_raster_writes_initialised_grid(tmp_path):
+    _, gt, crs = _sample_raster()
+    path = tmp_path / "empty.tif"
+    create_empty_raster(str(path), rows=3, cols=5, transform=gt, crs_wkt=crs, dtype=np.float32)
+    loaded, _, _, _ = load_raster(str(path))
+    assert loaded.shape == (3, 5)
+    # Nodata sentinel -9999 should be mapped back to NaN by load_raster.
+    assert np.isnan(loaded).all()
+
+
+# ── windowed I/O ──
+
+
+def test_window_read_write_roundtrip(tmp_path):
+    """Write a 4x4 array, overwrite a 2x2 window, read the window back."""
+    _, gt, crs = _sample_raster()
+    arr = np.zeros((4, 4), dtype=np.float32)
+    path = tmp_path / "window.tif"
+    save_raster(str(path), arr, gt, crs, use_cog=False, generate_preview=False)
+
+    patch = np.array([[10.0, 20.0], [30.0, 40.0]], dtype=np.float32)
+    win = (slice(1, 3), slice(1, 3))
+    write_raster_window(str(path), patch, window=win)
+
+    out = read_raster_window(str(path), window=win)
+    np.testing.assert_allclose(out, patch)
+
+    # Surrounding cells untouched.
+    full, _, _, _ = load_raster(str(path))
+    assert full[0, 0] == 0.0
+    assert full[3, 3] == 0.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

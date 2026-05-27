@@ -729,8 +729,11 @@ def _previous_metrics() -> dict[str, str]:
         if len(cells) < 4:
             continue
         name, _icon, _summary, metric = cells[0], cells[1], cells[2], cells[3]
-        # metric is wrapped in backticks: `<value>`
-        metric = metric.strip("` ")
+        # Metric cell is `<value>` optionally followed by drift annotation
+        # like " (was X, Δ +Y)". Strip the drift suffix before storing so the
+        # comparison value is just the raw metric (no nested drift accumulation).
+        idx = metric.find("`", 1)  # second backtick closes the value
+        metric = metric[1:idx] if metric.startswith("`") and idx > 0 else metric.strip("` ")
         rows[name] = metric
     return rows
 
