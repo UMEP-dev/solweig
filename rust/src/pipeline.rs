@@ -274,9 +274,12 @@ pub fn precompute_gvf_cache(
     {
         if let Some(ctx) = get_gvf_gpu_context() {
             match ctx.upload_geometry(&cache) {
-                Ok(()) => {},
+                Ok(()) => {
+                    crate::shadowing::record_gpu_dispatch();
+                }
                 Err(e) => {
                     eprintln!("[GPU] GVF geometry upload failed, falling back to CPU: {}", e);
+                    crate::shadowing::record_gpu_fallback();
                     GVF_GPU_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
                 }
             }
@@ -582,9 +585,13 @@ pub fn compute_timestep(
                                 lc_grid_v,
                                 lc_grid_v.is_some(),
                             ) {
-                                Ok(result) => result,
+                                Ok(result) => {
+                                    crate::shadowing::record_gpu_dispatch();
+                                    result
+                                }
                                 Err(e) => {
                                     eprintln!("[GPU] GVF GPU dispatch failed, falling back to CPU: {}", e);
+                                    crate::shadowing::record_gpu_fallback();
                                     GVF_GPU_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
                                     gvf_calc_with_cache(
                                         cache,
@@ -945,6 +952,7 @@ pub fn compute_timestep(
                                     "[GPU] Anisotropic dispatch begin failed: {}. CPU fallback.",
                                     e
                                 );
+                                crate::shadowing::record_gpu_fallback();
                             }
                         }
                     }
@@ -963,12 +971,16 @@ pub fn compute_timestep(
                     #[cfg(feature = "gpu")]
                     let gpu_result = if let (Some(ctx), Some(pending)) = (gpu_ctx, gpu_pending) {
                         match ctx.dispatch_end(pending) {
-                            Ok(gpu) => Some(gpu),
+                            Ok(gpu) => {
+                                crate::shadowing::record_gpu_dispatch();
+                                Some(gpu)
+                            }
                             Err(e) => {
                                 eprintln!(
                                     "[GPU] Anisotropic dispatch end failed: {}. CPU fallback.",
                                     e
                                 );
+                                crate::shadowing::record_gpu_fallback();
                                 None
                             }
                         }

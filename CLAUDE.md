@@ -220,7 +220,7 @@ Conventional commits: `<type>: <description> (<version>)`
 - `loaders.py` (top-level) loads JSON params; `models/config.py` holds the `HumanParams` / `ModelConfig` dataclasses — different files, easy to confuse
 - `_compat.py` lazy eval: tests that temporarily modify `sys.modules` must access attrs BEFORE restoring mocks
 - The QGIS plugin's `algorithms/` directory is QGIS Processing terminology, distinct from `pysrc/solweig/physics/` (the scientific algorithm modules)
-- GPU context is recreated per call (known optimisation opportunity)
+- GPU contexts (shadow / aniso / GVF) are cached via `OnceLock` and reused process-wide — what *does* get reallocated per call is the cached GPU buffer set when grid dimensions change (cache key: `(rows, cols, has_veg, has_walls)`). Command encoders and bind groups are rebuilt per dispatch, which is normal wgpu usage
 - SVF is the #1 bottleneck (calls shadowing 32–248× per pixel)
 - The `surface.py` decomposition (b85) moved loaders/compute/tiled-SVF/views into sibling modules but kept `SurfaceData` public — internal callers may reach into `surface_loading`, `surface_compute`, `surface_svf_tiled`, `surface_views` directly
 - `solweig.geospatial` is the canonical home for plugin-style helpers (`extract_bounds`, `intersect_bounds`, `resample_to_grid`, `looks_like_relative`, etc.); the b85→b86 top-level re-exports were removed in b87 (accessing `solweig.extract_bounds` raises `AttributeError`)

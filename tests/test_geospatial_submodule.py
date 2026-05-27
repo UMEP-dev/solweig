@@ -93,10 +93,13 @@ def test_removed_names_are_not_in_top_level_all():
 def test_unknown_attribute_still_raises():
     """Truly-unknown attributes raise AttributeError (default behaviour now
     that the b85→b86 ``__getattr__`` deprecation hook has been removed).
-    Goes through ``getattr`` so the static type checker doesn't pre-flag
-    the deliberate miss."""
+
+    Uses a dynamic attribute name via a string variable so neither the
+    static type checker (`ty`) nor ruff's useless-expression rule (`B018`)
+    flag the deliberate miss."""
     import pytest as _pytest
     import solweig
 
+    bad_name = "this_does_not_exist"
     with _pytest.raises(AttributeError):
-        getattr(solweig, "this_does_not_exist")
+        _ = getattr(solweig, bad_name)

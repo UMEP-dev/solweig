@@ -43,6 +43,7 @@ fn compute_svf_shadows(
                 max_shadow_distance_m,
             ) {
                 Ok(r) => {
+                    crate::shadowing::record_gpu_dispatch();
                     let dim = dsm.dim();
                     return ShadowingResultRust {
                         bldg_sh: r.bldg_sh,
@@ -60,6 +61,7 @@ fn compute_svf_shadows(
                 }
                 Err(e) => {
                     eprintln!("[GPU] SVF shadow failed: {}. Falling back to CPU.", e);
+                    crate::shadowing::record_gpu_fallback();
                 }
             }
         }
@@ -379,9 +381,13 @@ fn calculate_svf_inner(
             vt,
             b,
         ) {
-            Ok(()) => true,
+            Ok(()) => {
+                crate::shadowing::record_gpu_dispatch();
+                true
+            }
             Err(e) => {
                 eprintln!("[GPU] SVF accumulation init failed: {}. CPU fallback.", e);
+                crate::shadowing::record_gpu_fallback();
                 false
             }
         }

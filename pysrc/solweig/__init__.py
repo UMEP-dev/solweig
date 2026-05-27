@@ -81,6 +81,7 @@ try:
     from .rustalgos import GPU_ENABLED, RELEASE_BUILD
     from .rustalgos import gvf as _gvf  # noqa: F401
     from .rustalgos import pet as _pet  # noqa: F401
+    from .rustalgos import pipeline as _pipeline
     from .rustalgos import shadowing as _shadowing
     from .rustalgos import sky as _sky  # noqa: F401
     from .rustalgos import skyview as _skyview  # noqa: F401
@@ -103,6 +104,7 @@ except ImportError as e:
     GPU_ENABLED = False
     RELEASE_BUILD = False
     _gpu_initialized = False
+    _pipeline = None
     _shadowing = None
     _skyview = None
     _gvf = None
@@ -113,7 +115,19 @@ except ImportError as e:
 
 
 def _ensure_gpu_initialized() -> None:
-    """Lazily initialize GPU on first use."""
+    """Honour SOLWEIG_NO_GPU on first call. Idempotent.
+
+    The Rust-side toggles (shadow / aniso / GVF) all default to enabled at
+    process start, so no explicit enable is needed here. We only act when
+    the user requested CPU-only via `SOLWEIG_NO_GPU=1`, in which case we
+    flip every GPU path off exactly once. Subsequent calls are no-ops so a
+    prior user-level `disable_gpu()` / `enable_gpu()` is preserved.
+
+    Prior to b87 this also emitted `_shadowing.enable_gpu()` unconditionally,
+    which silently re-enabled the GPU after a user-level `disable_gpu()`
+    call when followed by any `is_gpu_available()` lookup. That re-enable
+    has been removed.
+    """
     global _gpu_initialized
     if _gpu_initialized:
         return
@@ -121,12 +135,8 @@ def _ensure_gpu_initialized() -> None:
     if not GPU_ENABLED or _shadowing is None:
         return
     if _os.environ.get("SOLWEIG_NO_GPU"):
-        return
-    try:
-        _shadowing.enable_gpu()
-        _logger.info("GPU acceleration enabled")
-    except Exception:
-        _logger.warning("GPU initialization failed, falling back to CPU", exc_info=True)
+        disable_gpu()
+        _logger.info("GPU disabled via SOLWEIG_NO_GPU environment variable")
 
 
 def is_gpu_available() -> bool:
@@ -165,14 +175,104 @@ def get_compute_backend() -> str:
 
 def disable_gpu() -> None:
     """
-    Disable GPU acceleration, falling back to CPU.
+    Disable GPU acceleration on every Rust path (shadows, anisotropic sky,
+    GVF), falling back to CPU.
 
-    This can be useful for debugging or if GPU results differ from expected.
-    The change takes effect immediately for subsequent calculations.
+    Useful for debugging, CPU-only benchmarks, or when GPU results need to
+    be compared against the CPU reference. The change takes effect
+    immediately for subsequent calculations.
+
+    Note: Prior to b87 this function only flipped the shadow path; the
+    anisotropic sky and GVF paths kept running on GPU. It now toggles all
+    three so a single call genuinely produces a CPU-only run.
     """
     if _shadowing is not None:
         with _contextlib.suppress(AttributeError):
             _shadowing.disable_gpu()
+    if _pipeline is not None:
+        with _contextlib.suppress(AttributeError):
+            _pipeline.disable_aniso_gpu()
+        with _contextlib.suppress(AttributeError):
+            _pipeline.disable_gvf_gpu()
+
+
+def enable_gpu() -> None:
+    """
+    Enable GPU acceleration on every Rust path (shadows, anisotropic sky,
+    GVF).
+
+    The counterpart to :func:`disable_gpu`. Each Rust pipeline starts
+    enabled by default at import time, so the common use of this function
+    is re-enabling after an explicit :func:`disable_gpu` call (for
+    instance, between benchmark scenarios).
+
+    Has no effect if GPU support wasn't compiled in or no GPU device is
+    available — both :func:`is_gpu_available` and the per-path fallbacks
+    continue to govern actual execution.
+    """
+    if _shadowing is not None:
+        with _contextlib.suppress(AttributeError):
+            _shadowing.enable_gpu()
+    if _pipeline is not None:
+        with _contextlib.suppress(AttributeError):
+            _pipeline.enable_aniso_gpu()
+        with _contextlib.suppress(AttributeError):
+            _pipeline.enable_gvf_gpu()
+
+
+def gpu_dispatch_count() -> int:
+    """
+    Cumulative count of successful GPU dispatches since process start (or
+    since the last :func:`reset_gpu_metrics` call).
+
+    Reads a thread-safe atomic counter incremented on the success branch
+    of every GPU kernel call across the three GPU paths (shadows, SVF,
+    anisotropic sky, GVF). Pair with :func:`gpu_fallback_count` to
+    distinguish "GPU is disabled" (both zero after a run) from "GPU tried
+    and fell back" (dispatch=0, fallback>0).
+
+    Use in tests to assert "the GPU path actually ran":
+
+    >>> import solweig
+    >>> solweig.reset_gpu_metrics()
+    >>> # ... run a calculation ...
+    >>> assert solweig.gpu_dispatch_count() > 0, "GPU path never executed"
+    """
+    if _shadowing is None:
+        return 0
+    return int(_shadowing.gpu_dispatch_count())
+
+
+def gpu_fallback_count() -> int:
+    """
+    Cumulative count of GPU→CPU fall-backs since process start (or since
+    the last :func:`reset_gpu_metrics` call).
+
+    A non-zero value during a "should be GPU" run indicates either a GPU
+    device problem (driver crash, OOM, unsupported shape) or a per-dispatch
+    failure mode worth investigating. Zero after a CPU-only run just means
+    no fall-back happened because the GPU branch was never entered.
+
+    See also: :func:`gpu_dispatch_count`, :func:`reset_gpu_metrics`.
+    """
+    if _shadowing is None:
+        return 0
+    return int(_shadowing.gpu_fallback_count())
+
+
+def reset_gpu_metrics() -> None:
+    """Reset :func:`gpu_dispatch_count` and :func:`gpu_fallback_count` to 0.
+
+    Typical use in tests:
+
+    >>> solweig.reset_gpu_metrics()
+    >>> # ... run a calculation ...
+    >>> dispatched = solweig.gpu_dispatch_count()
+    >>> fellback = solweig.gpu_fallback_count()
+    """
+    if _shadowing is not None:
+        with _contextlib.suppress(AttributeError):
+            _shadowing.reset_gpu_metrics()
 
 
 def get_gpu_limits() -> dict[str, int | str] | None:
@@ -238,6 +338,10 @@ __all__ = [
     "get_compute_backend",
     "get_gpu_limits",
     "disable_gpu",
+    "enable_gpu",
+    "gpu_dispatch_count",
+    "gpu_fallback_count",
+    "reset_gpu_metrics",
     "GPU_ENABLED",
     "RELEASE_BUILD",
 ]

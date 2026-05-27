@@ -21,6 +21,29 @@ static GPU_CONTEXT: OnceLock<Option<ShadowGpuContext>> = OnceLock::new();
 #[cfg(feature = "gpu")]
 static GPU_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
+// Diagnostic counters. Bumped on every fall-back-to-CPU event so tests can
+// programmatically assert that the GPU path actually executed (or that it
+// fell back the expected number of times). Always defined — even when the
+// `gpu` feature is off the counters exist; they just never increment.
+pub(crate) static GPU_FALLBACK_COUNT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+pub(crate) static GPU_DISPATCH_COUNT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+/// Increment the GPU fall-back counter. Cheap (relaxed atomic add); safe
+/// to call from any thread. Use this at every site where a GPU dispatch
+/// failed and the code fell back to CPU.
+#[cfg(feature = "gpu")]
+pub(crate) fn record_gpu_fallback() {
+    GPU_FALLBACK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Increment the GPU successful-dispatch counter.
+#[cfg(feature = "gpu")]
+pub(crate) fn record_gpu_dispatch() {
+    GPU_DISPATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
 #[cfg(feature = "gpu")]
 pub(crate) fn get_gpu_context() -> Option<&'static ShadowGpuContext> {
     // Check if GPU is enabled
@@ -39,10 +62,42 @@ pub(crate) fn get_gpu_context() -> Option<&'static ShadowGpuContext> {
                     "[GPU] Failed to initialize GPU context: {}. Falling back to CPU.",
                     e
                 );
+                record_gpu_fallback();
                 None
             }
         })
         .as_ref()
+}
+
+/// Return the cumulative number of GPU→CPU fall-backs since process start
+/// (or since the last `reset_gpu_metrics()` call).
+///
+/// A non-zero value during a "should be GPU" run indicates either a GPU
+/// device problem or a per-dispatch failure mode worth investigating. A
+/// zero value during a CPU-only run (after `disable_gpu()`) just means no
+/// fall-back happened because the GPU branch was never entered.
+#[pyfunction]
+pub fn gpu_fallback_count() -> u64 {
+    GPU_FALLBACK_COUNT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Return the cumulative number of successful GPU dispatches since process
+/// start (or since the last `reset_gpu_metrics()` call). Useful in tests
+/// for asserting that "the GPU path actually ran" — pair with
+/// `gpu_fallback_count` to distinguish "GPU is disabled" from "GPU tried
+/// and fell back".
+#[pyfunction]
+pub fn gpu_dispatch_count() -> u64 {
+    GPU_DISPATCH_COUNT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Reset both `gpu_fallback_count` and `gpu_dispatch_count` to zero.
+/// Typical pattern in tests: reset → run the calculation → read both
+/// counters.
+#[pyfunction]
+pub fn reset_gpu_metrics() {
+    GPU_FALLBACK_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
+    GPU_DISPATCH_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[cfg(feature = "gpu")]
@@ -211,6 +266,7 @@ pub(crate) fn calculate_shadows_rust(
                 max_shadow_distance_m,
             ) {
                 Ok(gpu_result) => {
+                    record_gpu_dispatch();
                     // Handle sh_on_wall if wall scheme is present
                     let sh_on_wall = if let (Some(walls_scheme_view), Some(aspect_scheme_view)) =
                         (walls_scheme_view_opt, aspect_scheme_view_opt)
@@ -273,6 +329,7 @@ pub(crate) fn calculate_shadows_rust(
                         "[GPU] GPU shadow calculation failed: {}. Falling back to CPU.",
                         e
                     );
+                    record_gpu_fallback();
                     // Fall through to CPU path
                 }
             }

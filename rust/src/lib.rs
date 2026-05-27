@@ -77,6 +77,11 @@ fn register_shadowing_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
         submodule.add_function(wrap_pyfunction!(shadowing::is_gpu_enabled, &submodule)?)?;
         submodule.add_function(wrap_pyfunction!(shadowing::gpu_limits, &submodule)?)?;
     }
+    // GPU fallback / dispatch metrics are always available (the counters
+    // exist even without the `gpu` feature; they just never increment).
+    submodule.add_function(wrap_pyfunction!(shadowing::gpu_fallback_count, &submodule)?)?;
+    submodule.add_function(wrap_pyfunction!(shadowing::gpu_dispatch_count, &submodule)?)?;
+    submodule.add_function(wrap_pyfunction!(shadowing::reset_gpu_metrics, &submodule)?)?;
 
     py_module.add_submodule(&submodule)?;
     Ok(())
