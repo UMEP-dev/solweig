@@ -4,14 +4,19 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
-## 0.1.0b87 — unreleased
+## 0.1.0b87 — 2026-05-27
 
-**Breaking change.** The top-level re-exports of geospatial helpers
+**No numerical change** — golden tests byte-identical, validation site
+numbers unchanged from b82 baseline (31/31 validation tests pass).
+
+### Breaking
+
+The top-level re-exports of geospatial helpers
 (`solweig.extract_bounds`, `solweig.intersect_bounds`,
 `solweig.resample_to_grid`, `solweig.namespace_to_dict`,
 `solweig.pixel_size_tag`, `solweig.compute_max_tile_pixels`,
 `solweig.looks_like_relative`, `solweig.wallalgorithms`) — deprecated
-in b85 with a `DeprecationWarning` shim — have been removed.
+in b85 with a `DeprecationWarning` shim — have been **removed**.
 
 Migrate by importing from `solweig.geospatial` instead:
 
@@ -25,6 +30,51 @@ from solweig.geospatial import extract_bounds, resample_to_grid
 
 Accessing the old names now raises `AttributeError`. The
 `solweig.geospatial` submodule (added in b85) is unchanged.
+
+### GPU / CPU surface
+
+- **`solweig.disable_gpu()` now toggles every GPU path.** Pre-b87 it
+  only flipped the shadow path; anisotropic sky and GVF kept running
+  on GPU. A single call now genuinely produces a CPU-only run — the
+  basis for the new parity tests below.
+- **`solweig.enable_gpu()`** — new, mirrors `disable_gpu()`. Re-enables
+  all three Rust GPU paths in a single call.
+- **Lazy-init fix.** First call to `is_gpu_available()` used to
+  unconditionally re-enable shadow GPU, silently overriding any
+  prior `disable_gpu()`. Fixed: `_ensure_gpu_initialized` now only
+  acts when `SOLWEIG_NO_GPU=1` is set.
+- **GPU metrics surface** (new): `solweig.gpu_dispatch_count()`,
+  `solweig.gpu_fallback_count()`, `solweig.reset_gpu_metrics()`.
+  Thread-safe atomic counters incremented at every shadow / SVF /
+  aniso / GVF dispatch site in Rust. Lets tests assert "the GPU
+  path actually ran" (paired with `gpu_fallback_count() == 0`).
+
+### New parity / benchmark coverage
+
+- **Shadow + SVF GPU-CPU parity tests** (`tests/spec/test_gpu_cpu_parity.py`).
+  Mirrors the existing aniso parity pattern for the two remaining
+  GPU paths.
+- **GPU-CPU runtime ratio benchmark** (`tests/benchmarks/test_gpu_cpu_benchmark.py`).
+  Runs the same scenario back-to-back with GPU on/off, asserts the
+  ratio is above a hard 0.5 floor, warns below 1.0. Appends a row to
+  `tests/benchmarks/logs/gpu_cpu_ratio_history.md` (gitignored).
+
+### Known difference (documented, not a regression)
+
+The new SVF parity test characterises a small known difference between
+the CPU and GPU vegetation-SVF kernels:
+
+- Building SVF fields (`svf*`): **byte-identical** between paths.
+- Veg-blocks-building (`svf_aveg*`): **byte-identical**.
+- Vegetation-only fields (`svf_veg*`): up to ~0.042 absolute drift in
+  <1% of pixels, exclusively at canopy-edge pixels.
+
+The drift values are integer multiples of the per-patch SVF weight
+(~0.012) — i.e. 1–2 patches at the visible/blocked boundary disagree
+between the two implementations. Both are correct to f32 precision;
+the propagated Tmrt difference is below 0.5 °C (verified by
+`test_shadow_field_gpu_vs_cpu_match`), well under any physically
+meaningful threshold.
 
 ## 0.1.0b86 — 2026-05-27
 

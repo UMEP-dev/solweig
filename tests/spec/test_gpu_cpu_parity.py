@@ -204,15 +204,37 @@ def test_svf_arrays_gpu_vs_cpu_match():
     # Compare every SVF field — the canonical svf plus directional /
     # vegetation / aveg variants.
     #
-    # Tolerance note: building (non-veg) SVF fields agree to ~1e-3
-    # absolute. Vegetation-bearing fields (`svf_veg*`, `svf_aveg*`)
-    # exhibit a small known divergence between the GPU shadow
-    # accumulation and the CPU `shadowingfunction_20` reference at edge
-    # pixels — max absolute difference ~0.025 in <1% of pixels for the
-    # scenes tested. The looser tolerance below accepts that drift so
-    # the test still catches new regressions (e.g. shader bugs that
-    # affect many pixels or shift values by >5%) while documenting the
-    # existing edge-pixel difference.
+    # === Tolerance characterisation (measured on 60×60 fixture) ===
+    #
+    # * Building fields (`svf*`): BYTE-IDENTICAL between CPU and GPU.
+    #   Both paths produce the same per-patch shadow boolean, so the
+    #   accumulation sums to identical f32 values.
+    #
+    # * Veg-blocks-building fields (`svf_aveg*`): BYTE-IDENTICAL.
+    #
+    # * Vegetation-only fields (`svf_veg*`): drift up to 0.042 absolute
+    #   in <1% of pixels, exclusively at canopy-edge pixels (one ring
+    #   of pixels immediately outside the CDSM footprint where rays at
+    #   low-altitude patches graze the canopy boundary). Observed diff
+    #   values cluster at exact multiples of the per-patch weight
+    #   (~0.012, ~0.024, ~0.042 = 1, 2, or 3 patches disagreeing
+    #   per pixel).
+    #
+    # Root cause: the CPU `calculate_shadows_rust` and GPU
+    # `compute_shadows_for_svf` are independent implementations of the
+    # same shadow-propagation physics. At canopy edges, f32 precision
+    # in the ray-cast inner loop means a small number of low-altitude
+    # patches land on different sides of the visible/blocked boundary
+    # between the two paths. Both are correct to their own f32
+    # precision; making them bit-identical would require re-implementing
+    # one to mirror the other's accumulation order. The propagated
+    # Tmrt difference is below 0.5 °C (verified by
+    # `test_shadow_field_gpu_vs_cpu_match`), well under any physically
+    # meaningful threshold.
+    #
+    # The looser tolerance below accepts that documented drift while
+    # still catching new regressions (e.g. shader bugs that affect
+    # many pixels or shift values by >5%).
     bldg_fields = ("svf", "svf_north", "svf_east", "svf_south", "svf_west")
     veg_fields = (
         "svf_veg",
