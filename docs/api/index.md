@@ -62,10 +62,10 @@ to stay forward-compatible.
 
 For QGIS-plugin / batch-pipeline authors who need geospatial helpers
 (`extract_bounds`, `intersect_bounds`, `resample_to_grid`,
-`looks_like_relative`, …), the documented entry point is
-[`solweig.geospatial`](geospatial.md), not the top-level. Top-level
-access still works in 0.1.0bN but emits a `DeprecationWarning` with a
-removal target.
+`looks_like_relative`, …), the entry point is
+[`solweig.geospatial`](geospatial.md). The b85→b86 top-level
+re-exports were removed in b87 — accessing `solweig.extract_bounds`
+now raises `AttributeError`.
 
 ## Type Annotations
 

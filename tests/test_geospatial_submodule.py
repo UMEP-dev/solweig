@@ -46,20 +46,16 @@ def test_geospatial_names_match_canonical_modules():
     assert wallalgorithms is canon_wallalgorithms
 
 
-def test_top_level_reexports_still_work_but_warn():
-    """Top-level `solweig.extract_bounds` etc. remain accessible for backwards
-    compatibility, BUT must emit a ``DeprecationWarning`` and the canonical
-    `solweig.geospatial.<name>` must resolve to the same object.
-
-    When the top-level access is finally removed, flip this to
-    `assert not hasattr(solweig, name)` and delete the deprecation hook
-    in `solweig/__init__.py`.
+def test_top_level_access_is_removed():
+    """The b85→b86 deprecation shim was removed in b87. Top-level access
+    to the geospatial helpers (``solweig.extract_bounds`` etc) must now
+    raise ``AttributeError`` — callers are expected to import from
+    ``solweig.geospatial``.
     """
-    import warnings
-
+    import pytest as _pytest
     import solweig
 
-    deprecated_names = (
+    removed_names = (
         "extract_bounds",
         "intersect_bounds",
         "resample_to_grid",
@@ -70,25 +66,17 @@ def test_top_level_reexports_still_work_but_warn():
         "wallalgorithms",
     )
 
-    for name in deprecated_names:
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            value = getattr(solweig, name)
-        assert any(issubclass(w.category, DeprecationWarning) for w in caught), (
-            f"`solweig.{name}` accessed without a DeprecationWarning"
-        )
-        # The deprecated handle and the canonical home must be the same object.
-        from solweig import geospatial
-
-        assert value is getattr(geospatial, name)
+    for name in removed_names:
+        with _pytest.raises(AttributeError):
+            _ = getattr(solweig, name)
 
 
-def test_deprecated_names_are_not_in_top_level_all():
-    """`__all__` is the documented public surface. The deprecated re-exports
+def test_removed_names_are_not_in_top_level_all():
+    """`__all__` is the documented public surface. The removed re-exports
     must NOT appear there (only the `solweig.geospatial` submodule does)."""
     import solweig
 
-    deprecated = {
+    removed = {
         "extract_bounds",
         "intersect_bounds",
         "resample_to_grid",
@@ -98,14 +86,17 @@ def test_deprecated_names_are_not_in_top_level_all():
         "namespace_to_dict",
         "wallalgorithms",
     }
-    leaked = deprecated & set(solweig.__all__)
-    assert not leaked, f"Deprecated names still in __all__: {sorted(leaked)}"
+    leaked = removed & set(solweig.__all__)
+    assert not leaked, f"Removed names still in __all__: {sorted(leaked)}"
 
 
 def test_unknown_attribute_still_raises():
-    """The deprecation `__getattr__` must not swallow truly-unknown attrs."""
+    """Truly-unknown attributes raise AttributeError (default behaviour now
+    that the b85→b86 ``__getattr__`` deprecation hook has been removed).
+    Goes through ``getattr`` so the static type checker doesn't pre-flag
+    the deliberate miss."""
     import pytest as _pytest
     import solweig
 
     with _pytest.raises(AttributeError):
-        _ = solweig.this_does_not_exist  # noqa: F841
+        getattr(solweig, "this_does_not_exist")

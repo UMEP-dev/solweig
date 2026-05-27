@@ -4,6 +4,28 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
+## 0.1.0b87 — unreleased
+
+**Breaking change.** The top-level re-exports of geospatial helpers
+(`solweig.extract_bounds`, `solweig.intersect_bounds`,
+`solweig.resample_to_grid`, `solweig.namespace_to_dict`,
+`solweig.pixel_size_tag`, `solweig.compute_max_tile_pixels`,
+`solweig.looks_like_relative`, `solweig.wallalgorithms`) — deprecated
+in b85 with a `DeprecationWarning` shim — have been removed.
+
+Migrate by importing from `solweig.geospatial` instead:
+
+```python
+# Before
+from solweig import extract_bounds, resample_to_grid
+
+# After
+from solweig.geospatial import extract_bounds, resample_to_grid
+```
+
+Accessing the old names now raises `AttributeError`. The
+`solweig.geospatial` submodule (added in b85) is unchanged.
+
 ## 0.1.0b86 — 2026-05-27
 
 Internal tidy-and-tighten pass following b85. **No numerical change** — golden

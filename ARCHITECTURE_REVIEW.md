@@ -358,12 +358,12 @@ These are individually small but together produce the feeling that
 
 > **Status update (post-b85):** The 8 QGIS-plugin-support helpers flagged
 > below moved to a dedicated `solweig.geospatial` submodule
-> (`pysrc/solweig/geospatial.py`); top-level access still works but emits
-> a `DeprecationWarning` with removal target 0.1.0b88 / 0.2.x.
-> `__all__` was also tightened — `ThermalState` is now a deliberate top-level
-> export because it appears in the `calculate()` signature. Docstring
-> coverage of the public surface is at 100% (279 symbols, per
-> [AUDIT.md](AUDIT.md)).
+> (`pysrc/solweig/geospatial.py`); the b85→b86 top-level
+> `DeprecationWarning` shim was removed in b87. `__all__` was also
+> tightened — `ThermalState` and `Settings` are now deliberate top-level
+> exports because they appear in / underpin the `calculate()` signature.
+> Docstring coverage of the public surface is at 100% (279 symbols,
+> per [AUDIT.md](AUDIT.md)).
 
 [`solweig/__init__.py`](pysrc/solweig/__init__.py) exports 38 names in
 `__all__`. The intent is the user-facing API, but in practice it

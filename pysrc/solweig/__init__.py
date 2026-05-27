@@ -73,46 +73,6 @@ from .api import (  # noqa: E402
 )
 from .errors import SolweigError  # noqa: E402
 
-# ── Deprecated top-level geospatial helpers ──────────────────────────────────
-# These were promoted to the top level in 0.1.0b84 so the QGIS plugin could
-# stop reaching into internals. The cleaner home is `solweig.geospatial`
-# (created 0.1.0b85). Top-level access is preserved here behind a
-# DeprecationWarning so downstream code keeps working but is nudged toward
-# the structured import path.
-#
-# Removal target: 0.1.0b88 (or first 0.2.x). When removing, delete the
-# `_DEPRECATED_REEXPORTS` map, the `__getattr__` block below, and update
-# the matching entries in `__all__`.
-_DEPRECATED_REEXPORTS = {
-    "extract_bounds": "solweig.geospatial",
-    "intersect_bounds": "solweig.geospatial",
-    "resample_to_grid": "solweig.geospatial",
-    "namespace_to_dict": "solweig.geospatial",
-    "pixel_size_tag": "solweig.geospatial",
-    "compute_max_tile_pixels": "solweig.geospatial",
-    "looks_like_relative": "solweig.geospatial",
-    "wallalgorithms": "solweig.geospatial",
-}
-
-
-def __getattr__(name: str):  # noqa: N807 — PEP 562 module-level hook
-    if name in _DEPRECATED_REEXPORTS:
-        import warnings as _warnings
-
-        target = _DEPRECATED_REEXPORTS[name]
-        _warnings.warn(
-            f"`solweig.{name}` is deprecated and will be removed in a future "
-            f"release. Import from `{target}` instead: "
-            f"`from {target} import {name}`.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        from . import geospatial as _geo
-
-        return getattr(_geo, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 # Try to import Rust algorithms. The submodules are imported with underscore
 # aliases so they don't leak into the top-level public surface; user code that
 # really needs a specific Rust submodule should import from `solweig.rustalgos`
@@ -281,9 +241,7 @@ __all__ = [
     "GPU_ENABLED",
     "RELEASE_BUILD",
 ]
-# NOTE: The following names are still reachable as `solweig.<name>` for
-# backwards-compatibility but are NOT in __all__: extract_bounds,
-# intersect_bounds, resample_to_grid, namespace_to_dict, pixel_size_tag,
-# compute_max_tile_pixels, looks_like_relative, wallalgorithms. They emit a
-# DeprecationWarning on access (see the `__getattr__` hook above). Import
-# from `solweig.geospatial` instead.
+# Geospatial helpers (extract_bounds, intersect_bounds, resample_to_grid,
+# namespace_to_dict, pixel_size_tag, compute_max_tile_pixels, looks_like_relative,
+# wallalgorithms) live in `solweig.geospatial` — there is no top-level
+# re-export. The b85→b86 DeprecationWarning shim was removed in b87.

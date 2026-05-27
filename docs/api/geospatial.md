@@ -27,9 +27,9 @@ plugin could stop reaching into internals. That polluted the user-facing
 namespace with GIS plumbing, so 0.1.0b85 introduced `solweig.geospatial`
 as a stable facade that groups them by use case.
 
-Top-level access (`solweig.extract_bounds`, etc.) still works but emits a
-``DeprecationWarning`` and will be removed in `0.1.0b88` or the first
-`0.2.x` release.
+Top-level access (`solweig.extract_bounds`, etc.) was deprecated in
+b85, emitted a `DeprecationWarning` through b86, and **removed in b87**.
+Import from `solweig.geospatial` only.
 
 ## What's here
 
@@ -49,10 +49,10 @@ re-exports here are identity-equal to the canonical locations.
 
 ## Migrating from the top-level namespace
 
-Old (still works, emits ``DeprecationWarning``):
+Old (no longer supported — `AttributeError` since b87):
 
 ```python
-from solweig import extract_bounds, resample_to_grid
+from solweig import extract_bounds, resample_to_grid  # AttributeError
 ```
 
 New:
