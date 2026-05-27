@@ -78,12 +78,20 @@ is question one to settle.
 
 ## 1. SurfaceData is a god-object — and the natural decomposition is obvious
 
-[pysrc/solweig/models/surface.py](pysrc/solweig/models/surface.py) is 3,016 lines —
-larger than every other module by 2.5×. The class itself has at least nine
+[pysrc/solweig/models/surface.py](pysrc/solweig/models/surface.py) was 3,016
+lines at the time of this review and the class itself had at least nine
 distinct responsibilities (data schema, height-convention conversion, file I/O
 orchestration, preprocessing pipeline, SVF/wall computation, masking and
 cropping, optical-property derivation, buffer pool management, transient cache
 management).
+
+> **Status update (post-b85):** `surface.py` is now ~1,730 lines after
+> extracting `surface_loading.py`, `surface_compute.py`, `surface_svf_tiled.py`,
+> `surface_serialization.py`, and `surface_views.py`. The `SurfaceData` class
+> still owns the orchestration role described below — the responsibilities have
+> been _delegated_ rather than fully _decomposed_. The remainder of this
+> section documents the original analysis; treat the structural changes as
+> already absorbed.
 
 The fact that all of these live on one class is not just an aesthetic
 problem. It produces specific friction:

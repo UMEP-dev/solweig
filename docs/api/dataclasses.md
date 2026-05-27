@@ -45,6 +45,21 @@
 
 ---
 
+## Settings
+
+The internal merged-configuration object that `calculate()` builds from
+the `config`, kwargs, and JSON-file inputs. Most users never construct
+this directly — see the [Settings guide](../guide/settings.md) for the
+resolution rules — but the dataclass is documented here for callers
+who want to inspect the resolved values.
+
+::: solweig.models.settings.Settings
+    options:
+      show_source: false
+      heading_level: 3
+
+---
+
 ## SolweigResult
 
 ::: solweig.SolweigResult

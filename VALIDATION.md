@@ -18,7 +18,7 @@ a glance.
 
 ---
 
-## Summary — v0.1.0b84 (2026-04-16)
+## Summary — v0.1.0b85 (2026-05-26)
 
 | Metric               | Kronenhuset | Gustav Adolfs |          GVC |
 | -------------------- | ----------: | ------------: | -----------: |

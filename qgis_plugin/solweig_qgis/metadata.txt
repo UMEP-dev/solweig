@@ -56,7 +56,7 @@ changelog=
     - vegetation.rs panic surface 44 → 14 sites via documented contiguity helper
     - surface.py decomposed: serialization helpers extracted to models/surface_serialization.py
     - poe audit task + AUDIT.md (8 measured axes); new CI jobs (audit, test-slow); test-spec now includes slow tests
-    - Foundation docs: docs/development/principles.md + invariants.md
+    - Foundation docs: PRINCIPLES.md + INVARIANTS.md (repo root)
     0.1.0-beta84
     - Rust wall-aspect kernel: promote internal math to f64, switch to banker's rounding to match numpy's np.round (closer to UMEP numerics; input/output arrays stay f32 so data memory is unchanged)
     - Delete Python Goodwin fallback from wallalgorithms.py; Rust kernel is now the single code path (same numerical behaviour for QGIS and pip users)

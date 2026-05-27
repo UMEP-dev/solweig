@@ -22,9 +22,14 @@ Before making any non-trivial change, skim:
   load-bearing assumptions the code makes but does not always enforce
   (array layout, immutability, GIL ownership, etc). Violating these
   produces silently wrong results, not crashes.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — the layered overview (Python API
+  → orchestration → fused Rust pipeline → Rust algorithms) and how data
+  moves between them.
 - **[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md)** — the deeper review the
-  principles and invariants pages derive from. Read once for the why; the
-  shorter pages are the day-to-day reference.
+  principles and invariants pages derive from. Some numerical claims
+  (e.g. line counts) are pre-b85 and now out of date; treat it as a
+  snapshot of why the current architecture is shaped this way, not as
+  live structural reference.
 
 ---
 

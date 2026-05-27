@@ -72,5 +72,7 @@ with nine distinct responsibilities. Decomposing it directly into
 typed sub-objects would be a breaking change; the views are the
 middle path — internal callers and type-checked external code get
 the grouping benefit, the public API stays compatible. See
-[ARCHITECTURE_REVIEW.md](https://github.com/UMEP-dev/solweig/blob/main/ARCHITECTURE_REVIEW.md#1-surfacedata-is-a-god-object--and-the-natural-decomposition-is-obvious)
-§1 for the deeper rationale.
+[ARCHITECTURE.md](https://github.com/UMEP-dev/solweig/blob/main/ARCHITECTURE.md)
+and
+[ARCHITECTURE_REVIEW.md](https://github.com/UMEP-dev/solweig/blob/main/ARCHITECTURE_REVIEW.md)
+for the structural overview and the deeper rationale.
