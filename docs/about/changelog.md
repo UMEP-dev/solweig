@@ -4,6 +4,15 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
+## 0.1.0b88 — 2026-05-27
+
+Internal-only release — no library, plugin, or runtime change.
+
+Performance-timing benchmarks moved off CI (where they fired false
+positives on GPU-less runners) to a local-only `gpu_perf_gate`
+marker. The hardware-stable memory benchmark stays on CI. Run the
+full perf suite locally via `poe test_gpu_perf_gate`.
+
 ## 0.1.0b87 — 2026-05-27
 
 **No numerical change** — golden tests byte-identical, validation site

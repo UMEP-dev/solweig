@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta87
+version=0.1.0-beta88
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,10 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta88
+    - CI / test-categorisation only — zero plugin behaviour change.
+    - Performance-timing benchmarks moved to a local-only `gpu_perf_gate` marker; CI keeps only the hardware-stable memory bench. Resolves a CI false positive on the aniso/iso ratio gate (calibrated against local M-series GPU; CI runs CPU-only Linux where the ratio is naturally ~3×).
+    - Plugin functionality, public API, and numerical output unchanged from b87.
     0.1.0-beta87
     - Breaking: top-level solweig.extract_bounds / intersect_bounds / resample_to_grid / etc. (b85 DeprecationWarning shim) now raise AttributeError. Import from solweig.geospatial instead.
     - solweig.disable_gpu() now disables all three GPU paths (shadows, anisotropic sky, GVF) in a single call. Pre-b87 it only flipped shadows so "CPU-only" tests weren't actually CPU-only.
