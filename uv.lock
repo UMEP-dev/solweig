@@ -2717,9 +2717,18 @@ dev = [
     { name = "pip" },
     { name = "poethepoet" },
     { name = "pre-commit" },
+    { name = "pymdown-extensions" },
     { name = "ruff" },
     { name = "scipy" },
     { name = "ty" },
+]
+docs = [
+    { name = "mkdocs" },
+    { name = "mkdocs-include-markdown-plugin" },
+    { name = "mkdocs-jupyter" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+    { name = "pymdown-extensions" },
 ]
 qgis-compat = [
     { name = "maturin" },
@@ -2762,9 +2771,18 @@ dev = [
     { name = "pip", specifier = ">=23.2" },
     { name = "poethepoet", specifier = ">=0.29.0" },
     { name = "pre-commit", specifier = ">=4.3.0" },
+    { name = "pymdown-extensions" },
     { name = "ruff", specifier = ">=0.5.1" },
     { name = "scipy", specifier = ">=1.17.0" },
     { name = "ty", specifier = ">=0.0.12" },
+]
+docs = [
+    { name = "mkdocs", specifier = ">=1.6.0" },
+    { name = "mkdocs-include-markdown-plugin", specifier = ">=7.0.0" },
+    { name = "mkdocs-jupyter", specifier = ">=0.25.0" },
+    { name = "mkdocs-material", specifier = ">=9.5.0" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.27.0" },
+    { name = "pymdown-extensions" },
 ]
 qgis-compat = [
     { name = "maturin", specifier = ">=1.8.3" },

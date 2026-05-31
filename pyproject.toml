@@ -61,7 +61,21 @@ geo = ["geopandas>=1.0.1"]
 # Install commands:
 #   Development (all deps):  uv sync --group test --group dev
 #   Testing only:            uv sync --group test
-#   QGIS compat testing:    uv sync --group qgis-compat
+#   Docs site build only:    uv sync --group docs
+#   QGIS compat testing:     uv sync --group qgis-compat
+#
+# The `docs` group is the canonical list of packages the public docs
+# site needs — keep it in sync with mkdocs.yml's `plugins:` block. The
+# `dev` group re-includes it via `{include-group}` so `uv sync --group dev`
+# still installs everything for local work.
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.27.0",
+    "mkdocs-jupyter>=0.25.0",
+    "mkdocs-include-markdown-plugin>=7.0.0",
+    "pymdown-extensions",  # transitively required by mkdocs-material extensions used in mkdocs.yml
+]
 test = [
     "pytest>=7.2.0",
     "pandas-stubs>=1.5.2.221213",
@@ -79,12 +93,9 @@ dev = [
     "ty>=0.0.12",
     "pre-commit>=4.3.0",
     "coverage[toml]>=7.0",
-    # Documentation
-    "mkdocs>=1.6.0",
-    "mkdocs-material>=9.5.0",
-    "mkdocstrings[python]>=0.27.0",
-    "mkdocs-jupyter>=0.25.0",
-    "mkdocs-include-markdown-plugin>=7.0.0",
+    # Documentation — defined in the `docs` group above; included here so
+    # `uv sync --group dev` still installs everything for local work.
+    {include-group = "docs"},
     "matplotlib>=3.7.0",
     "ipykernel>=6.31.0",
     "scipy>=1.17.0",

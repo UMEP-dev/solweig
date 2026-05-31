@@ -31,12 +31,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          pip install mkdocs-material mkdocstrings[python] pymdown-extensions mkdocs-jupyter
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install docs dependencies
+        # The `docs` dependency-group in pyproject.toml is the single source
+        # of truth for what packages the docs site needs. Adding a new mkdocs
+        # plugin? Add it to the `docs` group and this CI job picks it up
+        # automatically (no separate edit here).
+        run: uv sync --group docs
 
       - name: Build documentation
-        run: mkdocs build --strict
+        run: uv run mkdocs build --strict
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
