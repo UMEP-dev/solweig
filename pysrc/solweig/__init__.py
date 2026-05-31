@@ -71,7 +71,14 @@ from .api import (  # noqa: E402
     # Validation
     validate_inputs,
 )
-from .errors import SolweigError  # noqa: E402
+from .errors import (  # noqa: E402
+    ConfigurationError,
+    GridShapeMismatch,
+    InvalidSurfaceData,
+    MissingPrecomputedData,
+    SolweigError,
+    WeatherDataError,
+)
 
 # Try to import Rust algorithms. The submodules are imported with underscore
 # aliases so they don't leak into the top-level public surface; user code that
@@ -310,6 +317,11 @@ __all__ = [
     "Timeseries",
     "TimeseriesSummary",
     "SolweigError",
+    "InvalidSurfaceData",
+    "GridShapeMismatch",
+    "MissingPrecomputedData",
+    "WeatherDataError",
+    "ConfigurationError",
     "calculate",
     "validate_inputs",
     "load_params",

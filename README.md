@@ -137,7 +137,7 @@ summary.plot()
 | `HumanParams`       | Body parameters: posture (standing/sitting), absorption coefficients, PET body parameters (age, weight, height, etc.).                                                        |
 | `ModelConfig`       | Runtime settings: anisotropic sky, max shadow distance, tiling workers.                                                                                                       |
 | `Settings`          | Resolved configuration `calculate()` works from internally; merges `ModelConfig`, kwargs, and JSON defaults. Most users don't construct it directly — see the Settings guide. |
-| `ThermalState`      | Carry-forward thermal state for multi-day chains (`calculate(..., state=...)`); returned in `summary.state`.                                                                  |
+| `ThermalState`      | Internal carry-forward thermal state used across timesteps inside `calculate()`. Surfaced for advanced callers reading `SolweigResult.state` in single-step / chained workflows.|
 
 ### Main functions
 

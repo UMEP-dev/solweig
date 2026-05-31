@@ -270,7 +270,7 @@ try:
     warnings = solweig.validate_inputs(surface, location, weather)
     for w in warnings:
         print(f"Warning: {w}")
-    result = solweig.calculate(surface, weather=[weather], location=location, output_dir="output/")
+    summary = solweig.calculate(surface, weather=[weather], location=location, output_dir="output/")
 except solweig.GridShapeMismatch as e:
     print(f"Grid size mismatch: {e.field} expected {e.expected}, got {e.got}")
 except solweig.MissingPrecomputedData as e:

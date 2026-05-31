@@ -4,7 +4,7 @@ For multi-timestep simulations (hours, days, or longer), pass a list of weather 
 
 ## Thermal State Management
 
-Ground and wall temperatures depend on accumulated heating from previous hours (thermal inertia). When given multiple weather timesteps, `calculate()` manages this via a `ThermalState` object, producing accurate ground-level longwave radiation values.
+Ground and wall temperatures depend on accumulated heating from previous hours (thermal inertia). When given multiple weather timesteps, `calculate()` carries this between timesteps internally (via a `ThermalState` object you don't need to construct or pass yourself), producing accurate ground-level longwave radiation values.
 
 ## Basic Timeseries
 

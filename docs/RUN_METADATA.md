@@ -115,14 +115,14 @@ For custom workflows, metadata can be created and saved separately:
 import solweig
 
 surface = solweig.SurfaceData.prepare(dsm="dsm.tif", working_dir="cache/")
-weather = solweig.Weather.from_epw("weather.epw")
+weather_series = solweig.Weather.from_epw("weather.epw")  # returns list[Weather]
 location = solweig.Location.from_surface(surface)
 human = solweig.HumanParams(weight=70)
 
 metadata = solweig.create_run_metadata(
     surface=surface,
     location=location,
-    weather=weather,
+    weather_series=weather_series,
     human=human,
     physics=None,
     materials=None,

@@ -105,7 +105,7 @@ rust/src/               Rust extension (PyO3, compiled as solweig.rustalgos)
   patch_radiation.rs, sunlit_shaded_patches.rs, emissivity_models.rs
   gpu/                  wgpu compute shaders (shadow, aniso, GVF) + 6 WGSL files
 
-tests/                  ~730 tests across ~50 files
+tests/                  ~1035 tests across ~68 files
   spec/                 Physical property & parity tests (fast)
   golden/               Regression tests against pre-computed baselines
   validation/           Real-world sites: Kronenhuset, Gustav Adolfs, GVC

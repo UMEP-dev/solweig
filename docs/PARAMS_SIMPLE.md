@@ -32,7 +32,7 @@ human = HumanParams(
 These parameters govern vegetation transmissivity and posture geometry. They are site-independent and apply universally.
 
 ```python
-physics = load_physics("custom_trees.json")  # Optional
+physics = solweig.load_physics("custom_trees.json")  # Optional
 ```
 
 Contents:
@@ -49,7 +49,7 @@ Contents:
 These parameters define surface material properties per landcover class.
 
 ```python
-materials = load_materials("site_materials.json")  # Required if a landcover grid is provided
+materials = solweig.load_materials("site_materials.json")  # Required if a landcover grid is provided
 ```
 
 Contents per landcover class:

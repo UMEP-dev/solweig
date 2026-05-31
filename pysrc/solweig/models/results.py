@@ -45,8 +45,12 @@ class SolweigResult:
         ldown: Downwelling longwave radiation (W/m²).
         lup: Upwelling longwave radiation (W/m²).
         state: Thermal state for multi-timestep chaining. Optional.
-            When state parameter was passed to calculate(), this contains
-            the updated state for the next timestep.
+            Populated by the internal per-timestep entry point when
+            ``state=`` is passed (advanced workflows). The public
+            ``calculate()`` orchestrates state propagation internally
+            and aggregates per-step results into a ``TimeseriesSummary``;
+            callers that need the carry-forward state directly use the
+            timeseries iteration / tile orchestration paths.
     """
 
     tmrt: NDArray[np.floating]

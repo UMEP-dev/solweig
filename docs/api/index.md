@@ -40,8 +40,12 @@ Complete reference for the SOLWEIG public API.
 | -------- | ----------- |
 | [`is_gpu_available()`](functions.md#is_gpu_available) | Check whether GPU acceleration is available |
 | [`get_compute_backend()`](functions.md#get_compute_backend) | Returns `"gpu"` or `"cpu"` |
-| [`disable_gpu()`](functions.md#disable_gpu) | Disable GPU, fall back to CPU |
+| [`enable_gpu()`](functions.md#enable_gpu) | Enable GPU on all three paths (shadows, aniso, GVF) |
+| [`disable_gpu()`](functions.md#disable_gpu) | Disable GPU on all three paths, fall back to CPU |
 | [`get_gpu_limits()`](functions.md#get_gpu_limits) | Inspect GPU device limits |
+| [`gpu_dispatch_count()`](functions.md#gpu_dispatch_count) | Successful GPU dispatches since process start / last reset |
+| [`gpu_fallback_count()`](functions.md#gpu_fallback_count) | GPU→CPU fallbacks since process start / last reset |
+| [`reset_gpu_metrics()`](functions.md#reset_gpu_metrics) | Zero both counters (typical test pattern: reset → run → check) |
 
 ## Import Pattern
 
