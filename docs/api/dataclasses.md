@@ -60,16 +60,11 @@ who want to inspect the resolved values.
 
 ---
 
-## SolweigResult
-
-::: solweig.SolweigResult
-    options:
-      show_source: false
-      heading_level: 3
-
----
-
 ## TimeseriesSummary
+
+What `calculate()` returns — aggregated mean / max / min grids,
+sun-hours, UTCI threshold exceedance, and a per-timestep
+[`Timeseries`](#timeseries) of spatial-mean scalars.
 
 ::: solweig.TimeseriesSummary
     options:
@@ -80,7 +75,25 @@ who want to inspect the resolved values.
 
 ## Timeseries
 
+Per-timestep scalar series (Tmrt mean, UTCI mean, etc.) embedded
+inside [`TimeseriesSummary`](#timeseriessummary).
+
 ::: solweig.Timeseries
+    options:
+      show_source: false
+      heading_level: 3
+
+---
+
+## SolweigResult
+
+Per-timestep internal result produced by the fused Rust pipeline
+(Tmrt, shadow, radiation components). `calculate()` aggregates these
+into a [`TimeseriesSummary`](#timeseriessummary); user code rarely
+constructs or returns one directly. Documented here for advanced
+single-step / chained workflows that consume the per-step output.
+
+::: solweig.SolweigResult
     options:
       show_source: false
       heading_level: 3

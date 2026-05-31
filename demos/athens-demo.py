@@ -231,10 +231,3 @@ print(f"  Date range: {metadata['timeseries']['start']} to {metadata['timeseries
 # Note: Summary grids (utci_mean, utci_max, etc.) are always computed regardless.
 
 # %%
-# =============================================================================
-# NOTE: Legacy API (SolweigRunRust, SolweigRunCore, configs.py) removed in Phase 5.6
-# =============================================================================
-# The legacy config-file-driven API has been removed. Use the modern simplified API above.
-# Tiling is automatic for large rasters — no explicit tiling call needed.
-
-# %%

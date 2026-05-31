@@ -25,7 +25,7 @@ import solweig
 surface = solweig.SurfaceData.prepare(dsm="dsm.tif", working_dir="cache/")
 weather = solweig.Weather.from_epw("weather.epw", start="2023-07-01")
 
-results = solweig.calculate(
+summary = solweig.calculate(
     surface, weather,
     human=solweig.HumanParams(weight=70, height=1.65),
     use_anisotropic_sky=True,
@@ -186,7 +186,7 @@ A representative `run_metadata.json`:
 Record parameters for reproducible results:
 
 ```python
-results = solweig.calculate(
+summary = solweig.calculate(
     surface, weather,
     human=solweig.HumanParams(weight=75, height=1.80),
     use_anisotropic_sky=True,
@@ -247,7 +247,7 @@ When custom physics or materials files are used, the full parameter values are e
 ```python
 physics = solweig.load_physics("custom_trees.json")
 
-results = solweig.calculate(
+summary = solweig.calculate(
     surface, weather,
     physics=physics,
     output_dir="output/",

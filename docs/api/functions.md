@@ -33,8 +33,11 @@ list. Documented here because every quick-start uses it before `calculate()`.
 
 ## GPU helpers
 
-Runtime toggles for the wgpu compute path. The GPU is enabled by default
-when available; these helpers let scripts inspect or override that.
+Runtime toggles and observability for the wgpu compute path. The GPU is
+enabled by default when available; these helpers let scripts inspect,
+override, or measure GPU usage. From b87 onwards, `enable_gpu` /
+`disable_gpu` toggle all three Rust GPU paths (shadows, anisotropic
+sky, GVF) in a single call.
 
 ### is_gpu_available
 
@@ -50,6 +53,13 @@ when available; these helpers let scripts inspect or override that.
       show_source: false
       heading_level: 4
 
+### enable_gpu
+
+::: solweig.enable_gpu
+    options:
+      show_source: false
+      heading_level: 4
+
 ### disable_gpu
 
 ::: solweig.disable_gpu
@@ -60,6 +70,27 @@ when available; these helpers let scripts inspect or override that.
 ### get_gpu_limits
 
 ::: solweig.get_gpu_limits
+    options:
+      show_source: false
+      heading_level: 4
+
+### gpu_dispatch_count
+
+::: solweig.gpu_dispatch_count
+    options:
+      show_source: false
+      heading_level: 4
+
+### gpu_fallback_count
+
+::: solweig.gpu_fallback_count
+    options:
+      show_source: false
+      heading_level: 4
+
+### reset_gpu_metrics
+
+::: solweig.reset_gpu_metrics
     options:
       show_source: false
       heading_level: 4

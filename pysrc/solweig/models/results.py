@@ -89,9 +89,12 @@ class SolweigResult:
                 surface metadata, otherwise no CRS set.
 
         Example:
-            # With surface metadata (recommended when using from_geotiff)
-            >>> surface, precomputed = SurfaceData.from_geotiff("dsm.tif", svf_dir="svf/")
-            >>> result = solweig.calculate(surface, location, weather, precomputed=precomputed)
+            # `SolweigResult` is the per-timestep internal result; user code
+            # rarely constructs one directly (most workflows iterate via
+            # `calculate()` and consume its `TimeseriesSummary`). Given a
+            # `SolweigResult` from an advanced single-step path:
+
+            # With surface metadata (carries CRS/transform from from_geotiff)
             >>> result.to_geotiff("output/", timestamp=weather.datetime, surface=surface)
 
             # Without surface metadata (explicit transform/CRS)
@@ -193,7 +196,9 @@ class SolweigResult:
             UTCI grid (°C) with same shape as tmrt.
 
         Example:
-            result = solweig.calculate(surface, location, weather)
+            # Given a `SolweigResult` from an advanced single-step path
+            # (user code rarely constructs one directly; `calculate()` returns
+            # a `TimeseriesSummary` that already aggregates UTCI for you):
 
             # Pattern A: Pass weather object (convenient)
             utci = result.compute_utci(weather)
@@ -242,7 +247,10 @@ class SolweigResult:
             PET uses an iterative solver and is ~50× slower than UTCI.
 
         Example:
-            result = solweig.calculate(surface, location, weather)
+            # Given a `SolweigResult` from an advanced single-step path
+            # (user code rarely constructs one directly; `calculate()` returns
+            # a `TimeseriesSummary` that already aggregates PET if you request
+            # `outputs=["pet"]`):
 
             # Pattern A: Pass weather object (convenient)
             pet = result.compute_pet(weather)

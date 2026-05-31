@@ -315,7 +315,7 @@ cdsm, transform = solweig.io.rasterise_gdf(
 | `Location` | Latitude, longitude, altitude, UTC offset |
 | `Weather` | Air temperature, humidity, radiation for one timestep |
 | `HumanParams` | Body parameters for Tmrt/PET (optional — defaults provided) |
-| `SolweigResult` | Output grids: Tmrt, shadow, radiation components |
+| `TimeseriesSummary` | What `calculate()` returns — aggregated grids + per-timestep scalars |
 
 ## Working demos
 

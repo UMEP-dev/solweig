@@ -62,14 +62,17 @@ for weather in weather_list:
     accumulator.update(result)       # GridAccumulator tracks min/max/mean
     state = result.state             # carry thermal state forward
 
-# computation.py — single-timestep entry point
+# computation.py — single-timestep entry point (internal)
+# Public callers use `solweig.calculate()` which iterates this and
+# returns a `TimeseriesSummary`; `SolweigResult` is the per-step
+# value Layer 2 hands back to the loop, not the public return type.
 def calculate_core_fused(surface, location, weather, state, ...):
     svf = resolve_svf(precomputed, ...)           # Python (cached)
     psi = compute_transmissivity(doy, ...)        # Python
     buildings = detect_building_mask(dsm, ...)     # Python
     result = pipeline.compute_timestep(...)        # Fused Rust FFI call
     lup = _apply_thermal_delay(...)                # Rust (TsWaveDelay)
-    return SolweigResult(tmrt, shadow, ...)
+    return SolweigResult(tmrt, shadow, ...)        # per-timestep, internal
 ```
 
 Responsibilities:

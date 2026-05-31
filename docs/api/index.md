@@ -17,10 +17,12 @@ Complete reference for the SOLWEIG public API.
 | [`Location`](dataclasses.md#location) | Geographic coordinates |
 | [`Weather`](dataclasses.md#weather) | Meteorological conditions |
 | [`HumanParams`](dataclasses.md#humanparams) | Human body parameters |
-| [`SolweigResult`](dataclasses.md#solweigresult) | Calculation output |
-| [`TimeseriesSummary`](dataclasses.md#timeseriessummary) | Aggregated timeseries output |
-| [`Timeseries`](dataclasses.md#timeseries) | Per-timestep scalar timeseries |
-| [`ModelConfig`](dataclasses.md#modelconfig) | Model configuration |
+| [`ModelConfig`](dataclasses.md#modelconfig) | Runtime configuration |
+| [`Settings`](dataclasses.md#settings) | Resolved configuration `calculate()` works from internally |
+| [`TimeseriesSummary`](dataclasses.md#timeseriessummary) | What `calculate()` returns — aggregated grids + per-timestep scalars |
+| [`Timeseries`](dataclasses.md#timeseries) | Per-timestep scalar series (inside `TimeseriesSummary`) |
+| [`SolweigResult`](dataclasses.md#solweigresult) | Per-timestep internal result (advanced single-step workflows) |
+| [`ThermalState`](dataclasses.md#thermalstate) | Carry-forward thermal state for multi-day chains |
 
 ## I/O Functions
 

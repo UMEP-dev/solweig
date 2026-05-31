@@ -212,7 +212,7 @@ class ModelConfig:
 
         Example:
             >>> config = ModelConfig.load("my_settings.json")
-            >>> results = calculate(surface, weather, config=config)
+            >>> summary = calculate(surface, weather, location, config=config, output_dir="out/")
         """
         path = Path(path)
 

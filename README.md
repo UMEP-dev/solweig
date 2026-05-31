@@ -127,15 +127,17 @@ summary.plot()
 
 ### Core classes
 
-| Class               | Purpose                                                                                                                                               |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SurfaceData`       | Holds all spatial inputs (DSM, CDSM, DEM, land cover) and precomputed arrays (walls, SVF). Use `.prepare()` to load GeoTIFFs with automatic caching.  |
-| `Location`          | Geographic coordinates (latitude, longitude, UTC offset). Create from coordinates, DSM CRS, or an EPW file.                                           |
-| `Weather`           | Per-timestep meteorological data (air temperature, relative humidity, global radiation, optional wind speed). Load from EPW files or create manually. |
-| `SolweigResult`     | Output grids from a single timestep: Tmrt, shadow, UTCI, PET, radiation components.                                                                   |
-| `TimeseriesSummary` | Aggregated results from a multi-timestep run: mean/max/min grids, sun hours, UTCI threshold exceedance, per-timestep scalars.                         |
-| `HumanParams`       | Body parameters: posture (standing/sitting), absorption coefficients, PET body parameters (age, weight, height, etc.).                                |
-| `ModelConfig`       | Runtime settings: anisotropic sky, max shadow distance, tiling workers.                                                                               |
+| Class               | Purpose                                                                                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SurfaceData`       | Holds all spatial inputs (DSM, CDSM, DEM, land cover) and precomputed arrays (walls, SVF). Use `.prepare()` to load GeoTIFFs with automatic caching.                          |
+| `Location`          | Geographic coordinates (latitude, longitude, UTC offset). Create from coordinates, DSM CRS, or an EPW file.                                                                   |
+| `Weather`           | Per-timestep meteorological data (air temperature, relative humidity, global radiation, optional wind speed). Load from EPW files or create manually.                         |
+| `TimeseriesSummary` | What `calculate()` returns: aggregated mean/max/min grids, sun hours, UTCI threshold exceedance, and per-timestep scalars across the run.                                     |
+| `SolweigResult`     | Per-timestep internal result (Tmrt, shadow, UTCI, PET, radiation components) — used for advanced single-step workflows; most users see `TimeseriesSummary` instead.            |
+| `HumanParams`       | Body parameters: posture (standing/sitting), absorption coefficients, PET body parameters (age, weight, height, etc.).                                                        |
+| `ModelConfig`       | Runtime settings: anisotropic sky, max shadow distance, tiling workers.                                                                                                       |
+| `Settings`          | Resolved configuration `calculate()` works from internally; merges `ModelConfig`, kwargs, and JSON defaults. Most users don't construct it directly — see the Settings guide. |
+| `ThermalState`      | Carry-forward thermal state for multi-day chains (`calculate(..., state=...)`); returned in `summary.state`.                                                                  |
 
 ### Main functions
 
@@ -155,6 +157,25 @@ summary = solweig.calculate(
 
 # Input validation
 warnings = solweig.validate_inputs(surface, location, weather)
+```
+
+### GPU control + observability
+
+```python
+# GPU is on by default when available. Toggle all three GPU paths
+# (shadows, anisotropic sky, GVF) in a single call.
+solweig.disable_gpu()              # force CPU-only (e.g. for benchmarks)
+solweig.enable_gpu()               # re-enable
+
+solweig.is_gpu_available()         # True if a GPU device initialised
+solweig.get_compute_backend()      # "gpu" or "cpu"
+
+# Counters incremented at every Rust GPU dispatch / fallback site —
+# pair `reset` → calculation → check, to prove the GPU path actually ran.
+solweig.reset_gpu_metrics()
+# ... solweig.calculate(...) ...
+assert solweig.gpu_dispatch_count() > 0
+assert solweig.gpu_fallback_count() == 0
 ```
 
 ### Convenience I/O

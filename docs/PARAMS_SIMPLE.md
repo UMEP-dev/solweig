@@ -89,13 +89,13 @@ import solweig
 
 surface = solweig.SurfaceData.prepare(dsm="dsm.tif", working_dir="cache/")
 weather = solweig.Weather.from_epw("weather.epw", start="2023-07-01")
-results = solweig.calculate(surface, weather, output_dir="output/")
+summary = solweig.calculate(surface, weather, output_dir="output/")
 ```
 
 ### Custom human parameters
 
 ```python
-results = solweig.calculate(
+summary = solweig.calculate(
     surface, weather,
     human=solweig.HumanParams(weight=70, height=1.65, posture="sitting"),
     output_dir="output/",
@@ -105,7 +105,7 @@ results = solweig.calculate(
 ### Anisotropic sky model
 
 ```python
-results = solweig.calculate(
+summary = solweig.calculate(
     surface, weather,
     use_anisotropic_sky=True,
     output_dir="output/",
@@ -115,7 +115,7 @@ results = solweig.calculate(
 ### Evergreen trees
 
 ```python
-results = solweig.calculate(
+summary = solweig.calculate(
     surface, weather,
     conifer=True,
     output_dir="output/",
@@ -132,7 +132,7 @@ results = solweig.calculate(
 # }
 
 physics = solweig.load_physics("custom_trees.json")
-results = solweig.calculate(surface, weather, physics=physics, output_dir="output/")
+summary = solweig.calculate(surface, weather, physics=physics, output_dir="output/")
 ```
 
 ### Landcover material variation
@@ -144,7 +144,7 @@ surface = solweig.SurfaceData.prepare(
     land_cover="landcover.tif",  # Classification raster with surface type IDs (0-7, 99-102)
     working_dir="cache/",
 )
-results = solweig.calculate(surface, weather, materials=materials, output_dir="output/")
+summary = solweig.calculate(surface, weather, materials=materials, output_dir="output/")
 ```
 
 ---
@@ -195,12 +195,23 @@ surface.compute_svf()
 
 ## Backwards Compatibility
 
-The unified `params.json` file is supported:
+The legacy unified `parametersforsolweig.json` file is supported via
+`ModelConfig.from_json()`, which extracts both human-body parameters
+and the materials block in one step:
 
 ```python
-params = solweig.load_params("parametersforsolweig.json")
-results = solweig.calculate(surface, weather, params=params, output_dir="output/")
+config = solweig.ModelConfig.from_json("parametersforsolweig.json")
+summary = solweig.calculate(
+    surface, weather, location,
+    config=config,
+    output_dir="output/",
+)
 ```
+
+(The lower-level `solweig.load_params()` returns a `SimpleNamespace`
+for callers that want to inspect or partially adapt the JSON contents.
+Don't pass that namespace as a `params=` kwarg — `calculate()` accepts
+`config=`, `physics=`, and `materials=`, not `params=`.)
 
 ---
 

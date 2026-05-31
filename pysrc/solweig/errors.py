@@ -5,7 +5,7 @@ and how to fix it, rather than generic error messages.
 
 Example:
     try:
-        result = solweig.calculate(surface, location, weather)
+        summary = solweig.calculate(surface, weather, location, output_dir="out/")
     except solweig.GridShapeMismatch as e:
         print(f"Grid '{e.field}' has wrong shape: expected {e.expected}, got {e.got}")
     except solweig.MissingPrecomputedData as e:
