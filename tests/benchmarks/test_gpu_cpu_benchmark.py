@@ -33,7 +33,7 @@ import pytest
 import solweig
 from solweig import Location, SurfaceData, Weather, calculate
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.gpu_perf_gate]
 
 # Same logging directory as the existing perf-matrix benchmark.
 _LOG_DIR = Path(__file__).resolve().parent / "logs"

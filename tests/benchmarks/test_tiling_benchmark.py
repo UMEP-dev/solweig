@@ -15,7 +15,7 @@ from conftest import make_mock_svf
 from solweig import Location, SurfaceData, Weather
 from solweig.timeseries import _calculate_timeseries
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.gpu_perf_gate]
 
 
 class TestTilingBenchmark:

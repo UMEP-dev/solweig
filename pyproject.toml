@@ -107,7 +107,7 @@ test_quick = { shell = "pytest tests/ -m 'not slow' -x -q" }
 test_full = { shell = "pytest tests/ -x -q" }
 test_benchmarks = { shell = "pytest tests/benchmarks/ -x -q" }
 test_gpu_gates = { shell = "pytest tests/spec/test_svf.py tests/spec/test_svf_core_api.py tests/spec/test_aniso_gpu_parity.py -q && pytest tests/test_tiling_integration.py -k 'multitile_vs_nontiled_comparison or anisotropic_tiled_vs_nontiled' -q" }
-test_gpu_perf_gate = { shell = "pytest tests/benchmarks/test_tiling_benchmark.py -q" }
+test_gpu_perf_gate = { shell = "pytest tests/benchmarks/ -m gpu_perf_gate -q && pytest tests/benchmarks/test_tiling_benchmark.py -q" }
 audit = { shell = "python scripts/audit.py" }
 docs = { shell = "mkdocs serve" }
 docs_build = { shell = "mkdocs build --strict" }
@@ -155,6 +155,7 @@ addopts = "-s"
 markers = [
     "slow: marks tests as slow (full SOLWEIG computation, deselect with '-m \"not slow\"')",
     "validation: marks tests requiring external validation datasets (deselect with '-m \"not validation\"')",
+    "gpu_perf_gate: marks performance / timing tests whose thresholds assume the maintainer's local hardware (M-series, GPU-enabled). Excluded from CI because shared CI runners have inconsistent timing characteristics that produce false negatives. Only hardware-stable bench gates (e.g. memory bytes-per-pixel) stay on CI. Run the full perf suite locally via `poe test_gpu_perf_gate`.",
 ]
 
 [tool.ty.rules]

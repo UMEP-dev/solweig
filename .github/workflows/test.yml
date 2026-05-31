@@ -163,7 +163,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
 
   benchmarks:
-    name: Benchmark regression gates (memory + perf matrix)
+    name: Benchmark regression gates (memory, hardware-stable)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -185,14 +185,15 @@ jobs:
         run: uv run maturin develop --release
 
       - name: Run benchmark gates
-        # Strict gates from tests/benchmarks/: bytes-per-pixel ceiling, per-scenario
-        # absolute runtime budgets, anisotropic-over-isotropic ratios, tiled-over-
-        # non-tiled ratios, plugin-over-API ratios. PERF_BUDGET_SCALE accommodates
-        # shared-runner variance — increase if CI becomes flaky.
-        run: uv run python -m pytest tests/benchmarks/ -v --tb=short
+        # Only runs benchmarks that are hardware-stable: bytes-per-pixel
+        # ceiling on `test_memory_benchmark.py` (bytes don't vary with CPU
+        # model). All timing-based gates (perf matrix, tiling perf, GPU/CPU
+        # ratio) are marked `gpu_perf_gate` and excluded — they live on the
+        # maintainer's local hardware via `poe test_gpu_perf_gate`. See the
+        # `gpu_perf_gate` marker docstring in pyproject.toml.
+        run: uv run python -m pytest tests/benchmarks/ -m "not gpu_perf_gate" -v --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SOLWEIG_PERF_BUDGET_SCALE: "2.0"
 
   test-spec:
     name: Test scientific spec/parity gates
