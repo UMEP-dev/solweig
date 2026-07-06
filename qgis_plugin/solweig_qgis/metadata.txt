@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta88
+version=0.1.0-beta89
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,15 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta89
+    - Correctness release from a full-repository review; numerical output changes for some runs (see VALIDATION.md).
+    - Clearness-index pressure unit fixed (hPa was scaled as kPa): clear-sky irradiance was ~20-25% underestimated for EPW/values-driven runs.
+    - GVF source area fixed at non-1 m pixel sizes (marched 144 m instead of 36 m at 2 m pixels); new UMEP parity gate at 0.5/1/2 m. 1 m runs unchanged.
+    - Cached GVF sunwall mask unified with UMEP semantics (fully sunlit walls only).
+    - Tiled SVF preprocessing fixed (crashed with NameError after computing all tiles); cancelling SVF preprocessing no longer persists a partial cache — the plugin now stops gracefully via solweig.ComputationCancelled.
+    - Plugin loads cleanly when solweig is not installed (per-algorithm import isolation); anisotropic-sky hint points at the correct toolbox algorithm.
+    - EPW parsing uses per-field missing codes (RH 99% and GHI 999 W/m2 are valid data again); ModelConfig.from_json actually reads legacy parameter files.
+    - Stale shadow-matrix caches raise a clear error instead of aborting QGIS; SVF caches invalidate when the trunk layer changes; land-cover nodata maps to the nodata class instead of "paved".
     0.1.0-beta88
     - CI / test-categorisation only — zero plugin behaviour change.
     - Performance-timing benchmarks moved to a local-only `gpu_perf_gate` marker; CI keeps only the hardware-stable memory bench. Resolves a CI false positive on the aniso/iso ratio gate (calibrated against local M-series GPU; CI runs CPU-only Linux where the ratio is naturally ~3×).

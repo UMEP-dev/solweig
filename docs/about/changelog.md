@@ -4,7 +4,7 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
-## 0.1.0b89 — unreleased
+## 0.1.0b89 — 2026-07-06
 
 Correctness release from a full-repository review. **Numerical output
 changes** for two classes of runs; see `VALIDATION.md` for the audit
