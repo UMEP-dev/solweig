@@ -24,7 +24,6 @@ from qgis.core import (
     QgsProcessingParameterFolderDestination,
     QgsProcessingParameterNumber,
 )
-from solweig.geospatial import looks_like_relative
 
 from ...utils.parameters import (
     add_land_cover_mapping_parameters,
@@ -43,6 +42,11 @@ def _needs_relative_retry(
     tdsm_relative: bool,
 ) -> tuple[bool, bool]:
     """Detect likely normalized vegetation/trunk rasters marked as absolute."""
+    # Deferred import: the plugin must load (and offer its install prompt)
+    # even when solweig is not installed, so no solweig import may run at
+    # module level. See provider.loadAlgorithms().
+    from solweig.geospatial import looks_like_relative
+
     dem = getattr(surface, "dem", None)
     dsm = getattr(surface, "dsm", None)
     base_surface = dem if dem is not None else dsm

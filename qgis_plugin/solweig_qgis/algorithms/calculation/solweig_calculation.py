@@ -466,7 +466,9 @@ GeoTIFF files organised into subfolders of the output directory:
                 feedback.reportError(
                     "Anisotropic sky requires pre-computed SVF with shadow matrices. "
                     "Falling back to isotropic sky model. To use anisotropic sky, "
-                    "first run 'Compute Sky View Factor' and provide the SVF directory.",
+                    "run '2. Prepare Surface Data (align, walls, SVF)' first (it "
+                    "computes SVF and shadow matrices) and pass its output folder "
+                    "as the prepared surface directory here.",
                     fatalError=False,
                 )
                 use_anisotropic_sky = False
