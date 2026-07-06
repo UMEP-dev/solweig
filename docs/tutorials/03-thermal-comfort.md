@@ -16,8 +16,11 @@ import solweig
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from pyproj import CRS
 
-DATA_DIR = Path("demos/data/athens")
-WORK_DIR = Path("temp/tutorial_cache")
+# Resolve the repo root so this notebook runs from the repo root or docs/tutorials/
+ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents] if (p / "demos").exists())
+
+DATA_DIR = ROOT / "demos/data/athens"
+WORK_DIR = ROOT / "temp/tutorial_cache"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 assert (DATA_DIR / "DSM.tif").exists(), f"Demo data not found at {DATA_DIR.resolve()}"
@@ -25,10 +28,6 @@ assert (DATA_DIR / "DSM.tif").exists(), f"Demo data not found at {DATA_DIR.resol
 EXTENTS_BBOX = [476800, 4205850, 477200, 4206250]
 TARGET_CRS = 2100
 ```
-
-    INFO:solweig:GPU acceleration enabled by default
-    [GPU] GPU acceleration enabled
-
 
 ## 1. Prepare surface and weather
 
@@ -71,38 +70,52 @@ weather_14h = [w for w in weather_list if w.datetime.hour == 14][0]
 print(f"Ta = {weather_14h.ta:.1f}°C, RH = {weather_14h.rh:.0f}%, wind = {weather_14h.ws:.1f} m/s")
 ```
 
-    INFO:solweig.models.surface:Preparing surface data from GeoTIFF files...
+    solweig.models.surface: Fast-path cache hit — loading prepared surface from /Users/dev/repos/solweig/temp/tutorial_cache/working
 
 
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  DSM: 400×400 pixels
-    INFO:solweig.models.surface:  Using specified pixel size: 1.00 m
-    INFO:solweig.models.surface:  CRS validated: GGRS87 / Greek Grid (EPSG:2100)
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  ✓ Canopy DSM (CDSM) provided
-    INFO:solweig.models.surface:  → No TDSM provided - will auto-generate from CDSM (ratio=0.25)
-    INFO:solweig.models.surface:Checking for preprocessing data...
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  ✓ Walls found in working_dir: temp/tutorial_cache/working/walls/px1.000
-    INFO:solweig.models.surface:  ✓ SVF loaded from memmap (memory-efficient)
-    INFO:solweig.models.surface:  ✓ SVF found in working_dir: temp/tutorial_cache/working/svf/px1.000
-    INFO:solweig.models.surface:  ✓ Shadow matrices loaded from npz
-    INFO:solweig.models.surface:  ✓ Shadow matrices found (anisotropic sky enabled)
-    INFO:solweig.models.surface:Computing spatial extent and resolution...
-    INFO:solweig.models.surface:  Using user-specified extent: [476800, 4205850, 477200, 4206250]
-    INFO:solweig.models.surface:  ✓ No resampling needed - all rasters match target grid
-    INFO:solweig.models.surface:  Layers loaded: DSM, CDSM
-    INFO:solweig.models.surface:Auto-generating TDSM from CDSM using trunk_ratio=0.25
-    INFO:solweig.models.surface:Converted relative CDSM to absolute (base: DSM)
-    INFO:solweig.models.surface:Converted relative TDSM to absolute (base: DSM)
-    INFO:solweig.models.surface:  Valid mask: all pixels valid
-    INFO:solweig.models.surface:  Crop: no trimming needed (valid bbox = full extent)
-    INFO:solweig.models.surface:  Cleaned rasters saved to temp/tutorial_cache/working/cleaned
-    INFO:solweig.models.surface:✓ Surface data prepared successfully
-    INFO:solweig.io:Loaded EPW file: NA, 8760 timesteps (pure Python parser)
-    INFO:solweig.models.weather:Loaded 24 timesteps from EPW: 2023-07-01 00:00 → 2023-07-01 23:00
-    INFO:solweig.models.weather:Location from EPW: NA — 38.0000°N, 23.7500°E (UTC+2, 175m)
+    solweig.models.surface: Loading prepared surface from /Users/dev/repos/solweig/temp/tutorial_cache/working/cleaned
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.surface:   DSM: 400×400 pixels
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.precomputed:   Loaded SVF memmap cache from /Users/dev/repos/solweig/temp/tutorial_cache/working/svf/px1.000/memmap
+
+
+    solweig.models.precomputed:   Loaded shadow matrices from /Users/dev/repos/solweig/temp/tutorial_cache/working/svf/px1.000/shadowmats.npz
+
+
+    solweig.models.precomputed:   Loaded SVF data: (400, 400)
+
+
+    solweig.models.precomputed:   Loaded shadow matrices for anisotropic sky
+
+
+    solweig.models.surface:   Loaded: DSM, CDSM, TDSM, walls, SVF, shadows
+
+
+    solweig.io_epw: Loaded EPW file: NA, 8760 timesteps (pure Python parser)
+
+
+    solweig.models.weather: Loaded 24 timesteps from EPW: 2023-07-01 00:00 → 2023-07-01 23:00
+
+
+    solweig.models.location: Location from EPW: NA — 38.0000°N, 23.7500°E (UTC+2, 175m)
 
 
     Ta = 30.3°C, RH = 43%, wind = 3.3 m/s
@@ -149,37 +162,69 @@ plt.show()
 print(f"UTCI range: {np.nanmin(utci):.1f} – {np.nanmax(utci):.1f}°C")
 ```
 
+    solweig.tiling: Resource-aware tile sizing (context=solweig): GPU budget=30,150,672,384 bytes, RAM=11,490,312,192 available of 51,539,607,552 total, max_tile_side=3789 px
+
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Starting SOLWEIG timeseries calculation
+
+
+    solweig.timeseries:   Grid size: 400x400 pixels
+
+
+    solweig.timeseries:   Timesteps: 1
+
+
+    solweig.timeseries:   Period: 2023-07-01 14:00 -> 2023-07-01 14:00
+
+
+    solweig.timeseries:   Location: 38.00N, 23.75E
+
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Pre-computing sun positions and radiation splits...
+
+
+    solweig.timeseries:   Pre-computed 1 timesteps in 0.0s
+
+
     [GPU] Shadow GPU context initialized successfully
-    INFO:solweig.tiling:Resource-aware tile sizing (context=solweig): GPU max_buffer=9,534,832,640 bytes, system RAM=17,179,869,184 bytes, max_tile_side=4634 px
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:Starting SOLWEIG timeseries calculation
-    INFO:solweig.timeseries:  Grid size: 400×400 pixels
-    INFO:solweig.timeseries:  Timesteps: 1
-    INFO:solweig.timeseries:  Period: 2023-07-01 14:00 → 2023-07-01 14:00
-    INFO:solweig.timeseries:  Location: 38.00°N, 23.75°E
-    INFO:solweig.timeseries:  Options: anisotropic sky
-    INFO:solweig.timeseries:  Auto-save: temp/tutorial_cache/output_comfort (tmrt, utci, shadow)
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:Pre-computing sun positions and radiation splits...
-    INFO:solweig.timeseries:  Pre-computed 1 timesteps in 0.2s
-    SOLWEIG timeseries:   0%|          | 0/1 [00:00<?, ?it/s][GPU] Allocated buffer cache for 400x400 grid (16.5 MB)
+
+
+    
+SOLWEIG timeseries:   0%|          | 0/1 [00:00<?, ?it/s]
+
+    [GPU] GVF GPU context initialized
     [GPU] Anisotropic sky GPU context initialized
-    SOLWEIG timeseries: 100%|██████████| 1/1 [00:02<00:00,  2.20s/it]
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:✓ Calculation complete: 1 timesteps processed
-    INFO:solweig.timeseries:  Total time: 2.8s (0.36 steps/s)
-    INFO:solweig.timeseries:  Tmrt range: 27.4°C - 65.2°C (mean: 53.7°C)
-    INFO:solweig.timeseries:  Files saved: 3 GeoTIFFs in temp/tutorial_cache/output_comfort
-    INFO:solweig.timeseries:============================================================
+    
+SOLWEIG timeseries: 100%|██████████| 1/1 [00:00<00:00, 12.72it/s]
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Calculation complete: 1 timesteps processed
+
+
+    solweig.timeseries:   Total time: 0.1s (11.62 steps/s)
+
+
+    solweig.timeseries: ============================================================
+
+
+    
 
 
 
     
-![Side-by-side raster plots of UTCI thermal comfort index for the Athens site at the timestamp in the title, with stress-category colour mapping.](03-thermal-comfort_files/03-thermal-comfort_5_1.png)
+![Side-by-side raster plots of UTCI thermal comfort index for the Athens site at the timestamp in the title, with stress-category colour mapping.](03-thermal-comfort_files/03-thermal-comfort_5_18.png)
     
 
 
-    UTCI range: 27.6 – 36.7°C
+    UTCI range: 27.7 – 36.7°C
 
 
 ## 3. UTCI stress-category map
@@ -225,8 +270,8 @@ for i, label in enumerate(utci_labels):
 
     Area by UTCI stress category:
       No stress       (9–26°C):   0.0%
-      Moderate        (26–32°C):  28.3%
-      Strong          (32–38°C):  71.7%
+      Moderate        (26–32°C):  18.5%
+      Strong          (32–38°C):  81.5%
       Very strong     (38–46°C):   0.0%
       Extreme         (46–60°C):   0.0%
 
@@ -252,6 +297,6 @@ print(f"UTCI:   {utci_sun:6.1f}°C  {utci_shd:6.1f}°C  {utci_sun - utci_shd:+6.
 ```
 
             Sunlit    Shaded    Difference
-    Tmrt:     61.0°C    35.1°C   +25.9°C
-    UTCI:     35.7°C    29.5°C    +6.2°C
+    Tmrt:     61.3°C    34.0°C   +27.2°C
+    UTCI:     35.8°C    29.2°C    +6.6°C
 

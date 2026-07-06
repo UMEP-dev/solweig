@@ -22,9 +22,12 @@ import numpy as np
 import solweig
 from pyproj import CRS
 
+# Resolve the repo root so this notebook runs from the repo root or docs/tutorials/
+ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents] if (p / "demos").exists())
+
 # Paths — adjust if running from a different location
-DATA_DIR = Path("demos/data/athens")
-WORK_DIR = Path("temp/tutorial_cache")
+DATA_DIR = ROOT / "demos/data/athens"
+WORK_DIR = ROOT / "temp/tutorial_cache"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 assert (DATA_DIR / "DSM.tif").exists(), f"Demo data not found at {DATA_DIR.resolve()}"
@@ -33,10 +36,6 @@ assert (DATA_DIR / "DSM.tif").exists(), f"Demo data not found at {DATA_DIR.resol
 EXTENTS_BBOX = [476800, 4205850, 477200, 4206250]
 TARGET_CRS = 2100
 ```
-
-    INFO:solweig:GPU acceleration enabled by default
-    [GPU] GPU acceleration enabled
-
 
 ## 1. Inspect the Digital Surface Model
 
@@ -61,7 +60,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
+    solweig.io: No-data value is -9999.0, replacing with NaN
 
 
     DSM shape: (400, 400)
@@ -149,35 +148,94 @@ print(f"Surface shape: {surface.dsm.shape}")
 print(f"Pixel size: {surface.pixel_size} m")
 ```
 
-    INFO:solweig.models.surface:Preparing surface data from GeoTIFF files...
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
+    solweig.models.surface: Fast-path cache invalidated (1 change):
 
 
-    INFO:solweig.models.surface:  DSM: 400×400 pixels
-    INFO:solweig.models.surface:  Using specified pixel size: 1.00 m
-    INFO:solweig.models.surface:  CRS validated: GGRS87 / Greek Grid (EPSG:2100)
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  ✓ Canopy DSM (CDSM) provided
-    INFO:solweig.models.surface:  → No TDSM provided - will auto-generate from CDSM (ratio=0.25)
-    INFO:solweig.models.surface:Checking for preprocessing data...
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  ✓ Walls found in working_dir: temp/tutorial_cache/working/walls/px1.000
-    INFO:solweig.models.surface:  ✓ SVF loaded from memmap (memory-efficient)
-    INFO:solweig.models.surface:  ✓ SVF found in working_dir: temp/tutorial_cache/working/svf/px1.000
-    INFO:solweig.models.surface:  ✓ Shadow matrices loaded from npz
-    INFO:solweig.models.surface:  ✓ Shadow matrices found (anisotropic sky enabled)
-    INFO:solweig.models.surface:Computing spatial extent and resolution...
-    INFO:solweig.models.surface:  Using user-specified extent: [476800, 4205850, 477200, 4206250]
-    INFO:solweig.models.surface:  ✓ No resampling needed - all rasters match target grid
-    INFO:solweig.models.surface:  Layers loaded: DSM, CDSM
-    INFO:solweig.models.surface:Auto-generating TDSM from CDSM using trunk_ratio=0.25
-    INFO:solweig.models.surface:Converted relative CDSM to absolute (base: DSM)
-    INFO:solweig.models.surface:Converted relative TDSM to absolute (base: DSM)
-    INFO:solweig.models.surface:  Valid mask: all pixels valid
-    INFO:solweig.models.surface:  Crop: no trimming needed (valid bbox = full extent)
-    INFO:solweig.models.surface:  Cleaned rasters saved to temp/tutorial_cache/working/cleaned
-    INFO:solweig.models.surface:✓ Surface data prepared successfully
+    solweig.models.surface:   - source 'cdsm' mtime changed (1783364226 → 1783368424)
+
+
+    solweig.models.surface: Rebuilding from source rasters…
+
+
+    solweig.models.surface: Preparing surface data from GeoTIFF files...
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.surface_loading:   DSM: 400×400 pixels
+
+
+    solweig.models.surface_loading:   Using specified pixel size: 1.00 m
+
+
+    solweig.models.surface_loading:   CRS validated: GGRS87 / Greek Grid (EPSG:2100)
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.surface_loading:   ✓ Canopy DSM (CDSM) provided
+
+
+    solweig.models.surface_loading:   → No TDSM provided - will auto-generate from CDSM (ratio=0.25)
+
+
+    solweig.models.surface_loading: Checking for preprocessing data...
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.surface_loading:   ✓ Walls found in working_dir: /Users/dev/repos/solweig/temp/tutorial_cache/working/walls/px1.000
+
+
+    solweig.models.surface_loading:   ✓ SVF loaded from memmap (memory-efficient)
+
+
+    solweig.models.surface_loading:   ✓ SVF found in working_dir: /Users/dev/repos/solweig/temp/tutorial_cache/working/svf/px1.000
+
+
+    solweig.models.surface_loading:   ✓ Shadow matrices loaded from npz
+
+
+    solweig.models.surface_loading:   ✓ Shadow matrices found (anisotropic sky enabled)
+
+
+    solweig.models.surface_loading: Computing spatial extent and resolution...
+
+
+    solweig.models.surface_loading:   Using user-specified extent: [476800, 4205850, 477200, 4206250]
+
+
+    solweig.models.surface_loading:   ✓ No resampling needed - all rasters match target grid
+
+
+    solweig.models.surface_loading:   Layers loaded: DSM, CDSM
+
+
+    solweig.models.surface: Auto-generating TDSM from CDSM using trunk_ratio=0.25
+
+
+    solweig.models.surface: Converted relative CDSM to absolute (base: DSM)
+
+
+    solweig.models.surface: Converted relative TDSM to absolute (base: DSM)
+
+
+    solweig.models.surface:   Valid mask: all pixels valid
+
+
+    solweig.models.surface:   Crop: no trimming needed (valid bbox = full extent)
+
+
+    solweig.models.surface:   Cleaned rasters saved to /Users/dev/repos/solweig/temp/tutorial_cache/working/cleaned
+
+
+    solweig.models.surface: ✓ Surface data prepared successfully
 
 
     Surface shape: (400, 400)
@@ -207,9 +265,13 @@ print(f"Global radiation: {weather_14h.global_rad:.0f} W/m²")
 print(f"Wind speed: {weather_14h.ws:.1f} m/s")
 ```
 
-    INFO:solweig.io:Loaded EPW file: NA, 8760 timesteps (pure Python parser)
-    INFO:solweig.models.weather:Loaded 24 timesteps from EPW: 2023-07-01 00:00 → 2023-07-01 23:00
-    INFO:solweig.models.weather:Location from EPW: NA — 38.0000°N, 23.7500°E (UTC+2, 175m)
+    solweig.io_epw: Loaded EPW file: NA, 8760 timesteps (pure Python parser)
+
+
+    solweig.models.weather: Loaded 24 timesteps from EPW: 2023-07-01 00:00 → 2023-07-01 23:00
+
+
+    solweig.models.location: Location from EPW: NA — 38.0000°N, 23.7500°E (UTC+2, 175m)
 
 
     Location: 38.00°N, 23.75°E
@@ -260,33 +322,65 @@ plt.tight_layout()
 plt.show()
 ```
 
-    INFO:solweig.tiling:Resource-aware tile sizing (context=solweig): GPU max_buffer=9,534,832,640 bytes, system RAM=17,179,869,184 bytes, max_tile_side=4634 px
+    solweig.tiling: Resource-aware tile sizing (context=solweig): GPU budget=30,150,672,384 bytes, RAM=11,279,073,280 available of 51,539,607,552 total, max_tile_side=3754 px
+
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Starting SOLWEIG timeseries calculation
+
+
+    solweig.timeseries:   Grid size: 400x400 pixels
+
+
+    solweig.timeseries:   Timesteps: 1
+
+
+    solweig.timeseries:   Period: 2023-07-01 14:00 -> 2023-07-01 14:00
+
+
+    solweig.timeseries:   Location: 38.00N, 23.75E
+
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Pre-computing sun positions and radiation splits...
+
+
+    solweig.timeseries:   Pre-computed 1 timesteps in 0.0s
+
+
     [GPU] Shadow GPU context initialized successfully
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:Starting SOLWEIG timeseries calculation
-    INFO:solweig.timeseries:  Grid size: 400×400 pixels
-    INFO:solweig.timeseries:  Timesteps: 1
-    INFO:solweig.timeseries:  Period: 2023-07-01 14:00 → 2023-07-01 14:00
-    INFO:solweig.timeseries:  Location: 38.00°N, 23.75°E
-    INFO:solweig.timeseries:  Options: anisotropic sky
-    INFO:solweig.timeseries:  Auto-save: temp/tutorial_cache/output_quickstart (tmrt, shadow)
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:Pre-computing sun positions and radiation splits...
-    INFO:solweig.timeseries:  Pre-computed 1 timesteps in 0.1s
-    SOLWEIG timeseries:   0%|          | 0/1 [00:00<?, ?it/s][GPU] Allocated buffer cache for 400x400 grid (16.5 MB)
+
+
+    
+SOLWEIG timeseries:   0%|          | 0/1 [00:00<?, ?it/s]
+
+    [GPU] GVF GPU context initialized
     [GPU] Anisotropic sky GPU context initialized
-    SOLWEIG timeseries: 100%|██████████| 1/1 [00:01<00:00,  1.45s/it]
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:✓ Calculation complete: 1 timesteps processed
-    INFO:solweig.timeseries:  Total time: 1.7s (0.59 steps/s)
-    INFO:solweig.timeseries:  Tmrt range: 27.4°C - 65.2°C (mean: 53.7°C)
-    INFO:solweig.timeseries:  Files saved: 2 GeoTIFFs in temp/tutorial_cache/output_quickstart
-    INFO:solweig.timeseries:============================================================
+    
+SOLWEIG timeseries: 100%|██████████| 1/1 [00:00<00:00, 10.54it/s]
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Calculation complete: 1 timesteps processed
+
+
+    solweig.timeseries:   Total time: 0.1s (9.68 steps/s)
+
+
+    solweig.timeseries: ============================================================
+
+
+    
 
 
 
     
-![Multi-panel SOLWEIG output rasters for the Athens site at the timestep noted in the title (Tmrt and shadow / radiation fields), each with its own colour bar.](01-athens-quickstart_files/01-athens-quickstart_11_1.png)
+![Multi-panel SOLWEIG output rasters for the Athens site at the timestep noted in the title (Tmrt and shadow / radiation fields), each with its own colour bar.](01-athens-quickstart_files/01-athens-quickstart_11_18.png)
     
 
 
@@ -310,8 +404,8 @@ print(f"Mean Tmrt (shaded): {tmrt_shade:.1f}°C")
 print(f"Sun–shade difference: {tmrt_sun - tmrt_shade:.1f}°C")
 ```
 
-    Mean Tmrt (all):    53.7°C
-    Mean Tmrt (sunlit): 61.0°C
-    Mean Tmrt (shaded): 35.1°C
-    Sun–shade difference: 25.9°C
+    Mean Tmrt (all):    56.2°C
+    Mean Tmrt (sunlit): 61.3°C
+    Mean Tmrt (shaded): 34.0°C
+    Sun–shade difference: 27.2°C
 

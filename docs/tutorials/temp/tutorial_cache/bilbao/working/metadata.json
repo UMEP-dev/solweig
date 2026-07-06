@@ -1,0 +1,74 @@
+{
+  "pixel_size": 2.5,
+  "geotransform": [
+    499600.0,
+    2.5,
+    0.0,
+    4797000.0,
+    0.0,
+    -2.5
+  ],
+  "crs_wkt": "PROJCS[\"ETRS89 / UTM zone 30N\",GEOGCS[\"ETRS89\",DATUM[\"European_Terrestrial_Reference_System_1989\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6258\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4258\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-3],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"25830\"]]",
+  "shape": [
+    1200,
+    1200
+  ],
+  "dsm_relative": false,
+  "cdsm_relative": false,
+  "tdsm_relative": false,
+  "has_cdsm": true,
+  "has_dem": true,
+  "has_tdsm": true,
+  "has_land_cover": true,
+  "has_walls": true,
+  "has_svf": true,
+  "dem_quantization_m": 1.0,
+  "smooth_quantized_dem": true,
+  "dem_smooth_sigma": 3.0,
+  "min_object_height": 1.0,
+  "trunk_ratio": 0.25,
+  "prepare_fingerprint": {
+    "version": "1",
+    "sources": {
+      "cdsm": {
+        "path": "/Users/dev/repos/solweig/demos/data/bilbao/CDSM.tif",
+        "mtime_ns": 1779813467952105388,
+        "size": 516317
+      },
+      "dem": {
+        "path": "/Users/dev/repos/solweig/demos/data/bilbao/DEM.tif",
+        "mtime_ns": 1779813467952416223,
+        "size": 121788
+      },
+      "dsm": {
+        "path": "/Users/dev/repos/solweig/demos/data/bilbao/BDSM.tif",
+        "mtime_ns": 1779813467950972129,
+        "size": 424393
+      },
+      "land_cover": {
+        "path": "/Users/dev/repos/solweig/docs/tutorials/temp/tutorial_cache/bilbao/land_cover.tif",
+        "mtime_ns": 1783368440431868273,
+        "size": 172795
+      },
+      "tdsm": null,
+      "wall_aspect": null,
+      "wall_height": null
+    },
+    "kwargs": {
+      "bbox": [
+        499600,
+        4794000,
+        502600,
+        4797000
+      ],
+      "cdsm_relative": true,
+      "dem_smooth_sigma": 3.0,
+      "dsm_relative": true,
+      "min_object_height": 1.0,
+      "pixel_size": 2.5,
+      "smooth_quantized_dem": true,
+      "tdsm_relative": true,
+      "trunk_ratio": 0.25
+    }
+  }
+}

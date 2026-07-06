@@ -1,0 +1,288 @@
+{
+  "solweig_version": "0.1.0b88",
+  "run_timestamp": "2026-07-06T21:07:40.157053",
+  "grid": {
+    "rows": 1200,
+    "cols": 1200,
+    "pixel_size": 2.5,
+    "crs": "PROJCS[\"ETRS89 / UTM zone 30N\",GEOGCS[\"ETRS89\",DATUM[\"European_Terrestrial_Reference_System_1989\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6258\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4258\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-3],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"25830\"]]"
+  },
+  "location": {
+    "latitude": 43.2926,
+    "longitude": -2.9728,
+    "utc_offset": 1.0
+  },
+  "timeseries": {
+    "start": "2021-07-01T00:00:00",
+    "end": "2021-07-03T23:00:00",
+    "timesteps": 72
+  },
+  "parameters": {
+    "use_anisotropic_sky": true,
+    "conifer": false
+  },
+  "outputs": {
+    "directory": "temp/tutorial_cache/bilbao/output_valley",
+    "variables": [
+      "tmrt",
+      "shadow"
+    ]
+  },
+  "physics": {
+    "full_params": {
+      "Tree_settings": {
+        "Value": {
+          "Transmissivity": 0.03,
+          "Transmissivity_leafoff": 0.5,
+          "Trunk_ratio": 0.25,
+          "First_day_leaf": 97,
+          "Last_day_leaf": 300
+        },
+        "Comment": "Settings for trees. Shortwave transmissivity as a fraction (0-1) for leaf-on and leaf-off seasons. Trunk ratio as a fraction of total height. Seasonal dates (day of year)."
+      },
+      "Posture": {
+        "Standing": {
+          "Value": {
+            "Fside": 0.22,
+            "Fup": 0.06,
+            "height": 1.1,
+            "Fcyl": 0.28
+          },
+          "Comment": "Standing posture geometry. Projected area fractions for human body. Used in Tmrt calculations."
+        },
+        "Sitting": {
+          "Value": {
+            "Fside": 0.166666,
+            "Fup": 0.166666,
+            "height": 0.75,
+            "Fcyl": 0.2
+          },
+          "Comment": "Sitting posture geometry. Projected area fractions for human body. Used in Tmrt calculations."
+        }
+      }
+    }
+  },
+  "materials": {
+    "full_params": {
+      "Names": {
+        "Value": {
+          "0": "Cobble_stone_2014a",
+          "1": "Dark_asphalt",
+          "2": "Roofs(buildings)",
+          "5": "Grass_unmanaged",
+          "6": "Bare_soil",
+          "7": "Water",
+          "99": "Walls",
+          "100": "Brick_wall",
+          "101": "Concrete_wall",
+          "102": "Wood_wall"
+        },
+        "Comment": "Name of each respective land cover class in land cover data."
+      },
+      "Code": {
+        "Value": {
+          "Cobble_stone_2014a": 0,
+          "Dark_asphalt": 1,
+          "Roofs(buildings)": 2,
+          "Grass_unmanaged": 5,
+          "Bare_soil": 6,
+          "Water": 7,
+          "Walls": 99,
+          "Brick_wall": 100,
+          "Concrete_wall": 101,
+          "Wood_wall": 102
+        },
+        "Comment": "Code for each land cover class name."
+      },
+      "Albedo": {
+        "Effective": {
+          "Value": {
+            "Cobble_stone_2014a": 0.2,
+            "Dark_asphalt": 0.18,
+            "Roofs(buildings)": 0.18,
+            "Grass_unmanaged": 0.16,
+            "Bare_soil": 0.25,
+            "Water": 0.05,
+            "Walls": 0.2
+          },
+          "Comment": "Effective albedos according to Lindberg et al., 2008; 2016."
+        },
+        "Material": {
+          "Value": {
+            "Brick_wall": 0.2,
+            "Concrete_wall": 0.2,
+            "Wood_wall": 0.2
+          },
+          "Comment": "Material albedos according to Wallenberg et al., 2025."
+        }
+      },
+      "Emissivity": {
+        "Value": {
+          "Cobble_stone_2014a": 0.95,
+          "Dark_asphalt": 0.95,
+          "Roofs(buildings)": 0.95,
+          "Grass_unmanaged": 0.94,
+          "Bare_soil": 0.94,
+          "Water": 0.98,
+          "Walls": 0.9,
+          "Brick_wall": 0.9,
+          "Concrete_wall": 0.9,
+          "Wood_wall": 0.9
+        },
+        "Comment": "Emissivity of each land cover class."
+      },
+      "Specific_heat": {
+        "Value": {
+          "Cobble_stone_2014a": -9999.0,
+          "Dark_asphalt": -9999.0,
+          "Roofs(buildings)": -9999.0,
+          "Grass_unmanaged": -9999.0,
+          "Bare_soil": -9999.0,
+          "Water": -9999.0,
+          "Walls": -9999.0,
+          "Brick_wall": 800,
+          "Concrete_wall": 840,
+          "Wood_wall": 1880
+        },
+        "Comment": "Specific heat capacity, in units J kg-1 K-1, used for wall surface temperatures according to Wallenberg et al. 2025."
+      },
+      "Thermal_conductivity": {
+        "Value": {
+          "Cobble_stone_2014a": -9999.0,
+          "Dark_asphalt": -9999.0,
+          "Roofs(buildings)": -9999.0,
+          "Grass_unmanaged": -9999.0,
+          "Bare_soil": -9999.0,
+          "Water": -9999.0,
+          "Walls": -9999.0,
+          "Brick_wall": 0.84,
+          "Concrete_wall": 1.7,
+          "Wood_wall": 0.17
+        },
+        "Comment": "Thermal conductivity of each land cover class, in units W m-1 K-1, used for wall surface temperatures according to Wallenberg et al. 2025."
+      },
+      "Density": {
+        "Value": {
+          "Cobble_stone_2014a": -9999.0,
+          "Dark_asphalt": -9999.0,
+          "Roofs(buildings)": -9999.0,
+          "Grass_unmanaged": -9999.0,
+          "Bare_soil": -9999.0,
+          "Water": -9999.0,
+          "Walls": -9999.0,
+          "Brick_wall": 1700,
+          "Concrete_wall": 2200,
+          "Wood_wall": 700
+        },
+        "Comment": "Density of the material in units kg m-3, used for wall surface temperatures according to Wallenberg et al. 2025."
+      },
+      "Wall_thickness": {
+        "Value": {
+          "Brick_wall": 0.1,
+          "Concrete_wall": 0.2,
+          "Wood_wall": 0.03
+        },
+        "Comment": "Wall thickness in units meters, used to calculate characteristic time for wall surface temperatures (Wallenberg et al., 2025)."
+      },
+      "TmaxLST": {
+        "Value": {
+          "Cobble_stone_2014a": 15.0,
+          "Dark_asphalt": 15.0,
+          "Roofs(buildings)": 15.0,
+          "Grass_unmanaged": 14.0,
+          "Bare_soil": 14.0,
+          "Water": 12.0,
+          "Walls": 15.0,
+          "Brick_wall": 15.0,
+          "Concrete_wall": 16.0,
+          "Wood_wall": 14.0
+        },
+        "Comment": "TmaxLST used for ground surface temperatures and wall surface temperatures according to Lindberg et al. 2008; 2016."
+      },
+      "Ts_deg": {
+        "Value": {
+          "Cobble_stone_2014a": 0.37,
+          "Dark_asphalt": 0.58,
+          "Roofs(buildings)": 0.58,
+          "Grass_unmanaged": 0.21,
+          "Bare_soil": 0.33,
+          "Water": 0.0,
+          "Walls": 0.37,
+          "Brick_wall": 0.4,
+          "Concrete_wall": 0.35,
+          "Wood_wall": 0.5
+        },
+        "Comment": "Ts_deg used for ground surface temperatures and wall surface temperatures according to Lindberg et al. 2008; 2016."
+      },
+      "Tstart": {
+        "Value": {
+          "Cobble_stone_2014a": -3.41,
+          "Dark_asphalt": -9.78,
+          "Roofs(buildings)": -9.78,
+          "Grass_unmanaged": -3.38,
+          "Bare_soil": -3.01,
+          "Water": 0.0,
+          "Walls": -3.41,
+          "Brick_wall": -4.0,
+          "Concrete_wall": -5.0,
+          "Wood_wall": -2.0
+        },
+        "Comment": "Tstart used for ground surface temperatures and wall surface temperatures according to Lindberg et al. 2008; 2016."
+      },
+      "Tmrt_params": {
+        "Value": {
+          "absK": 0.7,
+          "absL": 0.97,
+          "posture": "Standing"
+        },
+        "Comment": "Absorption coefficients per ISO 7726:1998. absK=0.70 (shortwave), absL=0.97 (longwave)."
+      },
+      "PET_settings": {
+        "Value": {
+          "Age": 35,
+          "Weight": 75.0,
+          "Height": 180,
+          "Sex": "Male",
+          "Activity": 80.0,
+          "clo": 0.9
+        },
+        "Comment": "Settings to calculate Physiological Equivalent Temperature (PET). Sex is either Male or Female."
+      },
+      "Wind_Height": {
+        "Value": {
+          "magl": 10.0
+        },
+        "Comment": "Height of wind sensor for PET and UTCI calculations."
+      },
+      "Tree_settings": {
+        "Value": {
+          "Transmissivity": 0.03,
+          "Trunk_ratio": 0.25,
+          "First_day_leaf": 97,
+          "Last_day_leaf": 300
+        },
+        "Comment": "Settings for trees. Shortwave transmissivity in %. Trunk ratio as a fraction of total height."
+      },
+      "Posture": {
+        "Standing": {
+          "Value": {
+            "Fside": 0.22,
+            "Fup": 0.06,
+            "height": 1.1,
+            "Fcyl": 0.28
+          },
+          "Comment": "Standing posture of human body. Used in Tmrt calculations."
+        },
+        "Sitting": {
+          "Value": {
+            "Fside": 0.166666,
+            "Fup": 0.166666,
+            "height": 0.75,
+            "Fcyl": 0.2
+          },
+          "Comment": "Sitting posture of human body. Used in Tmrt calculations."
+        }
+      }
+    }
+  }
+}

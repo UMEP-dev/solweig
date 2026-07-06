@@ -36,6 +36,14 @@ def clearnessindex_2013b(
     if RH <= 0:
         RH = 0.01  # Guard against log(0); physically RH > 0
 
+    # Sun at or below the horizon: clearness index is undefined. This is the
+    # same guard applied further down (log_arg < 0.01), hoisted before the
+    # transmission math so night calls don't compute NaN powers of a negative
+    # optical air mass (RuntimeWarning noise). Return values are identical.
+    zen_deg_early = zen / np.pi * 180
+    if 90 - zen_deg_early < 0.01:
+        return 0.0, float("Inf"), 0.0, 0.0, 0.0
+
     Itoa = SOLAR_CONSTANT
     D = sun_distance.sun_distance(jday)  # irradiance differences due to Sun-Earth distances
     m = 35.0 * np.cos(zen) * ((1224.0 * (np.cos(zen) ** 2) + 1) ** (-1 / 2.0))  # optical air mass at p=1013

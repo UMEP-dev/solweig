@@ -10,9 +10,13 @@ script regenerates the Markdown:
 1. ``jupyter nbconvert --to markdown`` for each notebook, which extracts
    output images into ``<name>_files/``.
 2. Re-inject per-image alt text. nbconvert's markdown exporter writes
-   ``![png](...)`` for every image/png output, discarding the alt text
-   authors store in ``output.metadata["image/png"]["alt"]``. We walk the
-   notebook's code-cell outputs in render order (the same order nbconvert
+   ``![png](...)`` for every image/png output. Alt texts are authored in
+   **cell** metadata — ``cell.metadata["solweig"]["image_alts"]`` is a list
+   with one entry per image/png output of that cell, in output order — because
+   cell metadata survives re-execution (output metadata, the pre-b89
+   convention, is wiped every time the notebook is re-run). Output metadata
+   (``output.metadata["image/png"]["alt"]``) is still read as a fallback.
+   We walk the code-cell outputs in render order (the same order nbconvert
    emits images) and replace the k-th ``![png](...)`` with ``![<alt>](...)``.
 """
 
@@ -36,11 +40,17 @@ def collect_alts(nb_path: Path) -> list[str]:
     for cell in nb.get("cells", []):
         if cell.get("cell_type") != "code":
             continue
+        cell_alts = list((cell.get("metadata", {}).get("solweig", {}) or {}).get("image_alts", []))
+        image_idx = 0
         for out in cell.get("outputs", []):
             if "image/png" not in out.get("data", {}):
                 continue
-            alt = (out.get("metadata", {}).get("image/png", {}) or {}).get("alt", "")
-            alts.append(alt)
+            if image_idx < len(cell_alts) and cell_alts[image_idx]:
+                alts.append(str(cell_alts[image_idx]))
+            else:
+                # Fallback: pre-b89 convention stored alts on the output itself
+                alts.append((out.get("metadata", {}).get("image/png", {}) or {}).get("alt", ""))
+            image_idx += 1
     return alts
 
 

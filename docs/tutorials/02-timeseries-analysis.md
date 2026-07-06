@@ -16,8 +16,11 @@ import matplotlib.pyplot as plt
 import solweig
 from pyproj import CRS
 
-DATA_DIR = Path("demos/data/athens")
-WORK_DIR = Path("temp/tutorial_cache")
+# Resolve the repo root so this notebook runs from the repo root or docs/tutorials/
+ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents] if (p / "demos").exists())
+
+DATA_DIR = ROOT / "demos/data/athens"
+WORK_DIR = ROOT / "temp/tutorial_cache"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR = WORK_DIR / "output_timeseries"
 
@@ -63,33 +66,43 @@ surface = solweig.SurfaceData.prepare(
 print(f"Surface ready: {surface.dsm.shape}")
 ```
 
-    INFO:solweig.models.surface:Preparing surface data from GeoTIFF files...
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  DSM: 400×400 pixels
-    INFO:solweig.models.surface:  Using specified pixel size: 1.00 m
-    INFO:solweig.models.surface:  CRS validated: GGRS87 / Greek Grid (EPSG:2100)
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  ✓ Canopy DSM (CDSM) provided
-    INFO:solweig.models.surface:  → No TDSM provided - will auto-generate from CDSM (ratio=0.25)
-    INFO:solweig.models.surface:Checking for preprocessing data...
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.io:No-data value is -9999.0, replacing with NaN
-    INFO:solweig.models.surface:  ✓ Walls found in working_dir: temp/tutorial_cache/working/walls/px1.000
-    INFO:solweig.models.surface:  ✓ SVF loaded from memmap (memory-efficient)
-    INFO:solweig.models.surface:  ✓ SVF found in working_dir: temp/tutorial_cache/working/svf/px1.000
-    INFO:solweig.models.surface:  ✓ Shadow matrices loaded from npz
-    INFO:solweig.models.surface:  ✓ Shadow matrices found (anisotropic sky enabled)
-    INFO:solweig.models.surface:Computing spatial extent and resolution...
-    INFO:solweig.models.surface:  Using user-specified extent: [476800, 4205850, 477200, 4206250]
-    INFO:solweig.models.surface:  ✓ No resampling needed - all rasters match target grid
-    INFO:solweig.models.surface:  Layers loaded: DSM, CDSM
-    INFO:solweig.models.surface:Auto-generating TDSM from CDSM using trunk_ratio=0.25
-    INFO:solweig.models.surface:Converted relative CDSM to absolute (base: DSM)
-    INFO:solweig.models.surface:Converted relative TDSM to absolute (base: DSM)
-    INFO:solweig.models.surface:  Valid mask: all pixels valid
-    INFO:solweig.models.surface:  Crop: no trimming needed (valid bbox = full extent)
-    INFO:solweig.models.surface:  Cleaned rasters saved to temp/tutorial_cache/working/cleaned
-    INFO:solweig.models.surface:✓ Surface data prepared successfully
+    solweig.models.surface: Fast-path cache hit — loading prepared surface from /Users/dev/repos/solweig/temp/tutorial_cache/working
+
+
+    solweig.models.surface: Loading prepared surface from /Users/dev/repos/solweig/temp/tutorial_cache/working/cleaned
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.surface:   DSM: 400×400 pixels
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.io: No-data value is -9999.0, replacing with NaN
+
+
+    solweig.models.precomputed:   Loaded SVF memmap cache from /Users/dev/repos/solweig/temp/tutorial_cache/working/svf/px1.000/memmap
+
+
+    solweig.models.precomputed:   Loaded shadow matrices from /Users/dev/repos/solweig/temp/tutorial_cache/working/svf/px1.000/shadowmats.npz
+
+
+    solweig.models.precomputed:   Loaded SVF data: (400, 400)
+
+
+    solweig.models.precomputed:   Loaded shadow matrices for anisotropic sky
+
+
+    solweig.models.surface:   Loaded: DSM, CDSM, TDSM, walls, SVF, shadows
 
 
     Surface ready: (400, 400)
@@ -108,9 +121,13 @@ print(f"{len(weather_list)} hourly timesteps")
 print(f"Date range: {weather_list[0].datetime} → {weather_list[-1].datetime}")
 ```
 
-    INFO:solweig.io:Loaded EPW file: NA, 8760 timesteps (pure Python parser)
-    INFO:solweig.models.weather:Loaded 96 timesteps from EPW: 2023-07-01 00:00 → 2023-07-04 23:00
-    INFO:solweig.models.weather:Location from EPW: NA — 38.0000°N, 23.7500°E (UTC+2, 175m)
+    solweig.io_epw: Loaded EPW file: NA, 8760 timesteps (pure Python parser)
+
+
+    solweig.models.weather: Loaded 96 timesteps from EPW: 2023-07-01 00:00 → 2023-07-04 23:00
+
+
+    solweig.models.location: Location from EPW: NA — 38.0000°N, 23.7500°E (UTC+2, 175m)
 
 
     96 hourly timesteps
@@ -134,32 +151,120 @@ summary = solweig.calculate(
 )
 ```
 
-    INFO:solweig.tiling:Resource-aware tile sizing (context=solweig): GPU max_buffer=9,534,832,640 bytes, system RAM=17,179,869,184 bytes, max_tile_side=4634 px
+    solweig.tiling: Resource-aware tile sizing (context=solweig): GPU budget=30,150,672,384 bytes, RAM=11,631,132,672 available of 51,539,607,552 total, max_tile_side=3812 px
+
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Starting SOLWEIG timeseries calculation
+
+
+    solweig.timeseries:   Grid size: 400x400 pixels
+
+
+    solweig.timeseries:   Timesteps: 96
+
+
+    solweig.timeseries:   Period: 2023-07-01 00:00 -> 2023-07-04 23:00
+
+
+    solweig.timeseries:   Location: 38.00N, 23.75E
+
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Pre-computing sun positions and radiation splits...
+
+
+    solweig.timeseries:   Pre-computed 96 timesteps in 0.1s
+
+
     [GPU] Shadow GPU context initialized successfully
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:Starting SOLWEIG timeseries calculation
-    INFO:solweig.timeseries:  Grid size: 400×400 pixels
-    INFO:solweig.timeseries:  Timesteps: 96
-    INFO:solweig.timeseries:  Period: 2023-07-01 00:00 → 2023-07-04 23:00
-    INFO:solweig.timeseries:  Location: 38.00°N, 23.75°E
-    INFO:solweig.timeseries:  Options: anisotropic sky
-    INFO:solweig.timeseries:  Auto-save: temp/tutorial_cache/output_timeseries (tmrt, shadow)
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:Pre-computing sun positions and radiation splits...
-    INFO:solweig.timeseries:  Pre-computed 96 timesteps in 0.2s
-    SOLWEIG timeseries:   0%|          | 0/96 [00:00<?, ?it/s]pysrc/solweig/physics/clearnessindex_2013b.py:29: RuntimeWarning: invalid value encountered in scalar power
-      1.021 - 0.084 * (m * (0.000949 * p + 0.051)) ** 0.5
-    pysrc/solweig/physics/clearnessindex_2013b.py:67: RuntimeWarning: invalid value encountered in scalar power
-      Tw = 1 - 0.077 * ((u * m) ** 0.3)  # Transmission coefficient for water vapor
-    [GPU] Allocated buffer cache for 400x400 grid (16.5 MB)
+
+
+    
+SOLWEIG timeseries:   0%|          | 0/96 [00:00<?, ?it/s]
+
+    [GPU] GVF GPU context initialized
     [GPU] Anisotropic sky GPU context initialized
-    SOLWEIG timeseries: 100%|██████████| 96/96 [00:19<00:00,  4.91it/s]
-    INFO:solweig.timeseries:============================================================
-    INFO:solweig.timeseries:✓ Calculation complete: 96 timesteps processed
-    INFO:solweig.timeseries:  Total time: 19.6s (4.90 steps/s)
-    INFO:solweig.timeseries:  Tmrt range: 15.9°C - 69.6°C (mean: 35.0°C)
-    INFO:solweig.timeseries:  Files saved: 192 GeoTIFFs in temp/tutorial_cache/output_timeseries
-    INFO:solweig.timeseries:============================================================
+    
+SOLWEIG timeseries:   3%|▎         | 3/96 [00:00<00:03, 26.00it/s]
+
+    
+SOLWEIG timeseries:   8%|▊         | 8/96 [00:00<00:02, 35.19it/s]
+
+    
+SOLWEIG timeseries:  14%|█▎        | 13/96 [00:00<00:02, 38.10it/s]
+
+    
+SOLWEIG timeseries:  18%|█▊        | 17/96 [00:00<00:02, 38.69it/s]
+
+    
+SOLWEIG timeseries:  22%|██▏       | 21/96 [00:00<00:01, 38.51it/s]
+
+    
+SOLWEIG timeseries:  27%|██▋       | 26/96 [00:00<00:01, 40.19it/s]
+
+    
+SOLWEIG timeseries:  32%|███▏      | 31/96 [00:00<00:01, 40.74it/s]
+
+    
+SOLWEIG timeseries:  38%|███▊      | 36/96 [00:00<00:01, 40.16it/s]
+
+    
+SOLWEIG timeseries:  43%|████▎     | 41/96 [00:01<00:01, 39.75it/s]
+
+    
+SOLWEIG timeseries:  47%|████▋     | 45/96 [00:01<00:01, 39.00it/s]
+
+    
+SOLWEIG timeseries:  52%|█████▏    | 50/96 [00:01<00:01, 40.61it/s]
+
+    
+SOLWEIG timeseries:  57%|█████▋    | 55/96 [00:01<00:00, 41.17it/s]
+
+    
+SOLWEIG timeseries:  62%|██████▎   | 60/96 [00:01<00:00, 40.73it/s]
+
+    
+SOLWEIG timeseries:  68%|██████▊   | 65/96 [00:01<00:00, 40.42it/s]
+
+    
+SOLWEIG timeseries:  73%|███████▎  | 70/96 [00:01<00:00, 39.71it/s]
+
+    
+SOLWEIG timeseries:  78%|███████▊  | 75/96 [00:01<00:00, 40.70it/s]
+
+    
+SOLWEIG timeseries:  83%|████████▎ | 80/96 [00:02<00:00, 40.77it/s]
+
+    
+SOLWEIG timeseries:  89%|████████▊ | 85/96 [00:02<00:00, 39.15it/s]
+
+    
+SOLWEIG timeseries:  93%|█████████▎| 89/96 [00:02<00:00, 38.73it/s]
+
+    
+SOLWEIG timeseries:  97%|█████████▋| 93/96 [00:02<00:00, 38.15it/s]
+
+    
+SOLWEIG timeseries: 100%|██████████| 96/96 [00:02<00:00, 39.41it/s]
+
+    solweig.timeseries: ============================================================
+
+
+    solweig.timeseries: Calculation complete: 96 timesteps processed
+
+
+    solweig.timeseries:   Total time: 2.4s (39.29 steps/s)
+
+
+    solweig.timeseries: ============================================================
+
+
+    
 
 
 ## 4. Summary report
@@ -174,14 +279,14 @@ print(summary.report())
 
     SOLWEIG Summary: 96 timesteps (60 day, 36 night)
       Period: 2023-07-01 00:00 — 2023-07-04 23:00
-      Tmrt  — mean: 35.0°C, range: 15.9 – 69.6°C
-      UTCI  — mean: 28.8°C, range: 19.9 – 41.2°C
-      Sun   — 0.0 – 96.0 hours
-      UTCI > 26°C (night) — max 9.0h
+      Tmrt  — mean: 35.3°C, range: 13.9 – 69.7°C
+      UTCI  — mean: 28.8°C, range: 18.9 – 41.3°C
+      Sun   — 0.0 – 60.0 hours
+      UTCI > 26°C (night) — max 3.0h
       UTCI > 32°C (day) — max 47.0h
       UTCI > 38°C (day) — max 15.0h
       Ta    — range: 20.4 – 33.2°C
-      Summary GeoTIFFs: temp/tutorial_cache/output_timeseries/summary/
+      Summary GeoTIFFs: /Users/dev/repos/solweig/temp/tutorial_cache/output_timeseries/summary/
         shade_hours.tif
         sun_hours.tif
         tmrt_day_mean.tif
