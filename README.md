@@ -382,8 +382,8 @@ SOLWEIG is validated against field radiation measurements from three sites in Go
 | Site                                  | Season          | Days |  Tmrt RMSE |   Tmrt R² |
 | ------------------------------------- | --------------- | ---: | ---------: | --------: |
 | Kronenhuset (courtyard, 1 m)          | Autumn          |    1 |     6.7 °C |      0.51 |
-| Gustav Adolfs torg (open square, 2 m) | Autumn + Summer |    3 | 5.6-7.4 °C | 0.79-0.88 |
-| GVC (university campus, 2 m)          | Summer          |    3 | 1.5-6.2 °C | 0.80-0.99 |
+| Gustav Adolfs torg (open square, 2 m) | Autumn + Summer |    3 | 5.7-7.3 °C | 0.80-0.88 |
+| GVC (university campus, 2 m)          | Summer          |    3 | 2.4-6.9 °C | 0.65-0.99 |
 
 Anisotropic sky mode, matched daytime observation hours. Full details, radiation budget comparisons, and version history: **[Validation Report](VALIDATION.md)**.
 

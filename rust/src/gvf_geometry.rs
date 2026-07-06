@@ -179,8 +179,6 @@ fn precompute_azimuth_geometry(
     let mut weightsumalbnosh_first = Array2::<f32>::zeros((sizex, sizey));
     let mut weightsumalbwallnosh_first = Array2::<f32>::zeros((sizex, sizey));
 
-    let _first_threshold = (first as f32 * pixel_scale).round().max(1.);
-
     for (n, &(dx, dy)) in shifts.iter().enumerate() {
         let ((xc1, xc2, yc1, yc2), (xp1, xp2, yp1, yp2)) = compute_slices(dx, dy, sizex, sizey);
         let x_c_slice = s![xc1..xc2, yc1..yc2];
@@ -265,9 +263,14 @@ pub(crate) fn precompute_gvf_geometry(
     second_ht: f32,
     wall_albedo: f32,
 ) -> GvfGeometryCache {
-    let first = (first_ht * pixel_scale).round().max(1.);
-    let second = (second_ht * pixel_scale).round();
     let (rows, cols) = (buildings.nrows(), buildings.ncols());
+    // Metres → pixels: pixel_scale is metres per pixel (see sun_on_surface).
+    // Clamped to the grid extent so out-of-range shifts cannot panic the
+    // slice arithmetic on coarse rasters.
+    let first = (first_ht / pixel_scale).round().max(1.);
+    let second = (second_ht / pixel_scale)
+        .round()
+        .min(rows.max(cols) as f32);
 
     let azimuth_a: Array1<f32> = Array1::range(5.0, 359.0, 20.0);
     let num_azimuths = azimuth_a.len() as f32;

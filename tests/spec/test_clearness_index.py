@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from solweig.physics.clearnessindex_2013b import clearnessindex_2013b
 
 LOCATION = {"latitude": 38.0, "longitude": 23.75, "altitude": 0.0}

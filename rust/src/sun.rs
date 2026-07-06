@@ -85,8 +85,16 @@ pub fn sun_on_surface(
     let mut weightsumalbnosh = Array2::<f32>::zeros((sizex, sizey));
     let mut weightsumalbwallnosh = Array2::<f32>::zeros((sizex, sizey));
 
-    let first = (first_ht * pixel_scale).round().max(1.);
-    let second = (second_ht * pixel_scale).round();
+    // first_ht/second_ht are metres (Smidt et al. source-area distances);
+    // pixel_scale is metres per pixel, so pixels = metres / pixel_scale.
+    // UMEP's sunonsurface_2018a computes round(metres * scale) with
+    // scale = 1/pixel_size — the same quantity. The march is clamped to the
+    // grid diagonal extent: steps beyond the raster contribute nothing and
+    // out-of-range shifts would panic the slice arithmetic.
+    let first = (first_ht / pixel_scale).round().max(1.);
+    let second = (second_ht / pixel_scale)
+        .round()
+        .min(sizex.max(sizey) as f32);
 
     let mut weightsumwall_first = Array2::<f32>::zeros((sizex, sizey));
     let mut weightsumsh_first = Array2::<f32>::zeros((sizex, sizey));

@@ -10,11 +10,14 @@ GVF is computed by integrating visible ground and wall surfaces across 18 azimut
 
 ### Integration Distances
 
-Two distance scales are used, based on person height:
+Two distance scales are used, based on person height. They are metric
+distances (Smidt et al. source-area model), converted to pixels by dividing
+by the pixel size (matching UMEP's `round(metres × scale)` with
+`scale = 1/pixel_size`); the far-field march is clamped to the raster extent:
 
 ```text
-first  = round(height × pixel_scale), min 1   (near-field, ~person height in pixels)
-second = round(height × 20 × pixel_scale)      (far-field, ~20× person height in pixels)
+first  = round(height / pixel_size), min 1              (near-field, ~person height)
+second = round(height × 20 / pixel_size), ≤ max(rows, cols)   (far-field, ~20× person height)
 ```
 
 ### Near/Far Weighting
