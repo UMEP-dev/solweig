@@ -270,6 +270,9 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
                 min_object_height=min_object_height,
                 feedback=feedback,
             )
+        except solweig.ComputationCancelled:
+            feedback.pushInfo("Surface preparation cancelled by user.")
+            return {}
         except solweig.SolweigError as e:
             from ..base import format_solweig_error
 
@@ -314,6 +317,9 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
                     force_recompute=True,
                     feedback=feedback,
                 )
+            except solweig.ComputationCancelled:
+                feedback.pushInfo("Surface preparation cancelled by user.")
+                return {}
             except Exception as e:
                 raise QgsProcessingException(
                     f"Surface preparation retry with corrected vegetation height conventions failed: {e}"

@@ -33,6 +33,7 @@ import numpy as np
 from .. import io
 from .. import walls as walls_module
 from ..cache import CacheMetadata, pixel_size_tag
+from ..errors import ComputationCancelled
 from ..rustalgos import skyview
 from ..solweig_logging import get_logger
 from .surface_serialization import (
@@ -324,12 +325,15 @@ def compute_and_cache_svf(
             if done > last:
                 pbar.update(done - last)
                 last = done
-            # Check QGIS cancellation
+            # Check QGIS cancellation. Raising (instead of returning) keeps the
+            # caller from persisting the prepare fingerprint for a surface that
+            # has no SVF, which would make later prepare() calls fast-path to a
+            # broken cache.
             if feedback is not None and hasattr(feedback, "isCanceled") and feedback.isCanceled():
                 runner.cancel()
                 thread.join(timeout=5.0)
                 pbar.close()
-                return
+                raise ComputationCancelled("SVF computation")
         if last < n_patches:
             pbar.update(n_patches - last)
         pbar.close()

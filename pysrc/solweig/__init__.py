@@ -72,6 +72,7 @@ from .api import (  # noqa: E402
     validate_inputs,
 )
 from .errors import (  # noqa: E402
+    ComputationCancelled,
     ConfigurationError,
     GridShapeMismatch,
     InvalidSurfaceData,
@@ -322,6 +323,7 @@ __all__ = [
     "MissingPrecomputedData",
     "WeatherDataError",
     "ConfigurationError",
+    "ComputationCancelled",
     "calculate",
     "validate_inputs",
     "load_params",

@@ -108,6 +108,22 @@ class WeatherDataError(SolweigError):
         super().__init__(message)
 
 
+class ComputationCancelled(SolweigError):
+    """Raised when a long-running computation is cancelled by the user.
+
+    Raised on cancellation (e.g. QGIS feedback ``isCanceled()``) so partial
+    results are never persisted as valid caches. Callers that treat
+    cancellation as a graceful stop should catch this and return.
+
+    Attributes:
+        stage: The computation stage that was cancelled (e.g., "SVF").
+    """
+
+    def __init__(self, stage: str):
+        self.stage = stage
+        super().__init__(f"Computation cancelled by user during {stage}")
+
+
 class ConfigurationError(SolweigError):
     """Raised when configuration is invalid or inconsistent.
 

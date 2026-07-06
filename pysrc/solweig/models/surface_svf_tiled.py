@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from ..errors import ComputationCancelled
 from ..rustalgos import skyview
 from ..solweig_logging import get_logger
 
@@ -70,6 +71,7 @@ def _compute_svf_tiled(
     from .. import _ensure_gpu_initialized
     from ..progress import ProgressReporter
     from ..tiling import calculate_buffer_distance, generate_tiles, validate_tile_size
+    from .precomputed import SvfArrays  # deferred to avoid circular import via surface.py
 
     _ensure_gpu_initialized()
     rows, cols = dsm_f32.shape
@@ -294,8 +296,11 @@ def _compute_svf_tiled(
                     cancelled = True
                     break
             if cancelled:
+                # Raising (instead of returning partial results) is load-bearing:
+                # the except-branch below removes the partial memmap dirs, and the
+                # caller never persists a half-computed SVF as a valid cache.
                 logger.info("  SVF computation cancelled by user")
-                break
+                raise ComputationCancelled(f"SVF tile {tile_idx + 1}/{n_tiles}")
 
             # Ensure progress accounts for all patches in this tile
             if last_patch < n_patches:
