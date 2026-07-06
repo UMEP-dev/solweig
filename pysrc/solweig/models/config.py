@@ -116,12 +116,14 @@ class ModelConfig:
         )
 
     @classmethod
-    def from_json(cls, path: str | Path) -> ModelConfig:
+    def from_json(cls, path: str | Path | None = None) -> ModelConfig:
         """
         Load configuration from legacy JSON parameters file.
 
         Args:
-            path: Path to parametersforsolweig.json
+            path: Path to parametersforsolweig.json. ``None`` loads the
+                bundled default parameter file (same resolution as
+                :func:`solweig.load_params`).
 
         Returns:
             ModelConfig with settings extracted from JSON
@@ -135,24 +137,36 @@ class ModelConfig:
 
         params = load_params(path)
 
-        # Extract human parameters from JSON
-        human = HumanParams()
+        def _section_values(section):
+            # Legacy UMEP parameter files nest each section's values under
+            # a "Value" key (with a sibling "Comment"); tolerate flat files too.
+            return getattr(section, "Value", section)
+
+        # Collect human parameters, then construct through HumanParams so
+        # __post_init__ validation applies to file-supplied values.
+        kwargs: dict = {}
         if hasattr(params, "Tmrt_params"):
-            human.abs_k = getattr(params.Tmrt_params, "absK", 0.7)
-            human.abs_l = getattr(params.Tmrt_params, "absL", 0.97)
-            posture_str = getattr(params.Tmrt_params, "posture", "Standing")
-            human.posture = posture_str.lower()
+            tmrt = _section_values(params.Tmrt_params)
+            kwargs["abs_k"] = float(getattr(tmrt, "absK", 0.7))
+            kwargs["abs_l"] = float(getattr(tmrt, "absL", 0.97))
+            kwargs["posture"] = str(getattr(tmrt, "posture", "Standing")).lower()
 
         if hasattr(params, "PET_settings"):
-            human.age = getattr(params.PET_settings, "Age", 35)
-            human.weight = getattr(params.PET_settings, "Weight", 75.0)
-            human.height = getattr(params.PET_settings, "Height", 1.75)
-            human.sex = getattr(params.PET_settings, "Sex", 1)
-            human.activity = getattr(params.PET_settings, "Activity", 80.0)
-            human.clothing = getattr(params.PET_settings, "clo", 0.9)
+            pet = _section_values(params.PET_settings)
+            kwargs["age"] = int(getattr(pet, "Age", 35))
+            kwargs["weight"] = float(getattr(pet, "Weight", 75.0))
+            height = float(getattr(pet, "Height", 1.75))
+            # Legacy UMEP files store body height in centimetres (e.g. 180).
+            kwargs["height"] = height / 100.0 if height > 3.0 else height
+            sex = getattr(pet, "Sex", 1)
+            if isinstance(sex, str):
+                sex = 1 if sex.lower().startswith("m") else 2
+            kwargs["sex"] = int(sex)
+            kwargs["activity"] = float(getattr(pet, "Activity", 80.0))
+            kwargs["clothing"] = float(getattr(pet, "clo", 0.9))
 
         return cls(
-            human=human,
+            human=HumanParams(**kwargs),
             materials=params,
         )
 
