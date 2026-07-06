@@ -4,6 +4,66 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
+## 0.1.0b89 — unreleased
+
+Correctness release from a full-repository review. **Numerical output
+changes** for two classes of runs; see `VALIDATION.md` for the audit
+trail.
+
+### Physics fixes
+
+- **Clearness index pressure unit**: `Weather.pressure` (hPa) was scaled
+  as if it were kPa inside the Crawford & Duchon transmission formula,
+  underestimating clear-sky irradiance by ~20–25 % and disabling the
+  Ldown cloud correction for hazy skies. EPW/values-driven runs change;
+  validation-site numbers moved marginally (sites use measured
+  radiation).
+- **GVF source area at non-1 m pixels**: the metres→pixels conversion
+  multiplied by pixel size where UMEP divides. At 2 m pixels the ground
+  view factor integrated over 144 m instead of 36 m (at 0.5 m, 9 m). A
+  new parity gate pins GVF against UMEP's `gvf_2018a` at 0.5/1/2 m.
+  1 m runs are unchanged; the 2 m validation sites now reproduce UMEP's
+  own output.
+- **Cached vs uncached GVF**: the per-timestep cached path counted
+  partially sunlit walls in its sunwall mask; all paths now share
+  UMEP's fully-sunlit semantics.
+
+### Reliability fixes
+
+- Tiled SVF preprocessing crashed with `NameError` after computing all
+  tiles; it now completes and is covered by tiled-vs-single-shot parity
+  tests.
+- Cancelling SVF preprocessing (QGIS) no longer persists a partial SVF
+  cache or a prepare fingerprint without SVF; cancellation raises the
+  new `solweig.ComputationCancelled`, which the plugin handles as a
+  graceful stop.
+- EPW parsing uses the per-field missing codes from the EnergyPlus spec
+  (RH 99 % and GHI/DNI/DHI 999 W/m² are real data again; dry-bulb 99.9
+  and pressure 999999 are recognized as missing). `Weather.from_epw`
+  with no dates now loads the whole first day as documented.
+- `ModelConfig.from_json` actually reads legacy parameter files (the
+  `Value` nesting was skipped, so user values silently fell back to
+  defaults), normalizing legacy units (Height in cm, Sex as text).
+- A stale precomputed shadow-matrix cache from a different patch option
+  raises `ValueError` instead of aborting the process; SVF caches are
+  keyed on the trunk layer (TDSM/trunk_ratio) so trunk changes
+  invalidate; land-cover nodata maps to the 255 sentinel instead of
+  becoming "paved"; geographic-CRS inputs are rejected as documented.
+
+### QGIS plugin
+
+- Loads cleanly when solweig is not installed (per-algorithm import
+  isolation) and the anisotropic-sky hint points at an algorithm that
+  exists in the toolbox.
+
+### Docs
+
+- Tutorials are published as Markdown exported from the notebooks;
+  mkdocs-jupyter retired. Chunked-`calculate()` guidance replaced (it
+  dropped thermal state); dev-setup commands fixed; specs corrected
+  (water-code quirk documented, GVF distance formula, GPU/CPU parity
+  claim).
+
 ## 0.1.0b88 — 2026-05-27
 
 Internal-only release — no library, plugin, or runtime change.
