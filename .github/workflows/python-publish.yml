@@ -158,4 +158,6 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref, 'a') || contains(github.ref, 'b') || contains(github.ref, 'rc') }}
+          # Test the version part only (ref_name is e.g. "v0.1.0b88"); the old
+          # check on github.ref was always true because "refs/tags/" contains "a".
+          prerelease: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
