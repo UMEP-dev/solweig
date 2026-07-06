@@ -69,7 +69,7 @@ summary = solweig.calculate(
     output_dir=str(working_path / "output"),
     outputs=["tmrt", "shadow"],
 )
-summary.report()
+print(summary.report())
 summary.plot()
 
 # %%

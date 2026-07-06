@@ -10,9 +10,10 @@ calculation are forced to split the work into many tiles by the resource-aware
 sizer based on real GPU/RAM limits. Watch the logs for ``Resource-aware tile
 sizing`` lines emitted from ``solweig.tiling``.
 
-Source rasters are copied once into ``temp/madrid/source/`` so this demo runs
-self-contained against local data (the originals live under the
-``cities-dataset-spain`` repo).
+Source rasters are NOT bundled with this repository. Stage them manually into
+``temp/madrid/source/`` as ``bdsm.tif``, ``dem.tif`` and ``cdsm.tif`` (the
+originals live under the external ``cities-dataset-spain`` repo). The demo
+checks for them at startup and exits with instructions if any are missing.
 
 Data sources
 ------------
@@ -35,6 +36,7 @@ Raster extent: (410679, 4442245) – (465663, 4499872)
 """
 
 import math
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -48,10 +50,26 @@ output_dir = output_folder_path / "output_simplified"
 output_folder_path.mkdir(parents=True, exist_ok=True)
 
 # %%
+# The Madrid source rasters are external — verify they are staged before doing
+# any work, and explain exactly what is needed if they are not.
+_required = ["bdsm.tif", "dem.tif", "cdsm.tif"]
+_missing = [name for name in _required if not (source_path / name).exists()]
+if _missing:
+    print("Madrid source rasters not found — this demo needs external data.")
+    print(f"  Expected in: {source_path}")
+    for name in _required:
+        status = "MISSING" if name in _missing else "ok"
+        print(f"    {name}  [{status}]")
+    print("  Copy bdsm.tif, dem.tif and cdsm.tif for Madrid from the external")
+    print("  'cities-dataset-spain' repository into the directory above, then rerun.")
+    sys.exit(1)
+
+# %%
 # Report the auto-computed tile caps so the test is self-documenting.
 # The full raster is intentionally larger than these caps in both dimensions,
 # so the resource-aware tiler must subdivide for both SVF and the per-step pass.
-solweig._ensure_gpu_initialized()
+# get_compute_backend() also honours SOLWEIG_NO_GPU on first use (public API).
+print(f"Compute backend: {solweig.get_compute_backend()}")
 svf_cap = compute_max_tile_side(context="svf")
 solweig_cap = compute_max_tile_side(context="solweig")
 print(f"Auto tile cap (svf):     {svf_cap} px")
