@@ -142,6 +142,34 @@ pub(crate) struct GvfResultPure {
 
 /// Pure-ndarray implementation of GVF calculation.
 /// Callable from pipeline.rs (fused path) or from the PyO3 wrapper (modular path).
+const SUNWALL_TOL: f32 = 1e-6;
+
+/// UMEP sunwall mask: a wall pixel counts as sunlit only when fully sunlit,
+/// i.e. `(wallsun / walls) * buildings == 1` (gvf_2018a, "new as from 2015a").
+/// All GVF paths (full, cached, GPU-cached) must use this same construction —
+/// a looser `wallsun > 0` mask counts partially sunlit walls and diverges from
+/// the full path for the same timestep.
+pub(crate) fn compute_sunwall_mask(
+    wallsun: ArrayView2<f32>,
+    walls: ArrayView2<f32>,
+    buildings: ArrayView2<f32>,
+) -> Array2<f32> {
+    let mut mask = Array2::<f32>::zeros(wallsun.raw_dim());
+    Zip::from(&mut mask)
+        .and(&wallsun)
+        .and(&walls)
+        .and(&buildings)
+        .par_for_each(|m, &wsun, &wall, &bldg| {
+            if wall > 0.0 && bldg > 0.0 {
+                let ratio = (wsun / wall) * bldg;
+                if (ratio - 1.0).abs() < SUNWALL_TOL {
+                    *m = 1.0;
+                }
+            }
+        });
+    mask
+}
+
 #[allow(clippy::too_many_arguments)]
 #[allow(non_snake_case)]
 pub(crate) fn gvf_calc_pure(
@@ -170,22 +198,8 @@ pub(crate) fn gvf_calc_pure(
     let azimuth_a: Array1<f32> = Array1::range(5.0, 359.0, 20.0);
     let num_azimuths = azimuth_a.len() as f32;
     let num_azimuths_half = num_azimuths / 2.0;
-    const SUNWALL_TOL: f32 = 1e-6;
 
-    // Sunwall mask
-    let mut sunwall_mask = Array2::<f32>::zeros((rows, cols));
-    Zip::from(&mut sunwall_mask)
-        .and(&wallsun)
-        .and(&walls)
-        .and(&buildings)
-        .par_for_each(|mask, &wsun, &wall, &bldg| {
-            if wall > 0.0 && bldg > 0.0 {
-                let ratio = (wsun / wall) * bldg;
-                if (ratio - 1.0).abs() < SUNWALL_TOL {
-                    *mask = 1.0;
-                }
-            }
-        });
+    let sunwall_mask = compute_sunwall_mask(wallsun, walls, buildings);
     let dirwalls_rad = dirwalls.mapv(|d| d * PI / 180.0);
 
     struct Accum {
@@ -356,6 +370,7 @@ pub(crate) fn gvf_calc_pure(
 pub(crate) fn gvf_calc_with_cache(
     cache: &crate::gvf_geometry::GvfGeometryCache,
     wallsun: ArrayView2<f32>,
+    walls: ArrayView2<f32>,
     buildings: ArrayView2<f32>,
     shadow: ArrayView2<f32>,
     tg: ArrayView2<f32>,
@@ -377,8 +392,7 @@ pub(crate) fn gvf_calc_with_cache(
     let ta_k = ta + 273.15;
     let ta_k_pow4 = ta_k.powi(4);
 
-    let mut sunwall_mask = wallsun.to_owned();
-    sunwall_mask.mapv_inplace(|x| if x > 0. { 1. } else { x });
+    let sunwall_mask = compute_sunwall_mask(wallsun, walls, buildings);
 
     let lup = Zip::from(emis_grid)
         .and(tg)
@@ -543,6 +557,7 @@ pub(crate) fn gvf_calc_with_cache_gpu(
     gpu_ctx: &crate::gpu::GvfGpuContext,
     cache: &crate::gvf_geometry::GvfGeometryCache,
     wallsun: ArrayView2<f32>,
+    walls: ArrayView2<f32>,
     buildings: ArrayView2<f32>,
     shadow: ArrayView2<f32>,
     tg: ArrayView2<f32>,
@@ -563,8 +578,7 @@ pub(crate) fn gvf_calc_with_cache_gpu(
     let ta_k_pow4 = ta_k.powi(4);
 
     // Prepare inputs (same as CPU path)
-    let mut sunwall_mask = wallsun.to_owned();
-    sunwall_mask.mapv_inplace(|x| if x > 0. { 1. } else { x });
+    let sunwall_mask = compute_sunwall_mask(wallsun, walls, buildings);
 
     let lup = Zip::from(emis_grid)
         .and(tg)

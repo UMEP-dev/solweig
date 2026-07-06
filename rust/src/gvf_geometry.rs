@@ -154,7 +154,6 @@ fn precompute_azimuth_geometry(
     wall_albedo: f32,
     first: f32,
     second: f32,
-    pixel_scale: f32,
 ) -> AzimuthGeometry {
     let (sizex, sizey) = (buildings.nrows(), buildings.ncols());
     let azimuth_rad = azimuth_deg * (PI / 180.);
@@ -291,7 +290,6 @@ pub(crate) fn precompute_gvf_geometry(
                 wall_albedo,
                 first,
                 second,
-                pixel_scale,
             )
         })
         .collect();

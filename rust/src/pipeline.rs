@@ -445,17 +445,33 @@ pub fn compute_timestep(
     // indexing them. Without this check a mis-sized array silently reads OOB
     // garbage (or aborts via wgpu) inside the hot loop.
     let dsm_shape = dsm_v.dim();
+    let n_patches = patch_lut_for_option_cached(weather.patch_option)
+        .altitudes
+        .len();
+    let expected_pack = n_patches.div_ceil(8);
     for (name, opt) in [
         ("shmat", shmat_v.as_ref()),
         ("vegshmat", vegshmat_v.as_ref()),
         ("vbshmat", vbshmat_v.as_ref()),
     ] {
         if let Some(arr) = opt {
-            let (rows, cols, _) = arr.dim();
+            let (rows, cols, depth) = arr.dim();
             if (rows, cols) != dsm_shape {
                 return Err(pyo3::exceptions::PyValueError::new_err(format!(
                     "{name} dim ({}, {}, _) does not match DSM dim {:?}",
                     rows, cols, dsm_shape
+                )));
+            }
+            // A stale precomputed shadow-matrix file generated with a different
+            // patch option would otherwise index out of range deep in the
+            // radiation loop and abort the process (panic = "abort").
+            if depth != expected_pack {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "{name} packed patch depth {depth} does not match patch_option {} \
+                     ({n_patches} patches -> {expected_pack} packed bytes); the precomputed \
+                     shadow matrices were generated with a different patch option — \
+                     recompute the SVF/shadow cache (force_recompute=True)",
+                    weather.patch_option
                 )));
             }
         }
@@ -563,6 +579,8 @@ pub fn compute_timestep(
 
             let gvf: GvfResultPure = if config.has_walls {
                 if let Some(cache) = gvf_cache_inner {
+                    // Gated by config.has_walls=true (validated at entry).
+                    let wh = wall_ht_v.expect("wall_ht: gated by config.has_walls=true");
                     // Try GPU first, fall back to CPU
                     #[cfg(feature = "gpu")]
                     {
@@ -571,6 +589,7 @@ pub fn compute_timestep(
                                 ctx,
                                 cache,
                                 wallsun.view(),
+                                wh,
                                 buildings_v,
                                 shadow_f32.view(),
                                 ground.tg.view(),
@@ -596,6 +615,7 @@ pub fn compute_timestep(
                                     gvf_calc_with_cache(
                                         cache,
                                         wallsun.view(),
+                                        wh,
                                         buildings_v,
                                         shadow_f32.view(),
                                         ground.tg.view(),
@@ -616,6 +636,7 @@ pub fn compute_timestep(
                             gvf_calc_with_cache(
                                 cache,
                                 wallsun.view(),
+                                wh,
                                 buildings_v,
                                 shadow_f32.view(),
                                 ground.tg.view(),
@@ -636,6 +657,7 @@ pub fn compute_timestep(
                     gvf_calc_with_cache(
                         cache,
                         wallsun.view(),
+                        wh,
                         buildings_v,
                         shadow_f32.view(),
                         ground.tg.view(),
