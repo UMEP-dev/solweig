@@ -96,13 +96,19 @@ def load_and_validate_dsm(dsm: str | Path, pixel_size: float | None) -> tuple:
     if dsm_crs is None:
         raise ValueError("DSM file has no CRS information. SOLWEIG requires a projected coordinate system.")
 
+    # Parse failures (exotic WKT the backend can't read) downgrade to a
+    # warning, but a successfully parsed *geographic* CRS is a hard reject —
+    # the raise must sit outside the try so the except cannot swallow it.
+    is_projected: bool | None = None
+    crs_name = "unknown"
+    epsg: str | int = "custom"
     try:
         if GDAL_ENV:
             from osgeo import osr
 
             srs = osr.SpatialReference()
             srs.ImportFromWkt(dsm_crs)
-            is_projected = srs.IsProjected()
+            is_projected = bool(srs.IsProjected())
             crs_name = srs.GetName() or "unknown"
             epsg = srs.GetAuthorityCode(None) or "custom"
         else:
@@ -112,16 +118,17 @@ def load_and_validate_dsm(dsm: str | Path, pixel_size: float | None) -> tuple:
             is_projected = crs_obj.is_projected
             crs_name = crs_obj.name
             epsg = crs_obj.to_epsg() or "custom"
-
-        if not is_projected:
-            raise ValueError(
-                f"DSM CRS is geographic (lat/lon): {crs_name}. "
-                f"SOLWEIG requires a projected coordinate system (e.g., UTM, State Plane) "
-                f"for accurate distance and area calculations. Please reproject your data."
-            )
-        logger.info(f"  CRS validated: {crs_name} (EPSG:{epsg})")
     except Exception as e:
         logger.warning(f"  ⚠ Could not validate CRS: {e}")
+
+    if is_projected is False:
+        raise ValueError(
+            f"DSM CRS is geographic (lat/lon): {crs_name}. "
+            f"SOLWEIG requires a projected coordinate system (e.g., UTM, State Plane) "
+            f"for accurate distance and area calculations. Please reproject your data."
+        )
+    if is_projected:
+        logger.info(f"  CRS validated: {crs_name} (EPSG:{epsg})")
 
     return dsm_arr, dsm_transform, dsm_crs, pixel_size
 

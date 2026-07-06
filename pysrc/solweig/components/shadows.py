@@ -36,10 +36,12 @@ def compute_transmissivity(
     Reference:
         Lindberg et al. (2008) - SOLWEIG vegetation transmissivity model
     """
-    # Default values for deciduous vegetation
+    # Default values for deciduous vegetation, matching the shipped
+    # default_params.json Tree_settings (First_day_leaf 97 / Last_day_leaf 300)
+    # so param-less calls agree with param-loaded runs.
     transmissivity = 0.03
     transmissivity_leafoff = 0.5
-    first_day = 100  # ~April 10
+    first_day = 97  # ~April 7
     last_day = 300  # ~October 27
     is_conifer = conifer
 
@@ -48,7 +50,7 @@ def compute_transmissivity(
         ts = physics.Tree_settings.Value
         transmissivity = getattr(ts, "Transmissivity", 0.03)
         transmissivity_leafoff = getattr(ts, "Transmissivity_leafoff", 0.5)
-        first_day = int(getattr(ts, "First_day_leaf", 100))
+        first_day = int(getattr(ts, "First_day_leaf", 97))
         last_day = int(getattr(ts, "Last_day_leaf", 300))
         # Note: Conifer flag may not be in all params files
         is_conifer = conifer or getattr(ts, "Conifer", False)

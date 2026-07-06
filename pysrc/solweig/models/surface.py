@@ -268,6 +268,10 @@ class SurfaceData:
         cdsm: Canopy Digital Surface Model (vegetation heights). Optional.
         dem: Digital Elevation Model (ground elevation). Optional.
         tdsm: Trunk Digital Surface Model (trunk zone heights). Optional.
+        albedo: Per-pixel surface albedo grid. Optional. If not provided,
+            albedo is derived from land_cover (or defaults).
+        emissivity: Per-pixel surface emissivity grid. Optional. If not
+            provided, emissivity is derived from land_cover (or defaults).
         land_cover: Land cover classification grid (UMEP standard IDs). Optional.
             IDs: 0=paved, 1=asphalt, 2=buildings, 5=grass, 6=bare_soil, 7=water.
             When provided, albedo and emissivity are derived from land cover.
@@ -288,10 +292,18 @@ class SurfaceData:
             If True and preprocess() is not called, a warning is issued.
         tdsm_relative: Whether TDSM contains relative heights. Default True.
             If True and preprocess() is not called, a warning is issued.
+        min_object_height: Minimum nDSM height (meters) for an object to cast
+            shadows; below this, the DSM is flattened to the DEM. Default 1.0.
+        smooth_quantized_dem: Whether preprocess() applies a small Gaussian
+            smooth when an integer-quantized DEM is detected, breaking
+            stair-step SVF artifacts. Default True.
+        dem_smooth_sigma: Gaussian sigma (pixel units at target resolution)
+            for quantized-DEM smoothing. Default 3.0.
 
     Note:
-        Albedo and emissivity are derived internally from land_cover using
-        standard UMEP parameters. They cannot be directly specified.
+        Albedo and emissivity can be supplied directly as per-pixel grids.
+        When not provided, they are derived from land_cover using standard
+        UMEP parameters (or defaults if no land cover is given).
 
     Note:
         max_height is auto-computed from dsm as: np.nanmax(dsm) - np.nanmin(dsm)
@@ -398,7 +410,13 @@ class SurfaceData:
         if self.emissivity is not None:
             self.emissivity = np.asarray(self.emissivity, dtype=np.float32)
         if self.land_cover is not None:
-            self.land_cover = np.asarray(self.land_cover, dtype=np.uint8)
+            lc = np.asarray(self.land_cover)
+            if np.issubdtype(lc.dtype, np.floating):
+                # Raster loaders convert nodata to NaN; a plain uint8 cast would
+                # turn NaN into 0 (= paved) silently. Map non-finite pixels to
+                # the 255 nodata sentinel that compute_valid_mask() checks.
+                lc = np.where(np.isfinite(lc), lc, 255.0)
+            self.land_cover = lc.astype(np.uint8)
 
         # Convert optional preprocessing arrays if provided
         if self.wall_height is not None:
@@ -442,7 +460,7 @@ class SurfaceData:
         Example::
 
             surface = SurfaceData.load("prepared_surface/")
-            result = calculate(surface, weather, location)
+            summary = calculate(surface, weather, location, output_dir="output/")
         """
         from .precomputed import PrecomputedData
 
@@ -868,6 +886,15 @@ class SurfaceData:
         if preprocess_data["svf_data"] is not None and not force_recompute:
             dsm_arr = aligned_rasters["dsm_arr"]
             cdsm_arr = aligned_rasters.get("cdsm_arr")
+            # Effective trunk layer, mirroring compute_and_cache_svf: shadow
+            # matrices depend on it, so the SVF cache is keyed on it too.
+            tdsm_arr = aligned_rasters.get("tdsm_arr")
+            if cdsm_arr is None:
+                tdsm_eff = None
+            elif tdsm_arr is not None:
+                tdsm_eff = np.asarray(tdsm_arr, dtype=np.float32)
+            else:
+                tdsm_eff = (cdsm_arr * trunk_ratio).astype(np.float32)
             svf_source = preprocess_data.get("svf_source", "none")
 
             # Resolve the SVF cache directory (pixel-size-keyed or legacy)
@@ -878,11 +905,11 @@ class SurfaceData:
             cache_valid = False
             if svf_source == "memmap":
                 # Memmap has cache_meta.json — use hash-based validation
-                cache_valid = validate_cache(svf_base / "memmap", dsm_arr, pixel_size, cdsm_arr)
+                cache_valid = validate_cache(svf_base / "memmap", dsm_arr, pixel_size, cdsm_arr, tdsm_eff)
             elif svf_source == "zip":
                 # Try metadata first, fall back to shape check
                 zip_meta_dir = svf_base
-                cache_valid = validate_cache(zip_meta_dir, dsm_arr, pixel_size, cdsm_arr)
+                cache_valid = validate_cache(zip_meta_dir, dsm_arr, pixel_size, cdsm_arr, tdsm_eff)
                 if not cache_valid:
                     # Legacy zip without metadata — validate by shape only
                     svf_shape = preprocess_data["svf_data"].svf.shape
@@ -1223,7 +1250,7 @@ class SurfaceData:
             surface = SurfaceData(dsm=dsm, pixel_size=1.0)
             surface.preprocess()
             surface.compute_svf()
-            result = calculate(surface, weather)
+            summary = calculate(surface, weather, location, output_dir="output/")
         """
         if self.svf is not None:
             return  # Already computed

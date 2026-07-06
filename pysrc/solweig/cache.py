@@ -70,12 +70,21 @@ def compute_array_hash(arr: np.ndarray, *, sample_size: int = 10000) -> str:
 
 @dataclass
 class CacheMetadata:
-    """Metadata for cache validation."""
+    """Metadata for cache validation.
+
+    ``tdsm_hash`` covers the effective trunk layer (user-provided TDSM or the
+    CDSM × trunk_ratio auto-generation), so SVF/shadow caches computed with a
+    different trunk geometry invalidate instead of re-validating as fresh.
+    Wall caches don't depend on the trunk layer and leave it ``None``.
+    Metadata written before this field existed loads as ``None``: vegetation
+    runs then invalidate once (safe recompute) and no-veg runs still match.
+    """
 
     dsm_hash: str
     dsm_shape: tuple[int, int]
     pixel_size: float
     cdsm_hash: str | None = None
+    tdsm_hash: str | None = None
     version: str = "1.0"
 
     def to_dict(self) -> dict:
@@ -86,6 +95,7 @@ class CacheMetadata:
             "dsm_shape": list(self.dsm_shape),
             "pixel_size": self.pixel_size,
             "cdsm_hash": self.cdsm_hash,
+            "tdsm_hash": self.tdsm_hash,
         }
 
     @classmethod
@@ -97,6 +107,7 @@ class CacheMetadata:
             dsm_shape=tuple(data["dsm_shape"]),
             pixel_size=data["pixel_size"],
             cdsm_hash=data.get("cdsm_hash"),
+            tdsm_hash=data.get("tdsm_hash"),
         )
 
     @classmethod
@@ -105,6 +116,7 @@ class CacheMetadata:
         dsm: np.ndarray,
         pixel_size: float,
         cdsm: np.ndarray | None = None,
+        tdsm: np.ndarray | None = None,
     ) -> CacheMetadata:
         """Create metadata from input arrays."""
         return cls(
@@ -112,6 +124,7 @@ class CacheMetadata:
             dsm_shape=(dsm.shape[0], dsm.shape[1]),
             pixel_size=pixel_size,
             cdsm_hash=compute_array_hash(cdsm) if cdsm is not None else None,
+            tdsm_hash=compute_array_hash(tdsm) if tdsm is not None else None,
         )
 
     def matches(self, other: CacheMetadata) -> bool:
@@ -121,6 +134,7 @@ class CacheMetadata:
             and self.dsm_shape == other.dsm_shape
             and abs(self.pixel_size - other.pixel_size) < 0.001
             and self.cdsm_hash == other.cdsm_hash
+            and self.tdsm_hash == other.tdsm_hash
         )
 
     def save(self, directory: Path) -> None:
@@ -149,6 +163,7 @@ def validate_cache(
     dsm: np.ndarray,
     pixel_size: float,
     cdsm: np.ndarray | None = None,
+    tdsm: np.ndarray | None = None,
 ) -> bool:
     """
     Validate that cached data matches current inputs.
@@ -158,6 +173,9 @@ def validate_cache(
         dsm: Current DSM array.
         pixel_size: Current pixel size.
         cdsm: Current CDSM array (optional).
+        tdsm: Current effective trunk layer (optional). Pass the same array
+            the computation would use (user TDSM or CDSM × trunk_ratio) when
+            validating SVF/shadow caches; omit for wall caches.
 
     Returns:
         True if cache is valid, False if stale or missing.
@@ -167,7 +185,7 @@ def validate_cache(
         logger.debug(f"No cache metadata found in {cache_dir}")
         return False
 
-    current = CacheMetadata.from_arrays(dsm, pixel_size, cdsm)
+    current = CacheMetadata.from_arrays(dsm, pixel_size, cdsm, tdsm)
 
     if stored.matches(current):
         logger.debug(f"Cache validated: {cache_dir}")

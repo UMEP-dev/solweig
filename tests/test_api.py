@@ -967,14 +967,15 @@ class TestPreprocessing:
         """Test behavior at leaf on/off boundary days."""
         from solweig.components.shadows import compute_transmissivity
 
-        # Default boundaries are 100 and 300
-        # Day 100 is NOT included (first_day < doy < last_day)
-        psi_day_100 = compute_transmissivity(doy=100)
-        assert psi_day_100 == 0.5  # Not yet leaf-on
+        # Default boundaries are 97 and 300 (matching the shipped
+        # default_params.json Tree_settings)
+        # Day 97 is NOT included (first_day < doy < last_day)
+        psi_day_97 = compute_transmissivity(doy=97)
+        assert psi_day_97 == 0.5  # Not yet leaf-on
 
-        # Day 101 should be leaf-on
-        psi_day_101 = compute_transmissivity(doy=101)
-        assert psi_day_101 == 0.03
+        # Day 98 should be leaf-on
+        psi_day_98 = compute_transmissivity(doy=98)
+        assert psi_day_98 == 0.03
 
         # Day 299 should be leaf-on
         psi_day_299 = compute_transmissivity(doy=299)

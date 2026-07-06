@@ -58,17 +58,13 @@ logger = get_logger(__name__)
 def _max_shadow_height(dsm: np.ndarray, cdsm: np.ndarray | None = None, use_veg: bool = False) -> float:
     """Estimate maximum casting height above local ground.
 
-    Mirrors `surface._max_shadow_height` (kept private there for use by
-    other surface helpers); duplicated here so this module is self-contained.
+    Delegates to the canonical `surface._max_shadow_height`. A previous
+    duplicate here lacked the all-NaN/empty guards, so an all-NaN buffered
+    border tile fed NaN max_height into the Rust SVF kernel.
     """
-    dsm_max = float(np.nanmax(dsm))
-    dsm_min = float(np.nanmin(dsm))
-    base_height = dsm_max - dsm_min
-    if use_veg and cdsm is not None:
-        cdsm_max = float(np.nanmax(cdsm))
-        # Use absolute CDSM max if it's higher than DSM relief.
-        return max(base_height, cdsm_max - dsm_min)
-    return base_height
+    from .surface import _max_shadow_height as _canonical
+
+    return _canonical(dsm, cdsm, use_veg=use_veg)
 
 
 def compute_and_cache_walls(
@@ -221,7 +217,10 @@ def compute_and_cache_svf(
 
     svf_cache_dir = working_path / "svf" / pixel_size_tag(pixel_size)
     svf_cache_dir.mkdir(parents=True, exist_ok=True)
-    metadata = CacheMetadata.from_arrays(dsm_arr, pixel_size, cdsm_arr)
+    # Key the SVF cache on the effective trunk layer too (user TDSM or the
+    # CDSM x trunk_ratio auto-generation): shadow matrices depend on it, so a
+    # changed trunk geometry must not re-validate as fresh.
+    metadata = CacheMetadata.from_arrays(dsm_arr, pixel_size, cdsm_arr, tdsm_for_svf if use_veg else None)
 
     if needs_tiling:
         svf_data, (shmat_mm, vegshmat_mm, vbshmat_mm) = _compute_svf_tiled(
