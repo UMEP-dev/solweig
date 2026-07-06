@@ -66,7 +66,7 @@ def test_longwave_from_sky_cardinal_routing(patch_azimuth, expected_dominant):
     cardinals = {"east": Le, "south": Ls, "west": Lw, "north": Ln}
     dom = cardinals[expected_dominant]
     others = [v for k, v in cardinals.items() if k != expected_dominant]
-    assert float(dom) >= max(float(o) for o in others)
+    assert dom.item() >= max(o.item() for o in others)
 
 
 # ── longwave_from_veg ───────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ def test_longwave_from_veg_scales_with_air_temperature():
     )
     cool = longwave_from_veg(veg, Ta=10.0, **args)
     warm = longwave_from_veg(veg, Ta=30.0, **args)
-    assert float(warm[0]) > float(cool[0])
+    assert warm[0].item() > cool[0].item()
 
 
 # ── longwave_from_buildings (sunlit/shaded split) ───────────────────────────
@@ -145,7 +145,7 @@ def test_longwave_from_buildings_sun_facing_emits_more_than_shaded():
         Ta=20.0,
         Tgwall=15.0,  # Tgwall raises sunlit surface temp
     )
-    assert float(Lside_sun[0]) > float(Lside_sh[0])
+    assert Lside_sun.item() > Lside_sh.item()
 
 
 # ── longwave_from_buildings_wallScheme ──────────────────────────────────────
@@ -191,7 +191,7 @@ def test_reflected_longwave_proportional_to_one_minus_emissivity():
     )
     high_emis = reflected_longwave(surface, ewall=0.95, **args)[0]
     low_emis = reflected_longwave(surface, ewall=0.50, **args)[0]
-    assert float(low_emis[0]) > float(high_emis[0])
+    assert low_emis.item() > high_emis.item()
 
 
 def test_reflected_longwave_zero_when_no_incoming():

@@ -76,9 +76,10 @@ def create_gvf_inputs(input_data, shadow_data):
     rows, cols = input_data["dsm"].shape
     scale = float(input_data["params"]["scale"])
 
-    # Load ground temperature from fixture (spatially varying based on shadow)
-    tg_path = FIXTURES_DIR / "gvf_input_tg.npy"
-    tg = np.load(tg_path).astype(np.float32) if tg_path.exists() else np.zeros((rows, cols), dtype=np.float32)
+    # Load ground temperature from fixture (spatially varying based on shadow).
+    # The fixture is committed to the repo; a missing file is a bug, not an
+    # environment condition, so let FileNotFoundError propagate.
+    tg = np.load(FIXTURES_DIR / "gvf_input_tg.npy").astype(np.float32)
 
     emis_grid = np.full((rows, cols), DEFAULT_EMISSIVITY, dtype=np.float32)
     alb_grid = np.full((rows, cols), DEFAULT_ALBEDO, dtype=np.float32)
@@ -297,29 +298,22 @@ class TestGvfGoldenRegression:
     """
     Golden regression tests comparing current output against stored fixtures.
 
-    These tests are skipped if golden fixtures don't exist yet.
-    Run generate_fixtures.py to create them.
+    The fixtures are committed to the repo; a missing file is a bug and fails
+    loudly (FileNotFoundError) rather than skipping.
     """
 
     @pytest.fixture
     def gvf_golden(self):
-        """Load golden GVF fixtures if they exist."""
-        fixtures = {}
+        """Load golden GVF fixtures. Missing files raise FileNotFoundError."""
         golden_files = {
             "gvf_lup": FIXTURES_DIR / "gvf_lup.npy",
             "gvfalb": FIXTURES_DIR / "gvf_alb.npy",
             "gvf_norm": FIXTURES_DIR / "gvf_norm.npy",
         }
-        for name, path in golden_files.items():
-            if path.exists():
-                fixtures[name] = np.load(path)
-        return fixtures if fixtures else None
+        return {name: np.load(path) for name, path in golden_files.items()}
 
     def test_gvf_lup_matches_golden(self, gvf_result, gvf_golden):
         """GVF Lup should match golden fixture."""
-        if gvf_golden is None or "gvf_lup" not in gvf_golden:
-            pytest.skip("Golden GVF fixtures not generated yet")
-
         np.testing.assert_allclose(
             np.array(gvf_result.gvf_lup),
             gvf_golden["gvf_lup"],
@@ -330,9 +324,6 @@ class TestGvfGoldenRegression:
 
     def test_gvfalb_matches_golden(self, gvf_result, gvf_golden):
         """GVF albedo should match golden fixture."""
-        if gvf_golden is None or "gvfalb" not in gvf_golden:
-            pytest.skip("Golden GVF fixtures not generated yet")
-
         np.testing.assert_allclose(
             np.array(gvf_result.gvfalb),
             gvf_golden["gvfalb"],

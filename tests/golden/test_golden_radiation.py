@@ -533,30 +533,23 @@ class TestRadiationGoldenRegression:
     """
     Golden regression tests comparing current output against stored fixtures.
 
-    These tests are skipped if golden fixtures don't exist yet.
-    Run generate_fixtures.py to create them.
+    The fixtures are committed to the repo; a missing file is a bug and fails
+    loudly (FileNotFoundError) rather than skipping.
     """
 
     @pytest.fixture
     def radiation_golden(self):
-        """Load golden radiation fixtures if they exist."""
-        fixtures = {}
+        """Load golden radiation fixtures. Missing files raise FileNotFoundError."""
         golden_files = {
             "kside_e": FIXTURES_DIR / "radiation_kside_e.npy",
             "kside_s": FIXTURES_DIR / "radiation_kside_s.npy",
             "lside_e": FIXTURES_DIR / "radiation_lside_e.npy",
             "lside_s": FIXTURES_DIR / "radiation_lside_s.npy",
         }
-        for name, path in golden_files.items():
-            if path.exists():
-                fixtures[name] = np.load(path)
-        return fixtures if fixtures else None
+        return {name: np.load(path) for name, path in golden_files.items()}
 
     def test_kside_matches_golden(self, kside_result, radiation_golden):
         """Kside should match golden fixtures."""
-        if radiation_golden is None or "kside_e" not in radiation_golden:
-            pytest.skip("Golden radiation fixtures not generated yet")
-
         np.testing.assert_allclose(
             np.array(kside_result.keast),
             radiation_golden["kside_e"],
@@ -567,9 +560,6 @@ class TestRadiationGoldenRegression:
 
     def test_lside_matches_golden(self, lside_result, radiation_golden):
         """Lside should match golden fixtures."""
-        if radiation_golden is None or "lside_e" not in radiation_golden:
-            pytest.skip("Golden radiation fixtures not generated yet")
-
         # Wider tolerance: golden fixtures use upstream SBC=5.67e-8,
         # our code uses the more accurate SBC=5.67051e-8 (CODATA 2018).
         np.testing.assert_allclose(

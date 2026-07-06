@@ -426,17 +426,11 @@ class TestAnisotropicSkyGoldenRegression:
 
     @pytest.fixture
     def aniso_golden(self):
-        """Load golden anisotropic sky fixtures if they exist."""
-        golden_path = FIXTURES_DIR / "aniso_sky_output.npz"
-        if golden_path.exists():
-            return dict(np.load(golden_path))
-        return None
+        """Load golden anisotropic sky fixtures. A missing file raises FileNotFoundError."""
+        return dict(np.load(FIXTURES_DIR / "aniso_sky_output.npz"))
 
     def test_ldown_matches_golden(self, aniso_sky_result, aniso_golden):
         """Ldown should match golden fixture."""
-        if aniso_golden is None:
-            pytest.skip("Golden anisotropic sky fixtures not generated yet")
-
         np.testing.assert_allclose(
             np.array(aniso_sky_result.ldown),
             aniso_golden["ldown"],
@@ -447,9 +441,6 @@ class TestAnisotropicSkyGoldenRegression:
 
     def test_lside_matches_golden(self, aniso_sky_result, aniso_golden):
         """Lside should match golden fixture."""
-        if aniso_golden is None:
-            pytest.skip("Golden anisotropic sky fixtures not generated yet")
-
         np.testing.assert_allclose(
             np.array(aniso_sky_result.lside),
             aniso_golden["lside"],
@@ -460,9 +451,6 @@ class TestAnisotropicSkyGoldenRegression:
 
     def test_kside_matches_golden(self, aniso_sky_result, aniso_golden):
         """Kside should match golden fixture."""
-        if aniso_golden is None:
-            pytest.skip("Golden anisotropic sky fixtures not generated yet")
-
         np.testing.assert_allclose(
             np.array(aniso_sky_result.kside),
             aniso_golden["kside"],

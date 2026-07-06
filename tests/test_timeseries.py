@@ -5,7 +5,6 @@ These cover the critical gap: the primary user workflow (timeseries) had
 zero dedicated tests, and validate_inputs() was untested.
 """
 
-import contextlib
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -191,16 +190,20 @@ class TestCalculateTimeseries:
         assert late_tmrt > early_tmrt
 
     def test_location_auto_extracted_with_warning(self, flat_surface, tmp_path, caplog):
-        """When location is None, a warning is logged."""
+        """When location is None, a warning is logged before auto-extraction."""
         import logging
 
         weather_series = _make_weather_series(datetime(2024, 7, 15, 12, 0), n_hours=1)
 
-        with caplog.at_level(logging.WARNING), contextlib.suppress(Exception):
-            # Should work but warn about auto-extraction
+        # flat_surface is synthetic (no geotransform/CRS), so Location.from_surface
+        # raises ValueError after the auto-extraction warning is logged. Only that
+        # specific downstream error is tolerated; the warning must always fire.
+        with caplog.at_level(logging.WARNING), pytest.raises(ValueError, match="geotransform"):
             calculate(flat_surface, weather_series, location=None, output_dir=tmp_path)
-        # If it got past the location extraction, it should have warned
-        # (If it raised before logging, that's also acceptable for synthetic data)
+
+        assert any("auto-extracting from surface CRS" in record.message for record in caplog.records), (
+            "Expected auto-extraction warning when location=None"
+        )
 
     def test_config_precedence_explicit_wins(self, flat_surface, location, tmp_path):
         """Explicit parameters override config values."""
@@ -475,7 +478,7 @@ class TestTimeseriesSummary:
         stacked = np.stack([read_timestep_geotiff(tmp_path, "tmrt", i) for i in range(3)], axis=0)
         manual_mean = np.nanmean(stacked, axis=0)
 
-        np.testing.assert_allclose(summary.tmrt_mean, manual_mean, atol=0.1)
+        np.testing.assert_allclose(summary.tmrt_mean, manual_mean, atol=0.01)
 
     def test_multi_tile_matches_single_tile(self, location, tmp_path):
         """Forced multi-tile stitching matches a single-tile reference."""
