@@ -31,7 +31,7 @@
       "First_day_leaf": 97,
       "Last_day_leaf": 300
     },
-    "Comment": "Settings for trees. Shortwave transmissivity in %. Trunk ratio as a fraction of total height."
+    "Comment": "Settings for trees. Shortwave transmissivity as a fraction (0-1). Trunk ratio as a fraction of total height."
   },
   "Posture": {
     "Standing": {

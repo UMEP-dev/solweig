@@ -1,9 +1,10 @@
-"""Weather and location data models.
+"""Weather data model.
 
-Defines :class:`Location` (geographic coordinates and UTC offset) and
-:class:`Weather` (per-timestep meteorological observations).  Derived
-fields such as sun position and the direct/diffuse radiation split are
-computed lazily via :meth:`Weather.compute_derived`.
+Defines :class:`Weather` (per-timestep meteorological observations).
+Derived fields such as sun position and the direct/diffuse radiation
+split are computed lazily via :meth:`Weather.compute_derived`.
+:class:`Location` lives in :mod:`~solweig.models.location` (moved in
+b85) and is re-exported here for backwards compatibility.
 """
 
 from __future__ import annotations
@@ -60,6 +61,12 @@ class Weather:
             If provided with measured_diffuse_rad, these override the computed values.
         measured_diffuse_rad: Optional measured diffuse radiation in W/m².
             If provided with measured_direct_rad, these override the computed values.
+        precomputed_sun_altitude: Optional pre-computed sun altitude in degrees.
+            If provided with precomputed_sun_azimuth, skips the sun position
+            calculation in compute_derived().
+        precomputed_sun_azimuth: Optional pre-computed sun azimuth in degrees.
+        precomputed_altmax: Optional pre-computed maximum sun altitude for the
+            day in degrees. Skips the 96-step daily maximum search.
 
     Auto-computed (after calling compute_derived()):
         sun_altitude: Sun altitude angle in degrees. Initial: 0.0.

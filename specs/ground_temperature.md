@@ -134,12 +134,12 @@ Where `radG` is measured global radiation and `radG0` is theoretical clear-sky r
 | Cobblestone | -3.41 | 0.37 | 15:00 | Lindberg et al. (2016) |
 | Dark asphalt | -9.78 | 0.58 | 15:00 | Lindberg et al. (2016) |
 | Grass | -3.38 | 0.21 | 14:00 | Lindberg et al. (2016) |
-| Bare soil | -3.01 | 0.33 | 14:00 | Estimated |
-| Water | 0.0 | 0.00 | 12:00 | Estimated |
+| Bare soil | -3.01 | 0.33 | 14:00 | Lindberg et al. (2008; 2016) |
+| Water | 0.0 | 0.00 | 12:00 | Lindberg et al. (2008; 2016) |
 
 Note: Tstart is the temperature offset from air temperature at sunrise. Negative values indicate surfaces cooler than air at dawn.
 
-**Water temperature override:** When land cover is active (the normal path), water pixels (lc_grid == 3) bypass this table entirely — their ground temperature is set to `Twater - Ta` from the weather file. The TgK/TmaxLST values only apply in the rare no-landcover fallback. With TgK=0.00, Tgamp=0 making TmaxLST irrelevant.
+**Water temperature override (preserved UMEP quirk, inactive):** The Rust override sets ground temperature to `Twater - Ta` (from the weather file) for pixels with `lc_grid == 3`. This reproduces UMEP's `sunonsurface_2018a`, which also checks code 3. In this implementation and the shipped materials table, water is land-cover code **7**, so the override never fires for real water pixels. Water instead follows the parameter table above; with TgK = 0.00 there is no diurnal amplitude, making TmaxLST irrelevant. The code-3 check is knowingly preserved for UMEP parity rather than corrected.
 
 ## Properties
 

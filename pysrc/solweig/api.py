@@ -15,6 +15,7 @@ Example::
         surface=solweig.SurfaceData(dsm=my_dsm_array),
         weather=[solweig.Weather(datetime=datetime(2025, 7, 15, 12, 0), ta=25.0, rh=50.0, global_rad=800.0)],
         location=solweig.Location(latitude=57.7, longitude=12.0),
+        output_dir="output/",
     )
     print(f"Tmrt: {summary.tmrt_mean.mean():.1f} C")
 """

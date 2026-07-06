@@ -537,7 +537,7 @@ def calculate_buffer_distance(
 
     Example:
         >>> calculate_buffer_distance(30.0)  # 30m building
-        572.9  # 30m / tan(3deg)
+        572.4  # 30m / tan(3deg)
         >>> calculate_buffer_distance(10.0)  # 10m building
         190.8  # 10m / tan(3deg)
     """

@@ -6,7 +6,7 @@ Contributions to SOLWEIG are welcome.
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11–3.13
 - Rust toolchain (for building extensions)
 - uv (package manager)
 
@@ -16,11 +16,11 @@ Contributions to SOLWEIG are welcome.
 git clone https://github.com/UMEP-dev/solweig.git
 cd solweig
 
-# Install dependencies
-uv sync
+# Install dependencies (including dev and test groups)
+uv sync --group test --group dev
 
-# Build Rust extension
-maturin develop
+# Build Rust extension (must be --release; the test suite rejects debug builds)
+maturin develop --release
 ```
 
 ### Verify Installation
@@ -74,7 +74,8 @@ Add tests for new functionality:
 pytest tests/test_api.py
 
 # Run with coverage
-pytest --cov=solweig tests/
+uv run coverage run -m pytest tests/
+uv run coverage report
 ```
 
 ## Project Structure

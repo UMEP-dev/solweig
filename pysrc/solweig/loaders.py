@@ -168,7 +168,8 @@ def get_lc_properties_from_params(
     """
     Derive surface properties from land cover grid using loaded params.
 
-    This mirrors the logic in loaders.py TgMaps class.
+    Builds per-pixel lookup grids (albedo, emissivity, TgK, Tstart, TmaxLST)
+    from land-cover IDs, mirroring UMEP's TgMaps parameterization.
 
     Args:
         land_cover: Land cover classification grid (UMEP standard IDs).

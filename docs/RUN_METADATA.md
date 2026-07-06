@@ -219,9 +219,10 @@ The output directory contains the complete experimental record:
 ```python
 # output/
 #   ├── run_metadata.json      <-- Complete parameter record
-#   ├── tmrt_2023-07-01_1200.tif
-#   ├── tmrt_2023-07-01_1300.tif
-#   └── ...
+#   └── tmrt/
+#       ├── tmrt_20230701_1200.tif
+#       ├── tmrt_20230701_1300.tif
+#       └── ...
 ```
 
 ### Debugging
@@ -270,7 +271,7 @@ Create a metadata dictionary for a SOLWEIG run.
 
 - `surface`: SurfaceData object
 - `location`: Location object
-- `weather`: List of Weather objects
+- `weather_series`: List of Weather objects
 - `human`: HumanParams object (or None for defaults)
 - `physics`: Physics parameters from `load_physics()` (or None)
 - `materials`: Materials from `load_materials()` (or None)

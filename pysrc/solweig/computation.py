@@ -82,9 +82,9 @@ def calculate_core_fused(
     """
     Fused SOLWEIG calculation — single Rust FFI call per daytime timestep.
 
-    Functionally identical to calculate_core() but orchestrates shadows, ground
-    temperature, GVF, thermal delay, radiation, and Tmrt entirely within Rust,
-    eliminating intermediate numpy allocations and FFI round-trips.
+    Orchestrates shadows, ground temperature, GVF, thermal delay, radiation,
+    and Tmrt entirely within Rust, eliminating intermediate numpy allocations
+    and FFI round-trips.
 
     This is the primary compute path used by ``calculate()``.
     Supports both isotropic and anisotropic (Perez) sky models.

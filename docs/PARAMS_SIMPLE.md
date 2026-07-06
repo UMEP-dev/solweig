@@ -49,7 +49,7 @@ Contents:
 These parameters define surface material properties per landcover class.
 
 ```python
-materials = solweig.load_materials("site_materials.json")  # Required if a landcover grid is provided
+materials = solweig.load_materials("site_materials.json")  # Optional — bundled defaults used when omitted
 ```
 
 Contents per landcover class:
@@ -58,7 +58,7 @@ Contents per landcover class:
 - Ground temperature model parameters (TmaxLST, Ts_deg, Tstart)
 - Wall thermal properties (specific heat, conductivity, density, thickness)
 
-**Defaults:** None (required only when a landcover grid is provided)
+**Defaults:** Bundled in the package (`default_materials.json`) — loaded automatically when `materials` is omitted
 
 ---
 
@@ -221,6 +221,6 @@ Don't pass that namespace as a `params=` kwarg — `calculate()` accepts
 | --------- | ------- | ------- | ------------- |
 | `human` | Person characteristics | Standing, 75 kg, 175 cm | `HumanParams(...)` object |
 | `physics` | Site-independent constants | Bundled in package | `load_physics("custom.json")` |
-| `materials` | Landcover properties | Not required if no landcover grid | `load_materials("site.json")` |
+| `materials` | Landcover properties | Bundled in package | `load_materials("site.json")` |
 | `use_anisotropic_sky` | Sky model selection | `True` | Set to `False` for isotropic |
 | `conifer` | Tree type | `False` (deciduous) | Set to `True` for evergreen |

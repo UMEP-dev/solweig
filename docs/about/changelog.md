@@ -112,8 +112,10 @@ baseline.
   for the first time.
 - **`ThermalState` top-level export.** Now reachable at
   `solweig.ThermalState` — previously only at
-  `solweig.models.state.ThermalState` despite appearing in the public
-  `calculate(state=…)` signature.
+  `solweig.models.state.ThermalState`. Promoted to a top-level export
+  for advanced/internal use; thermal-state threading is handled
+  internally by the timeseries loop (`calculate()` takes no `state`
+  argument).
 - **QGIS plugin: 349 LOC of dead code removed.** Deleted
   `create_surface_from_parameters` and three helpers (the fossilised
   pre-`prepare()` loader). The production path already used

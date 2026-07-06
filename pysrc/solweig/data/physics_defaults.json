@@ -7,7 +7,7 @@
       "First_day_leaf": 97,
       "Last_day_leaf": 300
     },
-    "Comment": "Settings for trees. Shortwave transmissivity for leaf-on and leaf-off seasons. Trunk ratio as a fraction of total height. Seasonal dates (day of year)."
+    "Comment": "Settings for trees. Shortwave transmissivity as a fraction (0-1) for leaf-on and leaf-off seasons. Trunk ratio as a fraction of total height. Seasonal dates (day of year)."
   },
   "Posture": {
     "Standing": {

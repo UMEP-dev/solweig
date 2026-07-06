@@ -23,22 +23,24 @@ To modify the code or contribute:
 ```bash
 git clone https://github.com/UMEP-dev/solweig.git
 cd solweig
-uv sync              # Install Python dependencies
-maturin develop      # Compile Rust extension and link it
+uv sync --group test --group dev    # Install Python dependencies (dev + test groups)
+maturin develop --release           # Compile Rust extension and link it
 ```
 
-## Optional Dependencies
+## Dependencies
 
-SOLWEIG operates with numpy arrays alone, but file-based workflows benefit from the following packages:
+Core geospatial dependencies are installed automatically with the package:
 
 | Package | Purpose |
 | ------- | ------- |
-| `rasterio` | Loading/saving GeoTIFF rasters (installed by default) |
-| `geopandas` | Rasterising vector data (e.g. tree polygons to a canopy grid) |
-| `affine` | Geospatial coordinate transforms (installed by default) |
-| `pyproj` | CRS handling and coordinate conversion (installed by default) |
+| `rasterio` | Loading/saving GeoTIFF rasters (install dependency) |
+| `pyproj` | CRS handling and coordinate conversion (install dependency) |
+| `affine` | Geospatial coordinate transforms (pulled in transitively by rasterio) |
+| `geopandas` | Rasterising vector data, e.g. tree polygons to a canopy grid (optional, install separately) |
 
-If only numpy arrays are used, `rasterio` and `geopandas` are not required.
+`rasterio` is a hard install dependency even for pure numpy-array workflows.
+The alternative GDAL backend (no rasterio) exists only for running inside
+QGIS, where the plugin uses the QGIS-bundled GDAL instead.
 
 ## GPU Acceleration
 

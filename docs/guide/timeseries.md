@@ -134,20 +134,32 @@ The indices are computed inline during the main loop
 
 ## Memory Management for Long Simulations
 
-### Processing in chunks
+### Use a single call for the full period
 
-For extended simulations (weeks or months), processing in daily chunks is recommended:
+For extended simulations (weeks or months), pass the full weather list to one
+`calculate()` call:
 
 ```python
-for chunk_start in range(0, len(weather_list), 24):
-    chunk = weather_list[chunk_start:chunk_start + 24]
-    results = solweig.calculate(
-        surface=surface,
-        location=location,
-        weather=chunk,
-        output_dir=f"output/",
-    )
+results = solweig.calculate(
+    surface=surface,
+    weather=weather_list,  # full period
+    location=location,
+    output_dir="output/",
+)
 ```
+
+Thermal state (ground and wall temperature history) carries between timesteps
+automatically within a single call. Splitting the period into separate
+`calculate()` calls resets that state at every boundary and produces the
+temperature discontinuities described in
+[Basic Usage](basic-usage.md#multiple-timesteps-timeseries).
+
+Memory stays bounded regardless of simulation length: per-timestep grids are
+written to `output_dir` as they are computed, and only the running summary
+grids are held in memory. For grids too large to fit in memory, SOLWEIG tiles
+the spatial computation internally (see
+[Working with GeoTIFFs](geotiffs.md#large-rasters)); no chunking of the
+weather series is needed.
 
 ## Performance
 

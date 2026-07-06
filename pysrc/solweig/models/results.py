@@ -189,7 +189,7 @@ class SolweigResult:
 
         Can be called with either a Weather object or individual values:
             utci = result.compute_utci(weather)
-            utci = result.compute_utci(ta=25.0, rh=50.0, wind=2.0)
+            utci = result.compute_utci(25.0, rh=50.0, wind=2.0)
 
         Args:
             weather_or_ta: Either a Weather object, or air temperature in °C.
@@ -236,7 +236,7 @@ class SolweigResult:
 
         Can be called with either a Weather object or individual values:
             pet = result.compute_pet(weather)
-            pet = result.compute_pet(ta=25.0, rh=50.0, wind=2.0)
+            pet = result.compute_pet(25.0, rh=50.0, wind=2.0)
 
         Args:
             weather_or_ta: Either a Weather object, or air temperature in °C.

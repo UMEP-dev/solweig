@@ -143,7 +143,7 @@ class PreprocessedAuxiliaryView:
 
     @property
     def wall_aspect(self) -> NDArray[np.floating] | None:
-        """Per-pixel wall facing direction (radians, 0 = east), or ``None``."""
+        """Per-pixel wall facing direction (degrees, 0 = North, clockwise), or ``None``."""
         return self._surface.wall_aspect
 
     @property

@@ -50,6 +50,7 @@ print(f"Mean UTCI: {summary.utci_mean.mean():.1f} deg C")
 | 0 to 9 | Slight cold stress |
 | -13 to 0 | Moderate cold stress |
 | -27 to -13 | Strong cold stress |
+| -40 to -27 | Very strong cold stress |
 | < -40 | Extreme cold stress |
 
 ### Interpreting results

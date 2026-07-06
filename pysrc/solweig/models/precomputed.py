@@ -408,7 +408,13 @@ class PrecomputedData:
         shadows = ShadowArrays.from_npz("cache/shadowmats.npz")
         precomputed = PrecomputedData(svf=svf, shadow_matrices=shadows)
 
-        result = calculate(surface=surface, weather=weather, precomputed=precomputed)
+        summary = calculate(
+            surface,
+            weather,
+            location,
+            output_dir="output/",
+            precomputed=precomputed,
+        )
     """
 
     wall_height: NDArray[np.floating] | None = None

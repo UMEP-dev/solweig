@@ -55,15 +55,15 @@ lwall = SBC × ewall × (tgwall + Ta + 273.15)⁴ - SBC × ewall × (Ta + 273.15
 
 Where `tgwall` is the wall temperature deviation from air temperature (K), only applied to sunlit walls.
 
-### Water Temperature Override
+### Water Temperature Override (preserved UMEP quirk, inactive)
 
-When land cover data is active (`landcover=true`), water pixels (lc_grid == 3) have their ground temperature overridden:
+When land cover data is active (`landcover=true`), pixels with `lc_grid == 3` have their ground temperature overridden:
 
 ```text
 Tg_water = Twater - Ta    (Twater from weather file)
 ```
 
-This bypasses the land cover parameter table (TgK/TmaxLST) for water surfaces.
+This reproduces UMEP's `sunonsurface_2018a`, which also checks land-cover code 3. Water is land-cover code **7** in this implementation and in the shipped materials table, so the override never fires for real water pixels; water takes its ground temperature from the land-cover parameter table instead (TgK = 0.00, giving no diurnal amplitude). The code-3 check is knowingly preserved for UMEP parity rather than corrected.
 
 ### Sunwall Mask
 

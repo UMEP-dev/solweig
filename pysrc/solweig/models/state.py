@@ -40,12 +40,12 @@ class ThermalState:
         timeadd: Accumulated time for thermal delay function.
         timestep_dec: Decimal time between steps (fraction of day).
 
-    Example:
-        # Manual state management for custom time loops
-        state = ThermalState.initial(dsm.shape)
-        for weather in weather_list:
-            result = calculate(..., state=state)
-            state = result.state
+    Note:
+        State chaining is handled internally: :func:`solweig.calculate`
+        carries thermal state across timesteps automatically within a
+        single call (via the internal ``_calculate_single``). ThermalState
+        is exported for advanced use, e.g. constructing an initial state
+        with :meth:`initial` when driving the internal API directly.
     """
 
     tgmap1: NDArray[np.floating]

@@ -5,7 +5,7 @@ iterates over a list of :class:`~solweig.Weather` objects, carrying
 thermal state (ground and wall temperatures) forward between timesteps.
 Large rasters are transparently routed to the tiled processing path.
 
-Users should call :func:`solweig._calculate_single` (the public entry point).
+Users should call :func:`solweig.calculate` (the public entry point).
 """
 
 from __future__ import annotations
@@ -156,8 +156,8 @@ def _calculate_timeseries(
     ensuring accurate shadows at tile boundaries without wasting overlap on
     short buildings.
 
-    This is a convenience function that manages state automatically. For custom
-    control over state, use calculate() directly with the state parameter.
+    Thermal state is managed automatically: each timestep's state is carried
+    forward to the next within this call.
 
     Args:
         surface: Surface/terrain data (DSM required, CDSM/DEM optional).

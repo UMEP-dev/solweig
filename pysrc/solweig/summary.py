@@ -41,7 +41,9 @@ class Timeseries:
         utci_mean: Spatial mean UTCI per step (°C).
         sun_fraction: Fraction of sunlit pixels per step (0–1). NaN when shadow unavailable.
         diffuse_fraction: Diffuse fraction per step (0–1). 0 = clear sky, 1 = fully overcast.
-        clearness_index: Clearness index per step. Higher = clearer sky. 0 at night.
+        clearness_index: Clearness index per step. Higher = clearer sky. At night
+            the last daytime value is carried forward (1.0 before the first
+            daytime step).
         is_daytime: Day/night flag per step.
     """
 

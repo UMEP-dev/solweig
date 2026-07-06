@@ -234,7 +234,7 @@ def gpu_dispatch_count() -> int:
     since the last :func:`reset_gpu_metrics` call).
 
     Reads a thread-safe atomic counter incremented on the success branch
-    of every GPU kernel call across the three GPU paths (shadows, SVF,
+    of every GPU kernel call across the four GPU paths (shadows, SVF,
     anisotropic sky, GVF). Pair with :func:`gpu_fallback_count` to
     distinguish "GPU is disabled" (both zero after a run) from "GPU tried
     and fell back" (dispatch=0, fallback>0).

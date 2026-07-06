@@ -46,13 +46,15 @@ The `working_dir` stores preprocessing results so that subsequent runs reuse the
 ```text
 cache/
 ├── walls/
-│   ├── wall_hts.tif        # Wall heights derived from DSM
-│   └── wall_aspects.tif    # Wall compass directions
+│   └── px<size>/                # Keyed by pixel size, e.g. px1.000/
+│       ├── wall_hts.tif         # Wall heights derived from DSM
+│       └── wall_aspects.tif     # Wall compass directions
 └── svf/
-    └── memmap/
-        ├── svf.npy          # Total Sky View Factor
-        ├── svf_north.npy    # Directional SVF (4 cardinal directions)
-        └── ...              # 15 SVF grids total
+    └── px<size>/
+        └── memmap/
+            ├── svf.npy          # Total Sky View Factor
+            ├── svf_north.npy    # Directional SVF (4 cardinal directions)
+            └── ...              # 15 SVF grids total
 ```
 
 ### Force recomputation

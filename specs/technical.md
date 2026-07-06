@@ -62,7 +62,7 @@ Optional GPU support for shadow and SVF calculations:
 ### GPU Properties
 
 1. **Automatic fallback**: If GPU unavailable, uses CPU
-2. **Equivalent results**: GPU and CPU produce identical outputs (within float32 precision)
+2. **Near-equivalent results**: GPU and CPU agree to float32 precision for shadows and building/ground SVF; vegetation SVF (`svf_veg*`) can drift by up to 0.042 at canopy-edge pixels (<1% of pixels, <0.5 °C effect on Tmrt) — see VALIDATION.md
 3. **Memory management**: Large rasters automatically tiled for GPU memory limits
 
 ### GPU-Accelerated Operations
