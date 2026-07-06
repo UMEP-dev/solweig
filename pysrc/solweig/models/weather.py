@@ -382,7 +382,10 @@ class Weather:
         end_dt = parse_date(end, is_tmy, default_year)
 
         if start_dt is None:
-            start_dt = df.index[0].replace(tzinfo=None)
+            # Default documented as "first date in file": normalize to midnight
+            # so the end-of-day expansion below covers the whole first day
+            # (EPW files start at hour 1, so the raw first timestamp is 01:00).
+            start_dt = df.index[0].replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
         if end_dt is None:
             end_dt = start_dt
 

@@ -332,7 +332,26 @@ def _read_epw_pure_python(path: Path) -> tuple:
         "wind_speed": 21,
     }
 
-    na_values = {"99", "999", "9999", "99999", "999999999", ""}
+    # Per-field missing-value sentinels from the EPW specification
+    # (EnergyPlus Auxiliary Programs, "Weather Converter" field table).
+    # EPW missing markers are per-field numeric sentinels, so a shared set
+    # of magic strings is wrong in both directions: RH = 99 % and
+    # GHI = 999 W/m2 are legitimate data, while dry-bulb 99.9 and station
+    # pressure 999999 Pa are missing markers. Radiation and pressure use a
+    # >= comparison because the spec caps real values well below the
+    # sentinel; the rest match the sentinel exactly.
+    missing_exact = {
+        "temp_air": 99.9,
+        "relative_humidity": 999.0,
+        "wind_direction": 999.0,
+        "wind_speed": 999.0,
+    }
+    missing_at_or_above = {
+        "atmospheric_pressure": 999999.0,
+        "ghi": 9999.0,
+        "dni": 9999.0,
+        "dhi": 9999.0,
+    }
 
     rows = []
     timestamps = []
@@ -361,24 +380,29 @@ def _read_epw_pure_python(path: Path) -> tuple:
                     timestamp = dt_class(year, month, day, hour, minute)
                 timestamps.append(timestamp)
 
-                def parse_float(idx, row_data=line):
-                    val = row_data[idx].strip()
-                    if val in na_values:
+                def parse_float(field, row_data=line):
+                    val = row_data[col_indices[field]].strip()
+                    if val == "":
                         return float("nan")
                     try:
-                        return float(val)
+                        num = float(val)
                     except (ValueError, TypeError):
                         return float("nan")
+                    if field in missing_exact and num == missing_exact[field]:
+                        return float("nan")
+                    if field in missing_at_or_above and num >= missing_at_or_above[field]:
+                        return float("nan")
+                    return num
 
                 row = {
-                    "temp_air": parse_float(col_indices["temp_air"]),
-                    "relative_humidity": parse_float(col_indices["relative_humidity"]),
-                    "atmospheric_pressure": parse_float(col_indices["atmospheric_pressure"]),
-                    "ghi": parse_float(col_indices["ghi"]),
-                    "dni": parse_float(col_indices["dni"]),
-                    "dhi": parse_float(col_indices["dhi"]),
-                    "wind_speed": parse_float(col_indices["wind_speed"]),
-                    "wind_direction": parse_float(col_indices["wind_direction"]),
+                    "temp_air": parse_float("temp_air"),
+                    "relative_humidity": parse_float("relative_humidity"),
+                    "atmospheric_pressure": parse_float("atmospheric_pressure"),
+                    "ghi": parse_float("ghi"),
+                    "dni": parse_float("dni"),
+                    "dhi": parse_float("dhi"),
+                    "wind_speed": parse_float("wind_speed"),
+                    "wind_direction": parse_float("wind_direction"),
                 }
                 rows.append(row)
             except (ValueError, IndexError):
