@@ -15,15 +15,23 @@ def clearnessindex_2013b(
 
     :param zen: zenith angle in radians
     :param jday: day of year
-    :param Ta: air temperature
-    :param RH: relative humidity
+    :param Ta: air temperature in degrees C
+    :param RH: relative humidity as a fraction (0-1)
     :param radG: global shortwave radiation
-    :param location: distionary including lat, lon and alt
-    :param P: pressure
-    :return:
+    :param location: dictionary including lat, lon and alt
+    :param P: station pressure in hPa, or -999.0 for the 1013 mb standard atmosphere
+    :return: (I0, CI, Kt, I0et, CIuncorr)
+
+    Unit note: the Crawford & Duchon transmission formula takes pressure in
+    millibars, and 1 hPa == 1 mb, so ``P`` is used directly. Classic UMEP
+    passes ``P`` in kPa from its met format and scales by 10 inside this
+    function; ``Weather.pressure`` here is hPa, so applying UMEP's x10 would
+    inflate p to ~10000 mb and underestimate clear-sky irradiance by ~20-25%
+    (the refactored umep-core package inherits exactly that bug by feeding
+    hPa to the kPa-convention function).
     """
 
-    p = 1013.0 if P == -999.0 else P * 10.0  # Pressure in millibars (convert hPa to mb)
+    p = 1013.0 if P == -999.0 else P  # Pressure in millibars (1 hPa == 1 mb)
 
     if RH <= 0:
         RH = 0.01  # Guard against log(0); physically RH > 0
