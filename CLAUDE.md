@@ -278,7 +278,7 @@ sessions should know about.
 - Validation table in `README.md` mirrors the latest row of `VALIDATION.md`'s version history; update both together.
 - Quick-start docs assume `SurfaceData.prepare()` is the entry point, not manual `compute_svf()`.
 - License is GPL-3.0 throughout (matching upstream UMEP); never write "AGPL".
-- Tutorials are published as Markdown (`docs/tutorials/*.md` + `*_files/` images), exported from the `.ipynb` authoring sources by `scripts/export_tutorials.py`, which also injects the per-image alt text stored in `output.metadata["image/png"]["alt"]`. `poe notebooks` executes the notebooks and re-exports the Markdown in one step; the `.ipynb` files are excluded from the site build (`exclude_docs` in mkdocs.yml). Do not edit the `.md` exports by hand — edit the notebook and re-export.
+- Tutorials are published as Markdown (`docs/tutorials/*.md` + `*_files/` images), exported from the `.ipynb` authoring sources by `scripts/export_tutorials.py`, which also injects the per-image alt text stored in `cell.metadata["solweig"]["image_alts"]` (a list, one entry per image output of the cell — cell metadata survives re-execution; output metadata, the pre-b89 home, is wiped every run). `poe notebooks` executes the notebooks and re-exports the Markdown in one step; the `.ipynb` files are excluded from the site build (`exclude_docs` in mkdocs.yml). Do not edit the `.md` exports by hand — edit the notebook and re-export.
 
 ### Architecture refactors (post-b82, internal-only)
 
