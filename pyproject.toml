@@ -72,7 +72,6 @@ docs = [
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.27.0",
-    "mkdocs-jupyter>=0.25.0",
     "mkdocs-include-markdown-plugin>=7.0.0",
     "pymdown-extensions",  # transitively required by mkdocs-material extensions used in mkdocs.yml
 ]
@@ -122,7 +121,7 @@ test_gpu_perf_gate = { shell = "pytest tests/benchmarks/ -m gpu_perf_gate -q && 
 audit = { shell = "python scripts/audit.py" }
 docs = { shell = "mkdocs serve" }
 docs_build = { shell = "mkdocs build --strict" }
-notebooks = { shell = "jupyter nbconvert --to notebook --execute docs/tutorials/*.ipynb --inplace" }
+notebooks = { shell = "jupyter nbconvert --to notebook --execute docs/tutorials/*.ipynb --inplace && python scripts/export_tutorials.py" }
 
 [tool.ruff]
 line-length = 120

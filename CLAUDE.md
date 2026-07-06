@@ -185,8 +185,10 @@ Plus: **benchmark tests** (`tests/benchmarks/`) for performance and memory regre
 | **test** | Matrix: Python 3.11, 3.12, 3.13 — excludes slow tests |
 | **test-qgis-compat** | GDAL backend, NumPy 1.26, `UMEP_USE_GDAL=1` |
 | **validation** | 3 real-world sites (Kronenhuset, Gustav Adolfs, GVC) |
-| **benchmarks** | Memory + perf-matrix gates: bytes-per-pixel ceiling, per-scenario runtime budgets, aniso/iso, tiled/non-tiled, plugin/API ratios. `SOLWEIG_PERF_BUDGET_SCALE=2.0` in CI for shared-runner variance. |
+| **benchmarks** | Memory regression gates only (`-m "not gpu_perf_gate"`, bytes-per-pixel ceiling). Timing-based perf gates are local-only via `poe test_gpu_perf_gate` (moved off CI in 6457f32). |
 | **test-spec** | Scientific parity gates (vs reference UMEP implementation) |
+| **test-slow** | Runs the slow-marked top-level test files |
+| **audit** | Informational (`continue-on-error: true`), uploads AUDIT.md artifact |
 
 Build must be `--release` — `conftest.py` gates on `RELEASE_BUILD` flag.
 
@@ -276,7 +278,7 @@ sessions should know about.
 - Validation table in `README.md` mirrors the latest row of `VALIDATION.md`'s version history; update both together.
 - Quick-start docs assume `SurfaceData.prepare()` is the entry point, not manual `compute_svf()`.
 - License is GPL-3.0 throughout (matching upstream UMEP); never write "AGPL".
-- Tutorials in `docs/tutorials/*.ipynb` are accessibility-flagged for missing alt text — `mkdocs build --strict` passes but emits `traitlets:` warnings; add alt text when re-exporting cells.
+- Tutorials are published as Markdown (`docs/tutorials/*.md` + `*_files/` images), exported from the `.ipynb` authoring sources by `scripts/export_tutorials.py`, which also injects the per-image alt text stored in `output.metadata["image/png"]["alt"]`. `poe notebooks` executes the notebooks and re-exports the Markdown in one step; the `.ipynb` files are excluded from the site build (`exclude_docs` in mkdocs.yml). Do not edit the `.md` exports by hand — edit the notebook and re-export.
 
 ### Architecture refactors (post-b82, internal-only)
 

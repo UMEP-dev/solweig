@@ -75,11 +75,11 @@ SOLWEIG models the complete radiation budget experienced by a person standing ou
 
     ---
 
-    Step-by-step notebooks with Athens data and visual outputs
+    Step-by-step tutorials with Athens data and visual outputs
 
-    [:octicons-arrow-right-24: Athens Quick Start](tutorials/01-athens-quickstart.ipynb)
-    [:octicons-arrow-right-24: Timeseries Analysis](tutorials/02-timeseries-analysis.ipynb)
-    [:octicons-arrow-right-24: Thermal Comfort](tutorials/03-thermal-comfort.ipynb)
+    [:octicons-arrow-right-24: Athens Quick Start](tutorials/01-athens-quickstart.md)
+    [:octicons-arrow-right-24: Timeseries Analysis](tutorials/02-timeseries-analysis.md)
+    [:octicons-arrow-right-24: Thermal Comfort](tutorials/03-thermal-comfort.md)
 
 -   :material-book-open-variant:{ .lg .middle } **User Guide**
 
