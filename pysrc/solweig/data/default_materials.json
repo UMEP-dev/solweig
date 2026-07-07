@@ -164,6 +164,69 @@
         },
         "Comment": "Tstart used for ground surface temperatures and wall surface temperatures according to Lindberg et al. 2008; 2016."
     },
+    "Heat capacity": {
+        "Value": {
+            "Cobble_stone_2014a": 2110000.0,
+            "Dark_asphalt": 1940000.0,
+            "Roofs(buildings)": 1250000.0,
+            "Grass_unmanaged": 1350000.0,
+            "Bare_soil": 2000000.0,
+            "Water": 4180000.0,
+            "Walls": 1250000.0,
+            "Brick_wall": -9999.0,
+            "Concrete_wall": -9999.0,
+            "Wood_wall": -9999.0
+        },
+        "Comment": "Heat capacity of each land cover class, in J m-3 K-1, equal to density times specific heat and used in the ground surface temperature scheme. Values from UMEP-processing processor/parametersforsolweig.json (2026a ground scheme, Bridoux), fetched 2026-07-07."
+    },
+    "Thermal_diffusivity": {
+        "Value": {
+            "Cobble_stone_2014a": 7.2e-7,
+            "Dark_asphalt": 3.8e-7,
+            "Roofs(buildings)": 5e-8,
+            "Grass_unmanaged": 2.1e-7,
+            "Bare_soil": 3e-7,
+            "Water": 1e-7,
+            "Walls": 5e-8,
+            "Brick_wall": -9999.0,
+            "Concrete_wall": -9999.0,
+            "Wood_wall": -9999.0
+        },
+        "Comment": "Thermal diffusivity of each land cover class, in m2 s-1, equal to thermal conductivity per density per specific heat and used in the ground surface temperature scheme. Values from UMEP-processing (2026a ground scheme)."
+    },
+    "OHM_coefficients": {
+        "Values": {
+            "Cobble_stone_2014a": [0.61, 1.39, 0.28, -23.9],
+            "Dark_asphalt": [0.5, 1.39, 0.28, -31.45],
+            "Roofs(buildings)": [0.12, 1.39, 0.24, -4.5],
+            "Grass_unmanaged": [0.27, 1.39, 0.33, -21.75],
+            "Bare_soil": [0.3, 1.39, 0.44, -24],
+            "Water": [0.1, 1.39, 0, -10]
+        },
+        "Comment": "Used in the Objective Hysteresis Model (Grimmond et al. 1991) leading to the ground surface temperature: the mean of coef a1 (-), its phase (rad), a2 (h-1) and a3 (W m-2). Values from UMEP-processing (2026a ground scheme)."
+    },
+    "Tg_ini coefficients": {
+        "Values": {
+            "Cobble_stone_2014a": [-1.0, -0.04, 1.5],
+            "Dark_asphalt": [-1.4, -0.04, 0.72],
+            "Roofs(buildings)": [-2.9, 0, 0.43],
+            "Grass_unmanaged": [-4.0, -0.02, 0.38],
+            "Bare_soil": [-1.6, -0.02, 0.51],
+            "Water": [0, 0, 0]
+        },
+        "Comment": "Offset in K, slope of offset vs latitude, and ratio between amplitude and offset used to model the seasonal pattern of the initial ground surface temperature relative to air temperature. Values from UMEP-processing (2026a ground scheme)."
+    },
+    "Tm_ini coefficients": {
+        "Values": {
+            "Cobble_stone_2014a": [-4.5, -0.15, 9],
+            "Dark_asphalt": [-5.7, -0.18, 10],
+            "Roofs(buildings)": [0, 0, 6],
+            "Grass_unmanaged": [-6.2, -0.2, 10],
+            "Bare_soil": [-3.4, -0.11, 5],
+            "Water": [0, 0, 0]
+        },
+        "Comment": "Amplitude in K, slope of offset vs latitude in K/deg and offset in K used to model the seasonal pattern of the initial mean daily soil temperature relative to air temperature. Values from UMEP-processing (2026a ground scheme)."
+    },
     "Tmrt_params": {
         "Value": {
             "absK": 0.70,

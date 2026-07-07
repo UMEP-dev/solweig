@@ -43,6 +43,12 @@ class ModelConfig:
         tile_size: Core tile side length in pixels for tiled processing.
             If None (default), auto-calculated from available resources.
             Minimum 256.
+        use_ground_scheme: Opt into the UMEP 2026a ground surface temperature
+            scheme (force-restore/OHM). Requires a land-cover grid. Default
+            None (= False): the validated Lindberg et al. parameterization.
+        use_outgoing_longwave: Opt into the UMEP 2026a solid-angle outgoing
+            longwave model (directional ground/wall side longwave). Default
+            None (= False). Used together with ``use_ground_scheme``.
         tile_workers: Legacy runtime control for the low-level tiled executor.
             Retained for config compatibility. ``calculate()`` ignores this in
             tile-outer timeseries mode.
@@ -85,6 +91,11 @@ class ModelConfig:
     tile_workers: int | None = None
     tile_queue_depth: int | None = None
     prefetch_tiles: bool | None = None
+    # UMEP 2026a ground-surface scheme (opt-in, requires a land-cover grid):
+    # force-restore/OHM surface temperature and solid-angle outgoing longwave.
+    # Defaults False; the validated baseline physics is unchanged unless set.
+    use_ground_scheme: bool | None = None
+    use_outgoing_longwave: bool | None = None
 
     def __post_init__(self):
         """Validate configuration fields.

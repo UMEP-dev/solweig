@@ -44,6 +44,11 @@ class Settings:
     human: HumanParams
     physics: SimpleNamespace | None
     materials: SimpleNamespace | None
+    # UMEP 2026a ground-surface scheme (Bridoux): force-restore/OHM surface
+    # temperature and solid-angle outgoing longwave. Both default OFF — the
+    # validated baseline stays byte-identical until the scheme is validated.
+    use_ground_scheme: bool = False
+    use_outgoing_longwave: bool = False
 
     @classmethod
     def resolve(
@@ -57,6 +62,8 @@ class Settings:
         human: HumanParams | None = None,
         physics: SimpleNamespace | None = None,
         materials: SimpleNamespace | None = None,
+        use_ground_scheme: bool | None = None,
+        use_outgoing_longwave: bool | None = None,
     ) -> Settings:
         """Merge per-call kwargs with a ModelConfig base and dataclass defaults.
 
@@ -67,6 +74,8 @@ class Settings:
         cfg_physics = getattr(config, "physics", None) if config else None
         cfg_materials = getattr(config, "materials", None) if config else None
         cfg_max_shadow = getattr(config, "max_shadow_distance_m", None) if config else None
+        cfg_ground_scheme = getattr(config, "use_ground_scheme", None) if config else None
+        cfg_outgoing_lw = getattr(config, "use_outgoing_longwave", None) if config else None
 
         return cls(
             use_anisotropic_sky=_pick(use_anisotropic_sky, cfg_aniso, default=True),
@@ -80,6 +89,8 @@ class Settings:
             # don't need them.
             physics=_pick(physics, cfg_physics, default=None),
             materials=_pick(materials, cfg_materials, default=None),
+            use_ground_scheme=_pick(use_ground_scheme, cfg_ground_scheme, default=False),
+            use_outgoing_longwave=_pick(use_outgoing_longwave, cfg_outgoing_lw, default=False),
         )
 
     def with_loaded_defaults(self) -> Settings:
