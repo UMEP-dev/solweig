@@ -176,6 +176,11 @@ fn register_ground_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
         &submodule
     )?)?;
     submodule.add_class::<ground_surface::SurfaceTemperatureStep>()?;
+    submodule.add_function(wrap_pyfunction!(
+        ground_surface::outgoing_longwave_calc,
+        &submodule
+    )?)?;
+    submodule.add_class::<ground_surface::OutgoingLongwaveStep>()?;
     py_module.add_submodule(&submodule)?;
     Ok(())
 }

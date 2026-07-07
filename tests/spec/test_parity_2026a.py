@@ -302,3 +302,128 @@ def test_surface_temperature_matches_upstream_over_chained_steps():
         np.testing.assert_allclose(tg_rs, tg_py, rtol=1e-3, atol=0.05, err_msg=f"Tg mismatch at step {step}")
         np.testing.assert_allclose(rn_rs, rn_py, rtol=1e-3, atol=0.5, err_msg=f"Rn mismatch at step {step}")
         np.testing.assert_allclose(g_rs, g_py, rtol=1e-3, atol=0.5, err_msg=f"G mismatch at step {step}")
+
+
+# ── Ground-surface scheme: outgoing longwave solid-angle march ──────────────
+
+from umep_2026a.ground_surface import outgoingLongwave_calc  # noqa: E402
+
+OUTGOING_FIELDS = [
+    "gvf_lup",
+    "gvfalbsun",
+    "gvfalbtot",
+    "gvf_lup_e",
+    "gvfalbsun_e",
+    "gvfalbtot_e",
+    "gvf_lup_s",
+    "gvfalbsun_s",
+    "gvfalbtot_s",
+    "gvf_lup_w",
+    "gvfalbsun_w",
+    "gvfalbtot_w",
+    "gvf_lup_n",
+    "gvfalbsun_n",
+    "gvfalbtot_n",
+    "gvf_lside_w",
+    "gvf_lside_s",
+    "gvf_lside_e",
+    "gvf_lside_n",
+]
+
+
+@pytest.mark.parametrize("sizepx", [1.0, 2.0])
+def test_outgoing_longwave_matches_upstream(sizepx):
+    """Rust solid-angle march matches the vendored reference, all 19 outputs.
+
+    Scene includes buildings (roof fallback), walls with a sunlit subset
+    (wall emission + albedo terms), shadow structure, and mixed emissivity/
+    albedo. sizepx parametrized because the march radius and the below-pixel
+    view factor depend on it.
+    """
+    rng = np.random.default_rng(11)
+    shape = (40, 40)
+    buildings = np.ones(shape, dtype=np.float32)
+    buildings[12:20, 12:20] = 0.0  # building/roof block
+    walls = np.zeros(shape, dtype=np.float32)
+    walls[11, 11:21] = 6.0  # north face
+    walls[20, 11:21] = 6.0
+    walls[12:20, 11] = 6.0
+    walls[12:20, 20] = 6.0
+    sunwall = np.zeros(shape, dtype=np.float32)
+    sunwall[20, 11:21] = 6.0  # south-facing walls sunlit
+    sunwall[12:20, 20] = 4.0
+    shadow = np.ones(shape, dtype=np.float32)
+    shadow[20:28, 8:20] = 0.0
+    tg = (26.0 + rng.uniform(-3.0, 8.0, shape)).astype(np.float32)
+    ldown = np.full(shape, 380.0, dtype=np.float32)
+    emis = np.where(buildings > 0, 0.95, 0.92).astype(np.float32)
+    alb = np.where(buildings > 0, 0.18, 0.15).astype(np.float32)
+    tgwall = 6.0
+    ta = 27.0
+    rows, cols = shape
+
+    expected = outgoingLongwave_calc(
+        tg.astype(np.float64),
+        tgwall,
+        ta,
+        ldown.astype(np.float64),
+        emis.astype(np.float64),
+        alb.astype(np.float64),
+        buildings.astype(np.float64),
+        shadow.astype(np.float64),
+        sunwall.astype(np.float64).copy(),  # upstream mutates this in place
+        walls.astype(np.float64),
+        rows,
+        cols,
+        sizepx,
+    )
+
+    result = rust_ground.outgoing_longwave_calc(
+        tg,
+        tgwall,
+        ta,
+        ldown,
+        emis,
+        alb,
+        buildings,
+        shadow,
+        sunwall,
+        walls,
+        sizepx,
+    )
+
+    for i, field in enumerate(OUTGOING_FIELDS):
+        got = np.asarray(getattr(result, field), dtype=np.float64)
+        want = np.asarray(expected[i], dtype=np.float64)
+        np.testing.assert_allclose(
+            got,
+            want,
+            rtol=1e-3,
+            atol=0.5,
+            err_msg=f"{field} diverges from upstream at sizepx={sizepx}",
+        )
+
+
+def test_outgoing_longwave_does_not_mutate_inputs():
+    """The port must not reproduce upstream's in-place sunwall binarization."""
+    shape = (20, 20)
+    sunwall = np.zeros(shape, dtype=np.float32)
+    sunwall[5, 5:10] = 7.0
+    sunwall_before = sunwall.copy()
+    walls = np.zeros(shape, dtype=np.float32)
+    walls[5, 5:10] = 7.0
+    ones = np.ones(shape, dtype=np.float32)
+    rust_ground.outgoing_longwave_calc(
+        np.full(shape, 25.0, dtype=np.float32),
+        5.0,
+        25.0,
+        np.full(shape, 370.0, dtype=np.float32),
+        np.full(shape, 0.95, dtype=np.float32),
+        np.full(shape, 0.2, dtype=np.float32),
+        ones,
+        ones,
+        sunwall,
+        walls,
+        1.0,
+    )
+    np.testing.assert_array_equal(sunwall, sunwall_before)
