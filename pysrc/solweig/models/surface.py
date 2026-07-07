@@ -1479,8 +1479,24 @@ class SurfaceData:
         c0 = int(np.argmax(cols_any))
         c1 = len(cols_any) - int(np.argmax(cols_any[::-1]))
 
-        if r0 == 0 and r1 == self.dsm.shape[0] and c0 == 0 and c1 == self.dsm.shape[1]:
+        full_rows, full_cols = self.dsm.shape
+        if r0 == 0 and r1 == full_rows and c0 == 0 and c1 == full_cols:
             logger.info("  Crop: no trimming needed (valid bbox = full extent)")
+            return (r0, r1, c0, c1)
+
+        # Cropping copies every layer (and materialises the SVF/shadow memmaps),
+        # which is a full-raster memory spike — ~2 GB per float32 layer at
+        # 500 Mpx. Only pay it when the trim removes a meaningful fraction of the
+        # raster; a thin edge NaN band is left in place and handled downstream by
+        # the valid mask (the per-timestep path in computation.py applies the same
+        # >2%-reduction guard for its own transient crop).
+        full_area = full_rows * full_cols
+        crop_area = (r1 - r0) * (c1 - c0)
+        if crop_area >= int(full_area * 0.98):
+            logger.info(
+                f"  Crop: skipped (valid bbox trims only {100 * (1 - crop_area / full_area):.1f}% "
+                "of pixels; not worth a full-raster copy)"
+            )
             return (r0, r1, c0, c1)
 
         old_shape = self.dsm.shape
