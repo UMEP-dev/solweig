@@ -424,6 +424,86 @@ class TestCalculateTimeseries:
         assert not list(tmp_path.rglob("*.tif"))
 
 
+class TestGroundSchemeGuards:
+    """Configuration guards for the opt-in UMEP 2026a ground scheme."""
+
+    def test_flags_must_be_enabled_together(self, flat_surface, location, tmp_path):
+        from solweig.errors import ConfigurationError
+
+        weather = _make_weather_series(datetime(2024, 7, 15, 12, 0), n_hours=1)
+        with pytest.raises(ConfigurationError, match="together"):
+            calculate(
+                flat_surface,
+                weather,
+                location,
+                use_anisotropic_sky=False,
+                use_ground_scheme=True,
+                output_dir=tmp_path,
+            )
+
+    def test_requires_land_cover(self, flat_surface, location, tmp_path):
+        from solweig.errors import ConfigurationError
+
+        weather = _make_weather_series(datetime(2024, 7, 15, 12, 0), n_hours=1)
+        with pytest.raises(ConfigurationError, match="land-cover"):
+            calculate(
+                flat_surface,
+                weather,
+                location,
+                use_anisotropic_sky=False,
+                use_ground_scheme=True,
+                use_outgoing_longwave=True,
+                output_dir=tmp_path,
+            )
+
+    def test_rejects_tiled_processing(self, location, tmp_path):
+        from conftest import make_mock_svf
+        from solweig.errors import ConfigurationError
+
+        shape = (600, 600)
+        surface = SurfaceData(
+            dsm=np.zeros(shape, dtype=np.float32),
+            pixel_size=1.0,
+            svf=make_mock_svf(shape),
+            land_cover=np.zeros(shape, dtype=np.uint8),
+        )
+        weather = _make_weather_series(datetime(2024, 7, 15, 12, 0), n_hours=1)
+        with pytest.raises(ConfigurationError, match="tile"):
+            calculate(
+                surface,
+                weather,
+                location,
+                use_anisotropic_sky=False,
+                use_ground_scheme=True,
+                use_outgoing_longwave=True,
+                tile_size=256,
+                output_dir=tmp_path,
+            )
+
+    def test_config_flags_flow_through(self, location, tmp_path):
+        """Flags set on ModelConfig (not kwargs) activate the scheme."""
+        from conftest import make_mock_svf
+
+        shape = (25, 25)
+        surface = SurfaceData(
+            dsm=np.zeros(shape, dtype=np.float32),
+            pixel_size=1.0,
+            svf=make_mock_svf(shape),
+            land_cover=np.zeros(shape, dtype=np.uint8),
+        )
+        weather = _make_weather_series(datetime(2024, 7, 15, 12, 0), n_hours=2)
+        config = ModelConfig(
+            use_anisotropic_sky=False,
+            use_ground_scheme=True,
+            use_outgoing_longwave=True,
+        )
+        summary_scheme = calculate(surface, weather, location, config=config, output_dir=tmp_path / "s")
+        summary_base = calculate(surface, weather, location, use_anisotropic_sky=False, output_dir=tmp_path / "b")
+        assert not np.allclose(summary_scheme.tmrt_mean, summary_base.tmrt_mean, atol=0.05, equal_nan=True), (
+            "config-level scheme flags had no effect"
+        )
+
+
 class TestModelConfigTilingRuntimeSerialization:
     """Tests for tile runtime fields in ModelConfig save/load."""
 
