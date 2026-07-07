@@ -10,10 +10,14 @@ calculation are forced to split the work into many tiles by the resource-aware
 sizer based on real GPU/RAM limits. Watch the logs for ``Resource-aware tile
 sizing`` lines emitted from ``solweig.tiling``.
 
-Source rasters are NOT bundled with this repository. Stage them manually into
-``temp/madrid/source/`` as ``bdsm.tif``, ``dem.tif`` and ``cdsm.tif`` (the
-originals live under the external ``cities-dataset-spain`` repo). The demo
-checks for them at startup and exits with instructions if any are missing.
+Source rasters are NOT bundled with this repository (~0.5 GB). Fetch them
+from Spain's public IGN open data with::
+
+    uv run python scripts/fetch_madrid_data.py
+
+which stages ``bdsm.tif``, ``dem.tif`` and ``cdsm.tif`` into
+``temp/madrid/source/``. The demo checks for them at startup and exits with
+instructions if any are missing.
 
 Data sources
 ------------
@@ -60,8 +64,8 @@ if _missing:
     for name in _required:
         status = "MISSING" if name in _missing else "ok"
         print(f"    {name}  [{status}]")
-    print("  Copy bdsm.tif, dem.tif and cdsm.tif for Madrid from the external")
-    print("  'cities-dataset-spain' repository into the directory above, then rerun.")
+    print("  Fetch them from Spain's public IGN open data, then rerun:")
+    print("    uv run python scripts/fetch_madrid_data.py")
     sys.exit(1)
 
 # %%
