@@ -427,3 +427,63 @@ def test_outgoing_longwave_does_not_mutate_inputs():
         1.0,
     )
     np.testing.assert_array_equal(sunwall, sunwall_before)
+
+
+# ── Ground-surface scheme: per-run initialisation ───────────────────────────
+
+import json  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+from solweig.components.ground_scheme import initiate_ground_scheme  # noqa: E402
+from solweig.loaders import load_params  # noqa: E402
+from umep_2026a.ground_surface import initiate_groundScheme  # noqa: E402
+
+_MATERIALS_JSON = _Path(__file__).resolve().parents[2] / "pysrc" / "solweig" / "data" / "default_materials.json"
+
+
+@pytest.mark.parametrize("latitude", [57.7, -33.9])
+@pytest.mark.parametrize("day", [40, 200])
+def test_initiate_ground_scheme_matches_upstream(latitude, day):
+    """Initial grids match upstream for both hemispheres and seasons."""
+    lc = np.zeros((16, 16), dtype=np.float32)
+    lc[:, 4:6] = 1.0
+    lc[2:6, 10:14] = 2.0
+    lc[8:12, 0:3] = 5.0
+    lc[12:16, 12:16] = 6.0
+    lc[0:2, 0:2] = 7.0
+    lc[6, 6] = 101.0  # wall-material code, remapped to roofs
+
+    ta_series = np.array([16.0, 15.5, 17.0, 21.0, 24.0, 25.5, 23.0, 19.0])
+
+    with open(_MATERIALS_JSON) as fh:
+        params_dict = json.load(fh)
+    expected = initiate_groundScheme(
+        lc.astype(np.float64).copy(),  # upstream mutates the grid
+        params_dict,
+        day,
+        ta_series.astype(np.float64),
+        {"latitude": latitude, "longitude": 12.0},
+    )
+    exp_names = ["tg", "tm", "rn", "rn_past", "g", "cap", "diff", "a1", "a2", "a3"]
+
+    state = initiate_ground_scheme(lc, load_params(), day, ta_series, latitude)
+
+    for name, want in zip(exp_names, expected, strict=True):
+        got = np.asarray(getattr(state, name), dtype=np.float64)
+        np.testing.assert_allclose(
+            got, np.asarray(want, dtype=np.float64), rtol=1e-5, atol=1e-4, err_msg=f"{name} mismatch"
+        )
+    # Wall-material pixels were remapped to roofs
+    assert state.lc_grid[6, 6] == 2.0
+    # Caller's grid untouched (upstream mutates; our port must not)
+    assert lc[6, 6] == 101.0
+
+
+def test_initiate_ground_scheme_rejects_unparameterized_class():
+    """A land-cover class without OHM coefficients raises a structured error."""
+    from solweig.errors import InvalidSurfaceData
+
+    lc = np.zeros((4, 4), dtype=np.float32)
+    lc[0, 0] = 99.0  # Walls: named, but no OHM coefficients
+    with pytest.raises(InvalidSurfaceData, match="OHM"):
+        initiate_ground_scheme(lc, load_params(), 180, [20.0], 57.7)
