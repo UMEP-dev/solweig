@@ -345,6 +345,7 @@ Once installed, SOLWEIG algorithms appear in the **Processing Toolbox** under th
 | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
 | **Download / Preview Weather File** | Download a TMY EPW file from PVGIS, or preview an existing EPW file.                               |
 | **Prepare Surface Data**            | Align rasters, compute wall heights, wall aspects, and SVF. Results are cached and reused.         |
+| **Recompute Sky View Factor**       | Advanced: re-run the SVF stage alone on a prepared surface (e.g. after changing vegetation).       |
 | **SOLWEIG Calculation**             | Single-timestep or timeseries Tmrt with optional inline UTCI/PET. Supports EPW and UMEP met files. |
 
 ### QGIS-specific features

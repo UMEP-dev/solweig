@@ -30,7 +30,7 @@ On first use the plugin checks whether the `solweig` library is installed. If it
 
 ## Processing Algorithms
 
-Once installed, three algorithms appear in the **Processing Toolbox** under the SOLWEIG group. They are numbered to indicate the recommended workflow order.
+Once installed, four algorithms appear in the **Processing Toolbox** under the SOLWEIG group. They are numbered to indicate the recommended workflow order.
 
 ### 1. Download / Preview Weather File
 
@@ -93,6 +93,13 @@ stored in `metadata.json`. A cache hit completes in ~50 ms instead of tens of
 seconds. If any source file is edited or any kwarg changes, the log reports
 exactly which input invalidated the cache and the pipeline rebuilds from
 source.
+
+### 2b. Recompute Sky View Factor (advanced)
+
+Re-run the SVF stage alone on an already-prepared surface directory, for
+example after editing the vegetation rasters or to force a rebuild with
+different SVF settings. Most workflows never need this: *Prepare Surface
+Data* computes and caches SVF automatically.
 
 ### 3. SOLWEIG Calculation
 
