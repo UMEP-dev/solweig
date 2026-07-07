@@ -89,6 +89,7 @@ nav:
       - Timeseries Analysis: tutorials/02-timeseries-analysis.md
       - Thermal Comfort: tutorials/03-thermal-comfort.md
       - Terrain Shadows (Bilbao): tutorials/04-bilbao-terrain-shadows.md
+      - Ground Scheme (experimental): tutorials/05-ground-scheme-experimental.md
   - User Guide:
       - Basic Usage: guide/basic-usage.md
       - Working with GeoTIFFs: guide/geotiffs.md

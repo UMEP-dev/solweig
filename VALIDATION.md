@@ -149,6 +149,48 @@ the same site, POI, and surface model.
 
 ---
 
+## UMEP 2026a ground scheme (opt-in): field comparison
+
+Run 2026-07-07 on the same three sites, anisotropic sky, with
+`use_ground_scheme=True` / `use_outgoing_longwave=True` (site parameter
+files extended with the bundled OHM/heat-capacity blocks, which the legacy
+site JSONs predate). POI Tmrt against measurements:
+
+| Site | Day | Baseline RMSE / bias (°C) | Scheme RMSE / bias (°C) |
+| --- | --- | --- | --- |
+| Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 22.0 / +21.4 |
+| Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 13.6 / +12.7 |
+| Gustav Adolfs | 2006-07-26 | 7.1 / +3.7 | 16.4 / +15.8 |
+| Gustav Adolfs | 2006-08-01 | 7.3 / +0.6 | 15.1 / +13.6 |
+| GVC | 2010-07-07 | 4.4 / −1.4 | 12.9 / +12.5 |
+| GVC | 2010-07-10 | 6.0 / +2.9 | 17.3 / +16.3 |
+| GVC | 2010-07-12 | 8.6 / +7.9 | 21.1 / +20.8 |
+
+The bias is one-directional and large. The flux decomposition localises it:
+Kdown/Kup/Ldown are essentially unchanged, and the scheme's Lup at the
+Kronenhuset POI is *better* than baseline (bias +0.3 vs +8.3 W/m²), so the
+force-restore ground temperature itself is sound. The excess enters through
+the directional/cylinder Lside composition of `Solweig_2026a_calc`: the
+solid-angle march's directional side longwave feeds the Fside term, and in
+anisotropic mode the 2026a code additionally adds the mean of those
+directional terms to the Fcyl term (2025a used only the anisotropic-sky
+Lside there). An isotropic diagnostic at Kronenhuset isolates the two
+contributions: RMSE 8.9 / bias +7.2 °C (baseline 5.8 / +0.9), i.e. roughly
+a third of the anisotropic-mode bias remains without the Fcyl addition.
+
+Consequences:
+
+- `use_ground_scheme` / `use_outgoing_longwave` stay **off by default**;
+  the scheme should not be used for production Tmrt until the composition
+  question is resolved upstream.
+- The composition question has been raised with UMEP-processing (see the
+  upstream issues drafted 2026-07-07).
+- The port itself is faithful: every component matches the vendored
+  upstream reference (`tests/spec/test_parity_2026a.py`), so these numbers
+  characterise the upstream scheme as published, not the port.
+
+---
+
 ## Comparison with published results
 
 Lindberg et al. (2008) report aggregate statistics over 7 days at two
@@ -215,7 +257,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b87 | 2026-05-27 |     3 |      1.5–7.5 °C | GPU/CPU surface improvements + deprecation removal — **zero numerical change, byte-identical golden output**. (1) **Breaking:** top-level geospatial helpers (b85→b86 `DeprecationWarning` shim) removed — import from `solweig.geospatial` instead; old names now raise `AttributeError`. (2) `solweig.disable_gpu()` now toggles all three GPU paths (shadows + aniso + GVF) in a single call; pre-b87 it only flipped shadows so "CPU-only" runs weren't actually CPU-only. (3) New `solweig.enable_gpu()`. (4) Fixed a lazy-init bug where `is_gpu_available()` silently re-enabled GPU after `disable_gpu()`. (5) GPU metrics surface: `gpu_dispatch_count()` / `gpu_fallback_count()` / `reset_gpu_metrics()` — thread-safe atomic counters incremented at every GPU dispatch / fallback site. Lets tests assert "GPU path actually ran". (6) New shadow + SVF GPU/CPU parity tests (`tests/spec/test_gpu_cpu_parity.py`); documents a small known difference at canopy-edge `svf_veg*` pixels — building/aveg SVF byte-identical; veg drift up to 0.042 in <1% of pixels, propagates to <0.5 °C Tmrt. (7) New GPU/CPU runtime-ratio benchmark — appends to `tests/benchmarks/logs/gpu_cpu_ratio_history.md`. (8) Corrected outdated CLAUDE.md "GPU context recreated per call" claim — contexts are cached via `OnceLock`; only buffers reallocate per shape change. |
 | 0.1.0b88 | 2026-05-27 |     3 |      1.5–7.5 °C | Internal-only release — no code, plugin, runtime, or numerical change. Moves timing-based benchmarks off CI to a local-only `gpu_perf_gate` marker; CI keeps the hardware-stable memory bench. Validation 31/31 pass, unchanged from b82 baseline. |
 | 0.1.0b89 | 2026-07-06 |     3 |      1.5–7.4 °C | Pre-bump correctness sweep. (1) **Pressure unit fix in `clearnessindex_2013b`**: `Weather.pressure` is hPa but the function applied classic UMEP's kPa→mb ×10, driving p to ~10 000 mb and underestimating clear-sky I0 by ~20–25 % (743 vs 916 W/m² at 30° zenith); CI now crosses the <0.95 Ldown cloud-correction threshold correctly. Validation shifts are small because all three sites use measured direct/diffuse radiation (CI affects only the Ldown correction): Kronenhuset unchanged (6.7/0.51), Gustav Adolfs slightly improved (5.6–7.4 °C, R² 0.79–0.88), GVC 1.5–6.2 °C, R² 0.80–0.99. New spec gate `tests/spec/test_clearness_index.py`. (2) **Per-field EPW missing codes**: the shared `na_values` set nulled legitimate data (RH 99 %, GHI/DNI/DHI 999 W/m²) and missed real sentinels (dry-bulb 99.9, pressure 999999 Pa); no numerical change for bundled or validation datasets (scanned: no affected values). `from_epw` default now loads the whole first day as documented, not just the first timestep. (3) **Tiled SVF path fixed** (runtime NameError) and cancellation now raises `ComputationCancelled` instead of persisting partial SVF caches (untouched tiles at SVF=1.0) or writing the prepare fingerprint without SVF. (4) `ModelConfig.from_json` reads the legacy `Value` nesting (user parameter files were silently ignored); no change at defaults. (5) **GVF source-area march fixed at non-1 m pixels**: the metres→pixels conversion multiplied by pixel size where UMEP divides (`gvf_geometry.rs`, `sun.rs`), so at 2 m pixels the Smidt et al. source area marched 144 m instead of 36 m (and at 0.5 m only 9 m); at coarse pixels the over-long march could also panic on small rasters (march now clamped to the raster extent). New parity gate `tests/spec/test_gvf_pixel_scale_parity.py` pins GVF against UMEP's `gvf_2018a` at 0.5/1/2 m. Kronenhuset (1 m) byte-identical; the 2 m sites now reproduce what UMEP itself computes: Gustav Adolfs 5.7–7.3 °C (R² 0.80–0.88), GVC 2.4–6.9 °C (R² 0.65–0.99) — mixed movement vs the pre-fix numbers, which had benefited from the unphysically long source-area averaging. (6) **Cached GVF sunwall mask unified with UMEP semantics** (fully sunlit walls only, matching `gvf_2018a`; the per-timestep cached path previously counted any partially sunlit wall): Kronenhuset improves to 6.6 °C RMSE / R² 0.52 / bias +2.6; the 2 m sites shift ≤0.03 °C. Final b89 validation: 25/25 pass, Tmrt RMSE 2.4–7.3 °C across the seven site-days. |
-| 0.1.0b90 | 2026-07-07 |     3 |      2.4–7.3 °C | (Unreleased.) UMEP 2026a ground-surface scheme wired into the fused pipeline behind the opt-in `use_ground_scheme` / `use_outgoing_longwave` flags (force-restore/OHM surface temperature + solid-angle outgoing longwave march + `Lside_veg_v2026`, ordering per upstream `Solweig_2026a_calc`). **Defaults off — baseline physics unchanged, golden output byte-identical, validation 31/31 pass with numbers identical to b89.** Scheme components parity-gated against the vendored upstream reference (`tests/spec/test_parity_2026a.py`). The scheme requires a land-cover grid and currently rejects tiled processing. |
+| 0.1.0b90 | 2026-07-07 |     3 |      2.4–7.3 °C | (Unreleased.) UMEP 2026a ground-surface scheme wired into the fused pipeline behind the opt-in `use_ground_scheme` / `use_outgoing_longwave` flags (force-restore/OHM surface temperature + solid-angle outgoing longwave march + `Lside_veg_v2026`, ordering per upstream `Solweig_2026a_calc`). **Defaults off — baseline physics unchanged, golden output byte-identical, validation 31/31 pass with numbers identical to b89.** Scheme components parity-gated against the vendored upstream reference (`tests/spec/test_parity_2026a.py`). The scheme requires a land-cover grid and currently rejects tiled processing. Field comparison of the opt-in scheme (see "UMEP 2026a ground scheme: field comparison"): Tmrt RMSE 12.9–22.0 °C, bias +12.5 to +21.4 °C across the seven site-days — the upstream Lside composition runs hot, raised upstream; defaults stay off. |
 
 ---
 
