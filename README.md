@@ -135,7 +135,7 @@ summary.plot()
 | `TimeseriesSummary` | What `calculate()` returns: aggregated mean/max/min grids, sun hours, UTCI threshold exceedance, and per-timestep scalars across the run.                                     |
 | `SolweigResult`     | Per-timestep internal result (Tmrt, shadow, UTCI, PET, radiation components) — used for advanced single-step workflows; most users see `TimeseriesSummary` instead.            |
 | `HumanParams`       | Body parameters: posture (standing/sitting), absorption coefficients, PET body parameters (age, weight, height, etc.).                                                        |
-| `ModelConfig`       | Runtime settings: anisotropic sky, max shadow distance, tiling workers.                                                                                                       |
+| `ModelConfig`       | Runtime settings: anisotropic sky, max shadow distance, tile size, ground-scheme flags.                                                                                       |
 | `Settings`          | Resolved configuration `calculate()` works from internally; merges `ModelConfig`, kwargs, and JSON defaults. Most users don't construct it directly — see the Settings guide. |
 | `ThermalState`      | Internal carry-forward thermal state used across timesteps inside `calculate()`. Surfaced for advanced callers reading `SolweigResult.state` in single-step / chained workflows.|
 
@@ -266,6 +266,7 @@ Key parameters accepted by `calculate()`:
 | `use_anisotropic_sky`   | `True`       | Use Perez anisotropic sky model for more accurate diffuse radiation.                                               |
 | `conifer`               | `False`      | Treat trees as evergreen (skip seasonal leaf-off).                                                                 |
 | `max_shadow_distance_m` | `1000`       | Maximum shadow reach in metres. Increase for mountainous terrain.                                                  |
+| `use_ground_scheme` / `use_outgoing_longwave` | `False` | Opt into the experimental UMEP 2026a ground scheme (force-restore surface temperature + solid-angle outgoing longwave). Requires land cover; both flags together. See the [ground scheme tutorial](https://umep-dev.github.io/solweig/tutorials/05-ground-scheme-experimental/) and [VALIDATION.md](VALIDATION.md) before use. |
 | `output_dir`            | _(required)_ | Working directory for all output (summary grids, per-timestep GeoTIFFs, metadata).                                 |
 | `outputs`               | `None`       | Which per-timestep grids to save: `"tmrt"`, `"utci"`, `"pet"`, `"shadow"`, `"kdown"`, `"kup"`, `"ldown"`, `"lup"`. |
 
@@ -306,7 +307,7 @@ print(solweig.get_gpu_limits())       # {"max_buffer_size": ..., "backend": "Met
 solweig.disable_gpu()
 ```
 
-Large rasters are automatically tiled to fit within GPU buffer limits. Tile size, worker count, and prefetch depth are configurable via `ModelConfig` or keyword arguments.
+Large rasters are automatically tiled to fit within GPU buffer limits. The tile size is auto-calculated from available resources, or configurable via `ModelConfig`/`tile_size`.
 
 ---
 

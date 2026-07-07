@@ -80,6 +80,8 @@ SOLWEIG models the complete radiation budget experienced by a person standing ou
     [:octicons-arrow-right-24: Athens Quick Start](tutorials/01-athens-quickstart.md)
     [:octicons-arrow-right-24: Timeseries Analysis](tutorials/02-timeseries-analysis.md)
     [:octicons-arrow-right-24: Thermal Comfort](tutorials/03-thermal-comfort.md)
+    [:octicons-arrow-right-24: Terrain Shadows (Bilbao)](tutorials/04-bilbao-terrain-shadows.md)
+    [:octicons-arrow-right-24: Ground Scheme (experimental)](tutorials/05-ground-scheme-experimental.md)
 
 -   :material-book-open-variant:{ .lg .middle } **User Guide**
 

@@ -6,11 +6,12 @@ ensure consistency and catch regressions.
 
 ## Test Summary
 
-**Total Golden Tests: 130** (see [REPORT.md](REPORT.md) for quantitative comparison results)
+**Total Golden Tests: 146** (see [REPORT.md](REPORT.md) for quantitative comparison results)
 
 | Module | Test File | Tests | Description |
 |--------|-----------|------:|-------------|
 | Anisotropic Sky | `test_golden_anisotropic_sky.py` | 16 | Direction-dependent sky radiation model |
+| Ground Scheme (2026a) | `test_golden_ground_scheme.py` | 20 | Opt-in force-restore/OHM + outgoing-longwave pipeline path |
 | Ground Temp | `test_golden_ground_temp.py` | 6 | TsWaveDelay thermal inertia model |
 | GVF | `test_golden_gvf.py` | 13 | Ground View Factor calculations |
 | PET | `test_golden_pet.py` | 10 | Physiological Equivalent Temperature |
@@ -66,6 +67,7 @@ Golden fixtures are generated from different sources depending on the algorithm:
 | Ground Temp | UMEP Python | TsWaveDelay exponential decay model |
 | Wall Temp | Rust (regression) | Numerical consistency checks |
 | Anisotropic Sky | Rust (regression) | Complex model with numerical consistency checks |
+| Ground Scheme (2026a) | Rust (regression) | Components parity-gated vs vendored upstream in `tests/spec/test_parity_2026a.py`; golden pins the fused composition |
 
 ## Running Tests
 
