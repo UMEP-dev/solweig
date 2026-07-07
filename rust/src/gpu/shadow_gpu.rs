@@ -306,6 +306,10 @@ pub struct GpuShadowResult {
     pub bldg_sh: Array2<f32>,
     pub veg_sh: Option<Array2<f32>>,
     pub veg_blocks_bldg_sh: Option<Array2<f32>>,
+    // Propagated shadow-height volumes, read back only for walls-scheme
+    // calls (need_propagated_heights): shade_on_walls consumes them on the
+    // CPU side to compute scheme wall shadows.
+    pub propagated_bldg_height: Option<Array2<f32>>,
     pub propagated_veg_height: Option<Array2<f32>>,
     pub wall_sh: Option<Array2<f32>>,
     pub wall_sun: Option<Array2<f32>>,
@@ -1146,7 +1150,7 @@ impl ShadowGpuContext {
         bush_opt: Option<ArrayView2<f32>>,
         walls_opt: Option<ArrayView2<f32>>,
         aspect_opt: Option<ArrayView2<f32>>,
-        need_propagated_veg_height: bool,
+        need_propagated_heights: bool,
         need_full_wall_outputs: bool,
         azimuth_deg: f32,
         altitude_deg: f32,
@@ -1315,7 +1319,8 @@ impl ShadowGpuContext {
         }
 
         // Copy only required outputs to staging to reduce readback bandwidth.
-        let include_prop_veg = has_veg && need_propagated_veg_height;
+        let include_prop_veg = has_veg && need_propagated_heights;
+        let include_prop_bldg = need_propagated_heights;
         let mut write_offset = 0u64;
         encoder.copy_buffer_to_buffer(
             &buffers.bldg_shadow_buffer,
@@ -1325,6 +1330,17 @@ impl ShadowGpuContext {
             buffer_size,
         );
         write_offset += buffer_size;
+
+        if include_prop_bldg {
+            encoder.copy_buffer_to_buffer(
+                &buffers.propagated_bldg_height_buffer,
+                0,
+                &buffers.staging_buffer,
+                write_offset,
+                buffer_size,
+            );
+            write_offset += buffer_size;
+        }
 
         if has_veg {
             encoder.copy_buffer_to_buffer(
@@ -1436,6 +1452,18 @@ impl ShadowGpuContext {
         .map_err(|e| format!("Failed to create building shadow array: {}", e))?;
         read_offset_px += total_pixels;
 
+        let propagated_bldg_height = if include_prop_bldg {
+            let arr = Array2::from_shape_vec(
+                (rows, cols),
+                all_data[read_offset_px..read_offset_px + total_pixels].to_vec(),
+            )
+            .map_err(|e| format!("Failed to create propagated building height array: {}", e))?;
+            read_offset_px += total_pixels;
+            Some(arr)
+        } else {
+            None
+        };
+
         // Extract vegetation results if enabled
         let (veg_sh, veg_blocks_bldg_sh, propagated_veg_height) = if has_veg {
             let veg_sh = Array2::from_shape_vec(
@@ -1523,6 +1551,7 @@ impl ShadowGpuContext {
             bldg_sh,
             veg_sh,
             veg_blocks_bldg_sh,
+            propagated_bldg_height,
             propagated_veg_height,
             wall_sh,
             wall_sun,

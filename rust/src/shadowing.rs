@@ -244,9 +244,18 @@ pub(crate) fn calculate_shadows_rust(
         };
     }
 
-    // GPU acceleration path: use GPU if available for all shadow types
+    // GPU acceleration path: use GPU if available for all shadow types.
+    //
+    // Walls-scheme calls (a second walls/aspect set, used by UMEP's wall
+    // surface temperature feature) request the propagated building/vegetation
+    // shadow-height volumes from the GPU (need_propagated_heights) and run
+    // shade_on_walls on them CPU-side — the same inputs the CPU path uses,
+    // so GPU and CPU scheme wall shadows agree (gated by
+    // tests/spec/test_gpu_cpu_parity.py).
     #[cfg(feature = "gpu")]
     {
+        let scheme_requested =
+            walls_scheme_view_opt.is_some() && aspect_scheme_view_opt.is_some();
         if let Some(gpu_ctx) = get_gpu_context() {
             // Pass ArrayView directly - GPU will handle conversion efficiently
             match gpu_ctx.compute_all_shadows_view(
@@ -256,7 +265,7 @@ pub(crate) fn calculate_shadows_rust(
                 bush_view_opt,
                 walls_view_opt,
                 aspect_view_opt,
-                walls_scheme_view_opt.is_some() && aspect_scheme_view_opt.is_some(),
+                scheme_requested, // need_propagated_heights
                 need_full_wall_outputs,
                 azimuth_deg,
                 altitude_deg,
@@ -265,45 +274,46 @@ pub(crate) fn calculate_shadows_rust(
                 min_sun_elev_deg,
                 max_shadow_distance_m,
             ) {
-                Ok(gpu_result) => {
+                // Defensive: the readback is always present when requested;
+                // if it ever is not, treat the dispatch as failed and fall
+                // through to the CPU path rather than degrade the physics.
+                Ok(gpu_result)
+                    if !scheme_requested || gpu_result.propagated_bldg_height.is_some() =>
+                {
                     record_gpu_dispatch();
-                    // Handle sh_on_wall if wall scheme is present
-                    let sh_on_wall = if let (Some(walls_scheme_view), Some(aspect_scheme_view)) =
-                        (walls_scheme_view_opt, aspect_scheme_view_opt)
-                    {
-                        // Need to compute scheme-based wall shadows on CPU for now
-                        // since it requires a second set of walls/aspect inputs
-                        if let (Some(ref _bldg_sh), Some(ref _veg_sh)) =
-                            (&Some(gpu_result.bldg_sh.clone()), &gpu_result.veg_sh)
-                        {
-                            // Create propagated heights from GPU results
-                            let mut prop_bldg_h = Array2::<f32>::zeros(dim);
-                            prop_bldg_h.assign(&dsm_view);
-
-                            let prop_veg_h = gpu_result
-                                .propagated_veg_height
-                                .clone()
-                                .unwrap_or_else(|| Array2::<f32>::zeros(dim));
-
-                            let (scheme_wall_sh, _, scheme_wall_sh_veg, _, _) = shade_on_walls(
-                                azimuth_deg.to_radians(),
-                                aspect_scheme_view,
-                                walls_scheme_view,
-                                dsm_view,
-                                prop_bldg_h.view(),
-                                prop_veg_h.view(),
-                            );
-
-                            let mut sh_on_wall_combined =
-                                Array2::<f32>::zeros(scheme_wall_sh.dim());
-                            Zip::from(&mut sh_on_wall_combined)
-                                .and(&scheme_wall_sh)
-                                .and(&scheme_wall_sh_veg)
-                                .par_for_each(|sow, &wsh, &wsv| *sow = f32::max(wsh, wsv));
-                            Some(sh_on_wall_combined)
-                        } else {
-                            None
-                        }
+                    let sh_on_wall = if let (
+                        Some(walls_scheme_view),
+                        Some(aspect_scheme_view),
+                        Some(ref prop_bldg_h),
+                    ) = (
+                        walls_scheme_view_opt,
+                        aspect_scheme_view_opt,
+                        gpu_result.propagated_bldg_height.as_ref(),
+                    ) {
+                        // Without vegetation the CPU path feeds a zero
+                        // vegetation shadow volume; mirror that here.
+                        let prop_veg_zeros;
+                        let prop_veg_view = match gpu_result.propagated_veg_height.as_ref() {
+                            Some(v) => v.view(),
+                            None => {
+                                prop_veg_zeros = Array2::<f32>::zeros(dim);
+                                prop_veg_zeros.view()
+                            }
+                        };
+                        let (scheme_wall_sh, _, scheme_wall_sh_veg, _, _) = shade_on_walls(
+                            azimuth_deg.to_radians(),
+                            aspect_scheme_view,
+                            walls_scheme_view,
+                            dsm_view,
+                            prop_bldg_h.view(),
+                            prop_veg_view,
+                        );
+                        let mut sh_on_wall_combined = Array2::<f32>::zeros(scheme_wall_sh.dim());
+                        Zip::from(&mut sh_on_wall_combined)
+                            .and(&scheme_wall_sh)
+                            .and(&scheme_wall_sh_veg)
+                            .par_for_each(|sow, &wsh, &wsv| *sow = f32::max(wsh, wsv));
+                        Some(sh_on_wall_combined)
                     } else {
                         None
                     };
@@ -323,6 +333,13 @@ pub(crate) fn calculate_shadows_rust(
                         face_sun: gpu_result.face_sun,
                         sh_on_wall,
                     };
+                }
+                Ok(_) => {
+                    eprintln!(
+                        "[GPU] Scheme wall shadows requested but propagated height readback missing. Falling back to CPU."
+                    );
+                    record_gpu_fallback();
+                    // Fall through to CPU path
                 }
                 Err(e) => {
                     eprintln!(

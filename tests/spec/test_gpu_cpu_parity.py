@@ -323,3 +323,89 @@ def test_disable_gpu_actually_disables_all_paths(tmp_path: Path):
         )
     finally:
         solweig.enable_gpu()
+
+
+@pytest.mark.parametrize("with_vegetation", [True, False], ids=["veg", "no-veg"])
+def test_walls_scheme_shadow_gpu_vs_cpu_match(with_vegetation):
+    """Scheme wall shadows (sh_on_wall) must match GPU vs CPU.
+
+    Regression gate for the walls-scheme GPU branch, which previously fed
+    the raw DSM into shade_on_walls (zero building shadow volume on scheme
+    walls) and returned sh_on_wall = None when vegetation was absent. The
+    GPU path now reads the propagated building/vegetation shadow-height
+    volumes back from the kernel; this pins GPU == CPU for both cases and
+    that the building term is actually nonzero.
+    """
+    if not solweig.is_gpu_available():
+        pytest.skip("GPU not available on this host")
+
+    from solweig.physics import wallalgorithms as wa
+    from solweig.rustalgos import shadowing as rust_shadowing
+
+    shape = (80, 80)
+    dsm = np.ones(shape, dtype=np.float32) * 2.0
+    dsm[20:32, 20:32] = 9.0
+    dsm[48:60, 44:56] = 12.0
+
+    walls = wa.findwalls(dsm, 1.0).astype(np.float32)
+    aspect = wa.filter1Goodwin_as_aspect_v3(walls, 1.0, dsm).astype(np.float32)
+
+    if with_vegetation:
+        cdsm = np.zeros(shape, dtype=np.float32)
+        cdsm[60:72, 12:24] = 6.0
+        cdsm = cdsm + dsm * (cdsm > 0)  # absolute canopy heights
+        tdsm = (cdsm * 0.25).astype(np.float32)
+        bush = np.zeros(shape, dtype=np.float32)
+        veg_args = (cdsm, tdsm, bush)
+    else:
+        veg_args = (None, None, None)
+
+    def run() -> dict:
+        result = rust_shadowing.calculate_shadows_wall_ht_25(
+            140.0,  # azimuth_deg
+            35.0,  # altitude_deg
+            1.0,  # scale (m/px)
+            10.0,  # max_local_dsm_ht (relief)
+            dsm,
+            veg_args[0],
+            veg_args[1],
+            veg_args[2],
+            walls,
+            aspect,
+            walls,  # walls_scheme (same grid: exercises the scheme path)
+            aspect,  # aspect_scheme
+            3.0,  # min_sun_elev_deg
+            1000.0,  # max_shadow_distance_m
+        )
+        return {
+            "bldg_sh": np.asarray(result.bldg_sh),
+            "sh_on_wall": None if result.sh_on_wall is None else np.asarray(result.sh_on_wall),
+        }
+
+    solweig.enable_gpu()
+    solweig.reset_gpu_metrics()
+    gpu = run()
+    if solweig.gpu_dispatch_count() == 0:
+        pytest.skip("GPU path did not dispatch on this host")
+
+    solweig.disable_gpu()
+    try:
+        cpu = run()
+    finally:
+        solweig.enable_gpu()
+
+    # The old GPU branch returned None here whenever vegetation was absent.
+    assert gpu["sh_on_wall"] is not None, "GPU scheme path returned no sh_on_wall"
+    assert cpu["sh_on_wall"] is not None, "CPU scheme path returned no sh_on_wall"
+
+    np.testing.assert_allclose(gpu["bldg_sh"], cpu["bldg_sh"], atol=1e-3)
+    np.testing.assert_allclose(
+        gpu["sh_on_wall"],
+        cpu["sh_on_wall"],
+        atol=1e-3,
+        err_msg="scheme wall shadow heights diverge between GPU and CPU",
+    )
+    # Building shadow volume must contribute: the old GPU branch produced
+    # identically zero building terms on scheme walls.
+    assert np.count_nonzero(cpu["sh_on_wall"]) > 0
+    assert np.count_nonzero(gpu["sh_on_wall"]) > 0
