@@ -61,6 +61,7 @@ def _arr_key(arr):
 
 if TYPE_CHECKING:
     from .api import HumanParams, Location, PrecomputedData, SolweigResult, SurfaceData, ThermalState, Weather
+    from .components.ground_scheme import GroundSchemeState
 
 
 def calculate_core_fused(
@@ -76,6 +77,7 @@ def calculate_core_fused(
     wall_material: str | None = None,
     use_anisotropic_sky: bool = False,
     max_shadow_distance_m: float | None = None,
+    ground_scheme_state: GroundSchemeState | None = None,
     return_state_copy: bool = True,
     requested_outputs: set[str] | None = None,
 ) -> SolweigResult:
@@ -102,6 +104,11 @@ def calculate_core_fused(
         wall_material: Wall material type ("brick", "concrete", "wood", "cobblestone").
         use_anisotropic_sky: Use anisotropic (Perez) diffuse sky model.
         max_shadow_distance_m: Maximum shadow reach in metres.
+        ground_scheme_state: UMEP 2026a ground-surface scheme state (force-restore
+            surface temperature + solid-angle outgoing longwave). When provided,
+            the scheme replaces the classic sinusoidal Tg / GVF path; its carried
+            arrays (tg, rn, rn_past, g, shadow_past) are mutated in place for the
+            next timestep. None (default) runs the byte-identical baseline.
         return_state_copy: If True, return a deep-copied thermal state.
         requested_outputs: Set of output names to materialize (None = all).
 
@@ -164,6 +171,11 @@ def calculate_core_fused(
     full_area = rows * cols
     crop_area = (r1 - r0) * (c1 - c0)
     use_crop = (r0, r1, c0, c1) != (0, rows, 0, cols) and crop_area < int(full_area * 0.98)
+    # The ground scheme carries per-pixel state (Tg, fluxes, shadow_past) and
+    # marches ~11 m across the grid; run it on the full raster so the carried
+    # state and the march are not truncated to the valid bounding box.
+    if ground_scheme_state is not None:
+        use_crop = False
     crop_slice = (slice(r0, r1), slice(c0, c1))
 
     # Select which non-Tmrt outputs to materialize from Rust.
@@ -181,6 +193,11 @@ def calculate_core_fused(
             output_mask |= _OUT_LDOWN
         if "lup" in requested_outputs:
             output_mask |= _OUT_LUP
+
+    # The ground scheme carries shadow_past forward from the shadow the Rust
+    # side returns, so shadow must always be materialised when it is active.
+    if ground_scheme_state is not None:
+        output_mask |= _OUT_SHADOW
 
     # Land cover properties
     lc_props_key = (_arr_key(optical.land_cover), _arr_key(optical.albedo), _arr_key(optical.emissivity), id(materials))
@@ -343,8 +360,10 @@ def calculate_core_fused(
 
     # GVF geometry cache: precompute on first daytime call, reuse on subsequent.
     # Keep separate caches for full-grid and cropped-grid execution.
+    # The 2026a ground scheme replaces the GVF step with the solid-angle march,
+    # so the geometry cache is never consulted there — skip the precompute.
     gvf_cache = None
-    if has_walls:
+    if has_walls and ground_scheme_state is None:
         assert wall_asp is not None  # guaranteed by has_walls
         assert wall_ht is not None
         if use_crop:
@@ -521,6 +540,28 @@ def calculate_core_fused(
         as_float32(tgout1_call),
     )
 
+    # Ground-scheme bundle (UMEP 2026a, opt-in). timestep_s comes from the
+    # thermal state's timestep_dec (fraction of a day → seconds).
+    gss = ground_scheme_state
+    rust_ground_scheme = None
+    if gss is not None:
+        rust_ground_scheme = pipeline.GroundSchemeBundle(
+            pipeline.GROUND_SCHEME_BUNDLE_VERSION,
+            float(state.timestep_dec) * 86400.0,
+            as_float32(gss.tg),
+            as_float32(gss.tm),
+            as_float32(gss.rn),
+            as_float32(gss.rn_past),
+            as_float32(gss.g),
+            as_float32(gss.cap),
+            as_float32(gss.diff),
+            as_float32(gss.a1),
+            as_float32(gss.a2),
+            as_float32(gss.a3),
+            as_float32(gss.lc_grid),
+            as_float32(gss.shadow_past),
+        )
+
     result = pipeline.compute_timestep(
         # Scalar structs
         ws,
@@ -543,6 +584,8 @@ def calculate_core_fused(
         aniso_vbshmat,
         # Thermal state (9 fields bundled with explicit FFI version check)
         rust_state_bundle,
+        # UMEP 2026a ground scheme (None = classic byte-identical path)
+        rust_ground_scheme,
         # Valid pixel mask for early NaN exit
         valid_mask_call,
         output_mask,
@@ -571,6 +614,16 @@ def calculate_core_fused(
     else:
         state.firstdaytime = 1.0
         state.timeadd = 0.0
+
+    # Carry the ground-scheme state forward (scheme active → Rust returned
+    # the updated force-restore state; shadow_past becomes this shadow).
+    if gss is not None:
+        assert result.tg is not None, "scheme active but Rust returned no tg"
+        gss.tg = np.asarray(result.tg)
+        gss.rn = np.asarray(result.rn)
+        gss.rn_past = np.asarray(result.rn_past)
+        gss.g = np.asarray(result.g)
+        gss.shadow_past = np.asarray(result.shadow)
 
     output_state = state.copy() if return_state_copy else state
 

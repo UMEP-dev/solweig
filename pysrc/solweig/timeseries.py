@@ -133,6 +133,8 @@ def _calculate_timeseries(
     wall_material: str | None = None,
     max_shadow_distance_m: float | None = None,
     tile_size: int | None = None,
+    use_ground_scheme: bool | None = None,
+    use_outgoing_longwave: bool | None = None,
     *,
     output_dir: str | Path,
     outputs: list[str] | None = None,
@@ -189,6 +191,13 @@ def _calculate_timeseries(
             (default), auto-calculated from available GPU/RAM resources.
             Minimum 256. Small rasters that fit in a single tile are
             processed without tiling overhead.
+        use_ground_scheme: Opt into the UMEP 2026a force-restore/OHM ground
+            surface temperature scheme. Requires a land-cover grid and
+            ``use_outgoing_longwave=True``; incompatible with tiled
+            processing. Default None (= False).
+        use_outgoing_longwave: Opt into the UMEP 2026a solid-angle outgoing
+            longwave model. Must be enabled together with
+            ``use_ground_scheme``. Default None (= False).
         output_dir: Working directory for all output. Summary grids are always
             saved to ``output_dir/summary/``. Per-timestep GeoTIFFs are saved
             when ``outputs`` is specified.
@@ -275,6 +284,32 @@ def _calculate_timeseries(
             "The unified tile-outer timeseries path only honors tile_size."
         )
 
+    # ── UMEP 2026a ground-surface scheme (opt-in) ────────────────────────
+    # Resolve flags: per-call kwargs > ModelConfig > False.
+    if use_ground_scheme is None:
+        use_ground_scheme = bool(getattr(config, "use_ground_scheme", None)) if config else False
+    if use_outgoing_longwave is None:
+        use_outgoing_longwave = bool(getattr(config, "use_outgoing_longwave", None)) if config else False
+    if use_ground_scheme != use_outgoing_longwave:
+        from .errors import ConfigurationError
+
+        raise ConfigurationError(
+            parameter="use_ground_scheme",
+            reason=(
+                "the 2026a ground scheme is currently supported only with "
+                "use_ground_scheme and use_outgoing_longwave enabled together "
+                f"(got use_ground_scheme={use_ground_scheme}, "
+                f"use_outgoing_longwave={use_outgoing_longwave})"
+            ),
+        )
+    if use_ground_scheme and surface.land_cover is None:
+        from .errors import ConfigurationError
+
+        raise ConfigurationError(
+            parameter="use_ground_scheme",
+            reason="the 2026a ground scheme requires a land-cover grid on the surface",
+        )
+
     # Fill NaN in surface layers (idempotent — skipped if already done)
     surface.fill_nan()
 
@@ -321,6 +356,18 @@ def _calculate_timeseries(
     tiles = generate_tiles(rows, cols, adjusted_tile_size, buffer_pixels)
     n_tiles = len(tiles)
     n_steps = len(weather_series)
+
+    if use_ground_scheme and n_tiles > 1:
+        from .errors import ConfigurationError
+
+        raise ConfigurationError(
+            parameter="use_ground_scheme",
+            reason=(
+                f"the 2026a ground scheme does not yet support tiled processing "
+                f"(raster needs {n_tiles} tiles); reduce the raster size or set an "
+                "explicit tile_size that fits the whole raster"
+            ),
+        )
 
     # ── Logging ──────────────────────────────────────────────────────────
     logger.info("=" * 60)
@@ -453,6 +500,24 @@ def _calculate_timeseries(
             tile_precomputed = _slice_tile_precomputed(precomputed, tile)
             tile_state = ThermalState.initial(tile.full_shape)
             tile_state.timestep_dec = timestep_dec
+
+            # Ground-scheme state (UMEP 2026a, opt-in): parameter grids and
+            # initial temperatures from the first day's Ta series. Carried
+            # across timesteps like the thermal state (mutated in place).
+            tile_gss = None
+            if use_ground_scheme:
+                from .components.ground_scheme import initiate_ground_scheme
+
+                first_day = weather_series[0].datetime.date()
+                ta_first_day = [w.ta for w in weather_series if w.datetime.date() == first_day]
+                assert tile_surface.land_cover is not None  # validated before the tile loop
+                tile_gss = initiate_ground_scheme(
+                    tile_surface.land_cover,
+                    materials,
+                    weather_series[0].datetime.timetuple().tm_yday,
+                    ta_first_day,
+                    location.latitude,
+                )
             tile_accum = GridAccumulator(
                 shape=tile.full_shape,
                 heat_thresholds_day=heat_thresh_day,
@@ -476,6 +541,7 @@ def _calculate_timeseries(
                     materials=materials,
                     wall_material=wall_material,
                     max_shadow_distance_m=eff_max_shadow,
+                    ground_scheme_state=tile_gss,
                     return_state_copy=False,
                     _requested_outputs=requested_outputs,
                 )
@@ -565,7 +631,7 @@ def _calculate_timeseries(
 
             if _tile_progress is not None:
                 _tile_progress.close()
-            del tile_surface, tile_precomputed, tile_state, tile_accum, tile_summary
+            del tile_surface, tile_precomputed, tile_state, tile_gss, tile_accum, tile_summary
         tile_loop_completed = True
     finally:
         if _tiled_writer is not None and not tile_loop_completed:

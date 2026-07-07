@@ -67,7 +67,7 @@ from .tiling import (
 from .utils import dict_to_namespace, extract_bounds, intersect_bounds, namespace_to_dict, resample_to_grid
 
 if TYPE_CHECKING:
-    pass
+    from .components.ground_scheme import GroundSchemeState
 
 logger = get_logger(__name__)
 
@@ -258,10 +258,17 @@ def _calculate_single(
     materials: SimpleNamespace | None = None,
     wall_material: str | None = None,
     max_shadow_distance_m: float | None = None,
+    ground_scheme_state: GroundSchemeState | None = None,
     return_state_copy: bool = True,
     _requested_outputs: set[str] | None = None,
 ) -> SolweigResult:
-    """Single-timestep Rust FFI call. Internal building block for calculate()."""
+    """Single-timestep Rust FFI call. Internal building block for calculate().
+
+    ``ground_scheme_state`` activates the opt-in UMEP 2026a ground-surface
+    scheme (see :func:`solweig.components.ground_scheme.initiate_ground_scheme`);
+    its carried arrays are updated in place each call. None (default) runs the
+    validated baseline physics unchanged.
+    """
     from .models.settings import Settings
 
     # Track whether anisotropic mode was explicitly requested by direct API arg.
@@ -331,6 +338,7 @@ def _calculate_single(
         wall_material=settings.wall_material,
         use_anisotropic_sky=settings.use_anisotropic_sky,
         max_shadow_distance_m=settings.max_shadow_distance_m,
+        ground_scheme_state=ground_scheme_state,
         return_state_copy=return_state_copy,
         requested_outputs=_requested_outputs,
     )
@@ -352,6 +360,8 @@ def calculate(
     wall_material: str | None = None,
     max_shadow_distance_m: float | None = None,
     tile_size: int | None = None,
+    use_ground_scheme: bool | None = None,
+    use_outgoing_longwave: bool | None = None,
     outputs: list[str] | None = None,
     heat_thresholds_day: list[float] | None = None,
     heat_thresholds_night: list[float] | None = None,
@@ -380,6 +390,13 @@ def calculate(
         max_shadow_distance_m: Maximum shadow reach in metres (default 1000.0).
         tile_size: Core tile side in pixels for tiled processing. If None
             (default), auto-calculated from available resources. Minimum 256.
+        use_ground_scheme: Opt into the UMEP 2026a ground surface temperature
+            scheme (force-restore/OHM, Bridoux). Requires a land-cover grid and
+            ``use_outgoing_longwave=True``; incompatible with tiled processing.
+            Default None (= False): the validated baseline physics.
+        use_outgoing_longwave: Opt into the UMEP 2026a solid-angle outgoing
+            longwave model. Must currently be enabled together with
+            ``use_ground_scheme``. Default None (= False).
         output_dir: Working directory for all output. Summary grids are always
             saved to ``output_dir/summary/``. Per-timestep GeoTIFFs are saved
             when ``outputs`` is specified.
@@ -445,6 +462,8 @@ def calculate(
         wall_material=wall_material,
         max_shadow_distance_m=max_shadow_distance_m,
         tile_size=tile_size,
+        use_ground_scheme=use_ground_scheme,
+        use_outgoing_longwave=use_outgoing_longwave,
         output_dir=output_dir,
         outputs=outputs,
         heat_thresholds_day=heat_thresholds_day,

@@ -209,7 +209,12 @@ fn register_pipeline_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
     submodule.add_class::<pipeline::StateBundle>()?;
     submodule.add_class::<pipeline::PropertiesBundle>()?;
     submodule.add_class::<pipeline::SurfaceBundle>()?;
+    submodule.add_class::<pipeline::GroundSchemeBundle>()?;
     submodule.add("STATE_BUNDLE_VERSION", pipeline::STATE_BUNDLE_VERSION)?;
+    submodule.add(
+        "GROUND_SCHEME_BUNDLE_VERSION",
+        pipeline::GROUND_SCHEME_BUNDLE_VERSION,
+    )?;
     submodule.add_function(wrap_pyfunction!(pipeline::compute_timestep, &submodule)?)?;
     submodule.add_function(wrap_pyfunction!(
         pipeline::precompute_gvf_cache,

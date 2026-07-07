@@ -11,6 +11,7 @@ use pyo3::prelude::*;
 use std::sync::OnceLock;
 
 use crate::ground::{compute_ground_temperature_pure, ts_wave_delay_batch_pure, GroundTempResult};
+use crate::ground_surface::{outgoing_longwave_calc_pure, surface_temperature_calc_pure};
 use crate::gvf::{gvf_calc_pure, gvf_calc_with_cache, GvfResultPure};
 #[cfg(feature = "gpu")]
 use crate::gvf::gvf_calc_with_cache_gpu;
@@ -18,7 +19,7 @@ use crate::gvf_geometry::{precompute_gvf_geometry, GvfGeometryCache};
 use crate::shadowing::{calculate_shadows_rust, ShadowingResultRust};
 use crate::sky::{anisotropic_sky_pure, cylindric_wedge_pure_masked};
 use crate::tmrt::compute_tmrt_from_dir_sums_pure;
-use crate::vegetation::{kside_veg_isotropic_pure, lside_veg_pure};
+use crate::vegetation::{kside_veg_isotropic_pure, lside_veg_pure, lside_veg_variant_pure, LsideVariant};
 
 #[cfg(feature = "gpu")]
 use crate::gpu::AnisoGpuContext;
@@ -176,6 +177,16 @@ pub struct TimestepResult {
     pub tgmap1_n: Py<PyArray2<f32>>,
     #[pyo3(get)]
     pub tgout1: Py<PyArray2<f32>>,
+    // Updated ground-scheme state (Some only when the 2026a ground scheme ran;
+    // Python carries these forward like the thermal state above).
+    #[pyo3(get)]
+    pub tg: Option<Py<PyArray2<f32>>>,
+    #[pyo3(get)]
+    pub rn: Option<Py<PyArray2<f32>>>,
+    #[pyo3(get)]
+    pub rn_past: Option<Py<PyArray2<f32>>>,
+    #[pyo3(get)]
+    pub g: Option<Py<PyArray2<f32>>>,
 }
 
 /// Raw result struct with owned arrays (no Python types — Send-safe).
@@ -193,6 +204,10 @@ struct TimestepResultRaw {
     tgmap1_w: Array2<f32>,
     tgmap1_n: Array2<f32>,
     tgout1: Array2<f32>,
+    tg: Option<Array2<f32>>,
+    rn: Option<Array2<f32>>,
+    rn_past: Option<Array2<f32>>,
+    g: Option<Array2<f32>>,
 }
 
 const OUT_SHADOW: u32 = 1 << 0;
@@ -293,7 +308,8 @@ pub fn precompute_gvf_cache(
 // file focused on the orchestration logic. Re-exported here so consumers of
 // `crate::pipeline::{SvfBundle, ...}` keep working unchanged.
 pub use crate::pipeline_bundles::{
-    PropertiesBundle, STATE_BUNDLE_VERSION, StateBundle, SurfaceBundle, SvfBundle,
+    GROUND_SCHEME_BUNDLE_VERSION, GroundSchemeBundle, PropertiesBundle, STATE_BUNDLE_VERSION,
+    StateBundle, SurfaceBundle, SvfBundle,
 };
 
 // ── Main fused timestep function ───────────────────────────────────────────
@@ -335,6 +351,9 @@ pub fn compute_timestep(
     vbshmat: Option<PyReadonlyArray3<u8>>,
     // Thermal state (6 arrays + 3 scalars + version) bundled into one pyclass.
     state_bundle: &StateBundle,
+    // UMEP 2026a ground-surface scheme inputs + carried state (None = classic
+    // Lindberg et al. ground temperature + GVF path, byte-identical baseline).
+    ground_scheme: Option<&GroundSchemeBundle>,
     // Valid pixel mask (1=valid, 0=NaN/nodata — skip computation for invalid pixels)
     valid_mask: PyReadonlyArray2<u8>,
     // Optional output selection bitmask for Python conversion (tmrt always returned)
@@ -423,6 +442,37 @@ pub fn compute_timestep(
     let firstdaytime = state_bundle.firstdaytime;
     let timeadd = state_bundle.timeadd;
     let timestep_dec = state_bundle.timestep_dec;
+
+    // Bind ground-scheme arrays from the bundle (if the 2026a scheme is active).
+    // Same lifetime pattern as the other bundles: the *_ro binders outlive the
+    // *_v ArrayView2s. Absent bundle → all None → classic path runs.
+    let sch = ground_scheme;
+    let sch_timestep_s = sch.map(|s| s.timestep_s);
+    let sch_tg_ro = sch.map(|s| s.tg.bind(py).readonly());
+    let sch_tm_ro = sch.map(|s| s.tm.bind(py).readonly());
+    let sch_rn_ro = sch.map(|s| s.rn.bind(py).readonly());
+    let sch_rn_past_ro = sch.map(|s| s.rn_past.bind(py).readonly());
+    let sch_g_ro = sch.map(|s| s.g.bind(py).readonly());
+    let sch_cap_ro = sch.map(|s| s.cap.bind(py).readonly());
+    let sch_diff_ro = sch.map(|s| s.diff.bind(py).readonly());
+    let sch_a1_ro = sch.map(|s| s.a1.bind(py).readonly());
+    let sch_a2_ro = sch.map(|s| s.a2.bind(py).readonly());
+    let sch_a3_ro = sch.map(|s| s.a3.bind(py).readonly());
+    let sch_lc_ro = sch.map(|s| s.lc_grid.bind(py).readonly());
+    let sch_shadow_past_ro = sch.map(|s| s.shadow_past.bind(py).readonly());
+    let sch_tg_v = sch_tg_ro.as_ref().map(|a| a.as_array());
+    let sch_tm_v = sch_tm_ro.as_ref().map(|a| a.as_array());
+    let sch_rn_v = sch_rn_ro.as_ref().map(|a| a.as_array());
+    let sch_rn_past_v = sch_rn_past_ro.as_ref().map(|a| a.as_array());
+    let sch_g_v = sch_g_ro.as_ref().map(|a| a.as_array());
+    let sch_cap_v = sch_cap_ro.as_ref().map(|a| a.as_array());
+    let sch_diff_v = sch_diff_ro.as_ref().map(|a| a.as_array());
+    let sch_a1_v = sch_a1_ro.as_ref().map(|a| a.as_array());
+    let sch_a2_v = sch_a2_ro.as_ref().map(|a| a.as_array());
+    let sch_a3_v = sch_a3_ro.as_ref().map(|a| a.as_array());
+    let sch_lc_v = sch_lc_ro.as_ref().map(|a| a.as_array());
+    let sch_shadow_past_v = sch_shadow_past_ro.as_ref().map(|a| a.as_array());
+    let use_scheme = sch.is_some();
 
     // Borrow anisotropic arrays (if provided)
     let shmat_v = shmat.as_ref().map(|a| a.as_array());
@@ -564,6 +614,390 @@ pub fn compute_timestep(
             } else {
                 ground
             };
+
+            // ── UMEP 2026a ground-surface scheme (opt-in) ────────────────────────
+            // When active, the force-restore/OHM surface temperature replaces the
+            // classic sinusoidal Tg, and the solid-angle outgoing-longwave march
+            // supplies Lup / gvfalb* / directional side longwave (replacing the
+            // GVF + thermal-delay steps). The classic wall temperature
+            // (ground.tg_wall) is retained. Ordering follows Solweig_2026a_calc.
+            if use_scheme {
+                let timestep_s = sch_timestep_s.expect("scheme: timestep_s");
+                let tg_state = sch_tg_v.expect("scheme: tg");
+                let tm_state = sch_tm_v.expect("scheme: tm");
+                let rn_state = sch_rn_v.expect("scheme: rn");
+                let rn_past_state = sch_rn_past_v.expect("scheme: rn_past");
+                let g_state = sch_g_v.expect("scheme: g");
+                let cap_v = sch_cap_v.expect("scheme: cap");
+                let diff_v = sch_diff_v.expect("scheme: diff");
+                let a1_v = sch_a1_v.expect("scheme: a1");
+                let a2_v = sch_a2_v.expect("scheme: a2");
+                let a3_v = sch_a3_v.expect("scheme: a3");
+                let lc_scheme_v = sch_lc_v.expect("scheme: lc_grid");
+                let shadow_past_v = sch_shadow_past_v.expect("scheme: shadow_past");
+
+                // Upstream zeros the shadow grid at night (altitude <= 0); both
+                // the surface-temperature damping mask and the march consume it.
+                let scheme_shadow = if weather.is_daytime {
+                    shadow_f32.clone()
+                } else {
+                    Array2::<f32>::zeros(shape)
+                };
+
+                let esky = compute_esky(weather.ta, weather.rh);
+                let zen_rad = weather.sun_zenith * PI / 180.0;
+                let f_sh = cylindric_wedge_pure_masked(zen_rad, svfalfa_v, Some(valid_v));
+                let sin_alt = (weather.sun_altitude * PI / 180.0).sin();
+                let rad_i = weather.direct_rad;
+                let rad_d = weather.diffuse_rad;
+                let rad_g = weather.global_rad;
+                let psi = weather.psi;
+                let cyl = human.is_standing;
+
+                let use_aniso = config.use_anisotropic
+                    && shmat_v.is_some()
+                    && vegshmat_v.is_some()
+                    && vbshmat_v.is_some();
+
+                // Anisotropic setup (Perez luminance + CI-corrected esky). The
+                // scheme uses the CPU sky solver only; GPU aniso for the scheme
+                // is future work and produces identical results.
+                let (lv_arr, esky_a) = if use_aniso {
+                    let lv = crate::perez::perez_v3(
+                        weather.zen_deg,
+                        weather.sun_azimuth,
+                        weather.diffuse_rad,
+                        weather.direct_rad,
+                        weather.jday,
+                        weather.patch_option,
+                    );
+                    let ci = weather.clearness_index;
+                    let ea = if ci < 0.95 { ci * esky + (1.0 - ci) } else { esky };
+                    (Some(lv), ea)
+                } else {
+                    (None, esky)
+                };
+
+                // Diffuse shortwave into each cell (drad)
+                let drad = if use_aniso {
+                    let lv = lv_arr.as_ref().expect("lv gated by use_aniso");
+                    let shmat_a = shmat_v.expect("shmat: gated by use_aniso");
+                    let vegshmat_a = vegshmat_v.expect("vegshmat: gated by use_aniso");
+                    let ani_lum = compute_ani_lum_from_packed(
+                        shmat_a,
+                        vegshmat_a,
+                        lv.column(2),
+                        psi,
+                        valid_v,
+                    );
+                    ani_lum.mapv(|v| v * rad_d)
+                } else {
+                    svfbuveg_v.mapv(|sv| rad_d * sv)
+                };
+
+                // Kdown (identical formula to the classic path)
+                let kdown = compute_kdown(
+                    rad_i,
+                    rad_d,
+                    rad_g,
+                    scheme_shadow.view(),
+                    sin_alt,
+                    svfbuveg_v,
+                    config.albedo_wall,
+                    f_sh.view(),
+                    drad.view(),
+                    valid_v,
+                );
+
+                // Isotropic Ldown — the value fed to the surface-temperature ODE,
+                // the march, and Lside_veg_v2026 (the anisotropic sky reassigns
+                // the Tmrt Ldown below, matching upstream).
+                let ldown_iso = compute_ldown(
+                    esky,
+                    weather.ta,
+                    ground.tg_wall,
+                    svf_v,
+                    svf_veg_v,
+                    svf_aveg_v,
+                    config.emis_wall,
+                    weather.clearness_index,
+                    valid_v,
+                );
+
+                // Force-restore/OHM surface temperature step → new Tg + fluxes.
+                let st = surface_temperature_calc_pure(
+                    kdown.view(),
+                    ldown_iso.view(),
+                    rn_state,
+                    rn_past_state,
+                    g_state,
+                    tg_state,
+                    tm_state,
+                    alb_grid_v,
+                    emis_grid_v,
+                    cap_v,
+                    diff_v,
+                    lc_scheme_v,
+                    a1_v,
+                    a2_v,
+                    a3_v,
+                    timestep_s,
+                    weather.rh,
+                    scheme_shadow.view(),
+                    shadow_past_v,
+                );
+
+                // Outgoing-longwave solid-angle march. Walls default to zeros
+                // when the scene has none (no wall longwave contribution).
+                let walls_owned: Array2<f32> = if config.has_walls {
+                    wall_ht_v
+                        .expect("wall_ht: gated by config.has_walls=true")
+                        .to_owned()
+                } else {
+                    Array2::<f32>::zeros(shape)
+                };
+                let march = outgoing_longwave_calc_pure(
+                    st.tg.view(),
+                    ground.tg_wall,
+                    weather.ta,
+                    ldown_iso.view(),
+                    emis_grid_v,
+                    alb_grid_v,
+                    buildings_v,
+                    scheme_shadow.view(),
+                    wallsun.view(),
+                    walls_owned.view(),
+                    config.pixel_size,
+                );
+
+                // Kup from the march's albedo view factors (gvfalbsun→gvfalb,
+                // gvfalbtot→gvfalbnosh).
+                let (kup, kup_e, kup_s, kup_w, kup_n) = compute_kup(
+                    rad_i,
+                    rad_d,
+                    rad_g,
+                    weather.sun_altitude,
+                    svfbuveg_v,
+                    config.albedo_wall,
+                    f_sh.view(),
+                    march.gvfalbsun.view(),
+                    march.gvfalbsun_e.view(),
+                    march.gvfalbsun_s.view(),
+                    march.gvfalbsun_w.view(),
+                    march.gvfalbsun_n.view(),
+                    march.gvfalbtot.view(),
+                    march.gvfalbtot_e.view(),
+                    march.gvfalbtot_s.view(),
+                    march.gvfalbtot_w.view(),
+                    march.gvfalbtot_n.view(),
+                    valid_v,
+                );
+
+                // Lside_veg_v2026: reflection loses the Lup term; the ground
+                // longwave leaves Lside entirely (supplied by the march's
+                // gvfLside*). The anisotropic branch returns zeros. The Lup*
+                // slots are unused by V2026 — Ldown stands in.
+                let lside = lside_veg_variant_pure(
+                    LsideVariant::V2026,
+                    svf_s_v,
+                    svf_w_v,
+                    svf_n_v,
+                    svf_e_v,
+                    svf_veg_e_v,
+                    svf_veg_s_v,
+                    svf_veg_w_v,
+                    svf_veg_n_v,
+                    svf_aveg_e_v,
+                    svf_aveg_s_v,
+                    svf_aveg_w_v,
+                    svf_aveg_n_v,
+                    weather.sun_azimuth,
+                    weather.sun_altitude,
+                    weather.ta,
+                    ground.tg_wall,
+                    SBC,
+                    config.emis_wall,
+                    ldown_iso.view(),
+                    esky,
+                    0.0,
+                    f_sh.view(),
+                    weather.clearness_index,
+                    ldown_iso.view(),
+                    ldown_iso.view(),
+                    ldown_iso.view(),
+                    ldown_iso.view(),
+                    use_aniso,
+                    Some(valid_v),
+                );
+
+                let (kdown_out, ldown_out, kside_dirs_sum, lside_dirs_sum, kside_total, lside_total) =
+                    if use_aniso {
+                        let shmat_a = shmat_v.expect("shmat: gated by use_aniso");
+                        let vegshmat_a = vegshmat_v.expect("vegshmat: gated by use_aniso");
+                        let vbshmat_a = vbshmat_v.expect("vbshmat: gated by use_aniso");
+                        let lv = lv_arr.as_ref().expect("lv gated by use_aniso");
+                        let patch_lut = patch_lut_for_option_cached(weather.patch_option);
+                        let steradians_arr = ArrayView1::from(patch_lut.steradians.as_slice());
+                        let asvf_cache = asvf_for_svf_cached(svf_v);
+                        let asvf_arr = ArrayView2::from_shape(shape, asvf_cache.as_slice())
+                            .expect("ASVF cache shape matches DSM");
+
+                        let ani = anisotropic_sky_pure(
+                            shmat_a,
+                            vegshmat_a,
+                            vbshmat_a,
+                            weather.sun_altitude,
+                            weather.sun_azimuth,
+                            esky_a,
+                            weather.ta,
+                            cyl,
+                            false,
+                            config.albedo_wall,
+                            ground.tg_wall,
+                            config.emis_wall,
+                            rad_i,
+                            rad_d,
+                            asvf_arr,
+                            lv.view(),
+                            steradians_arr,
+                            march.gvf_lup.view(),
+                            lv.view(),
+                            scheme_shadow.view(),
+                            kup_e.view(),
+                            kup_s.view(),
+                            kup_w.view(),
+                            kup_n.view(),
+                            None,
+                            None,
+                            Some(valid_v),
+                        );
+                        let ani_kside_dirs_sum = side_sum_from_directional(
+                            ani.knorth.view(),
+                            ani.keast.view(),
+                            ani.ksouth.view(),
+                            ani.kwest.view(),
+                            valid_v,
+                        );
+                        // Directional Lside comes entirely from the march
+                        // (Lside_veg_v2026 anisotropic returns zeros).
+                        let lside_dirs_sum = side_sum_from_directional(
+                            march.gvf_lside_n.view(),
+                            march.gvf_lside_e.view(),
+                            march.gvf_lside_s.view(),
+                            march.gvf_lside_w.view(),
+                            valid_v,
+                        );
+                        // 2026a Tmrt composition: the Fcyl longwave term is
+                        // Lside = mean(directional) + anisotropic-sky Lside
+                        // (Solweig_2026a_calc L790 + L882).
+                        let lside_total = &ani.lside + &lside_dirs_sum.mapv(|v| v * 0.25);
+                        (
+                            kdown,
+                            ani.ldown,
+                            ani_kside_dirs_sum,
+                            lside_dirs_sum,
+                            ani.kside,
+                            lside_total,
+                        )
+                    } else {
+                        let kside = kside_veg_isotropic_pure(
+                            rad_i,
+                            rad_d,
+                            rad_g,
+                            scheme_shadow.view(),
+                            svf_s_v,
+                            svf_w_v,
+                            svf_n_v,
+                            svf_e_v,
+                            svf_veg_e_v,
+                            svf_veg_s_v,
+                            svf_veg_w_v,
+                            svf_veg_n_v,
+                            weather.sun_azimuth,
+                            weather.sun_altitude,
+                            psi,
+                            0.0,
+                            config.albedo_wall,
+                            f_sh.view(),
+                            kup_e.view(),
+                            kup_s.view(),
+                            kup_w.view(),
+                            kup_n.view(),
+                            cyl,
+                            Some(valid_v),
+                        );
+                        let kside_dirs_sum = side_sum_from_directional(
+                            kside.knorth.view(),
+                            kside.keast.view(),
+                            kside.ksouth.view(),
+                            kside.kwest.view(),
+                            valid_v,
+                        );
+                        // Directional Lside = march ground/wall side longwave +
+                        // Lside_veg_v2026 sky/wall/veg terms.
+                        let least_tot = &march.gvf_lside_e + &lside.least;
+                        let lsouth_tot = &march.gvf_lside_s + &lside.lsouth;
+                        let lwest_tot = &march.gvf_lside_w + &lside.lwest;
+                        let lnorth_tot = &march.gvf_lside_n + &lside.lnorth;
+                        let lside_dirs_sum = side_sum_from_directional(
+                            lnorth_tot.view(),
+                            least_tot.view(),
+                            lsouth_tot.view(),
+                            lwest_tot.view(),
+                            valid_v,
+                        );
+                        (
+                            kdown,
+                            ldown_iso,
+                            kside_dirs_sum,
+                            lside_dirs_sum,
+                            kside.kside_i,
+                            Array2::<f32>::zeros(shape),
+                        )
+                    };
+
+                // Lup (Fup upwelling) is the march output — no thermal delay.
+                let lup = march.gvf_lup;
+
+                let tmrt = compute_tmrt_from_dir_sums_pure(
+                    kdown_out.view(),
+                    kup.view(),
+                    ldown_out.view(),
+                    lup.view(),
+                    kside_dirs_sum.view(),
+                    lside_dirs_sum.view(),
+                    kside_total.view(),
+                    lside_total.view(),
+                    human.abs_k,
+                    human.abs_l,
+                    human.is_standing,
+                    use_aniso,
+                );
+
+                return TimestepResultRaw {
+                    tmrt,
+                    // The scheme carries shadow_past forward from this shadow;
+                    // return it whenever the caller asked for shadow output.
+                    shadow: if want_shadow { Some(scheme_shadow) } else { None },
+                    kdown: if want_kdown { Some(kdown_out) } else { None },
+                    kup: if want_kup { Some(kup) } else { None },
+                    ldown: if want_ldown { Some(ldown_out) } else { None },
+                    lup: if want_lup { Some(lup) } else { None },
+                    // Thermal-delay state is untouched by the scheme (the
+                    // force-restore ODE carries the inertia); pass it through.
+                    timeadd,
+                    tgmap1: tgmap1_v.to_owned(),
+                    tgmap1_e: tgmap1_e_v.to_owned(),
+                    tgmap1_s: tgmap1_s_v.to_owned(),
+                    tgmap1_w: tgmap1_w_v.to_owned(),
+                    tgmap1_n: tgmap1_n_v.to_owned(),
+                    tgout1: tgout1_v.to_owned(),
+                    tg: Some(st.tg),
+                    rn: Some(st.rn),
+                    rn_past: Some(st.rn_past),
+                    g: Some(st.g),
+                };
+            }
 
             // ── Step 3: GVF ─────────────────────────────────────────────────────
             let t_gvf = Instant::now();
@@ -1338,6 +1772,11 @@ pub fn compute_timestep(
                 tgmap1_w: delay.tgmap1_w,
                 tgmap1_n: delay.tgmap1_n,
                 tgout1: delay.tgout1,
+                // Ground scheme inactive on the classic path.
+                tg: None,
+                rn: None,
+                rn_past: None,
+                g: None,
             }
         })
     }; // end allow_threads_unchecked
@@ -1402,5 +1841,9 @@ pub fn compute_timestep(
         tgmap1_w: raw.tgmap1_w.into_pyarray(py).unbind(),
         tgmap1_n: raw.tgmap1_n.into_pyarray(py).unbind(),
         tgout1: raw.tgout1.into_pyarray(py).unbind(),
+        tg: raw.tg.map(|a| a.into_pyarray(py).unbind()),
+        rn: raw.rn.map(|a| a.into_pyarray(py).unbind()),
+        rn_past: raw.rn_past.map(|a| a.into_pyarray(py).unbind()),
+        g: raw.g.map(|a| a.into_pyarray(py).unbind()),
     })
 }
