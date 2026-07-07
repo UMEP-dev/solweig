@@ -77,7 +77,7 @@ pysrc/solweig/          Python package
   loaders.py            Config/EPW file loaders (RENAMED from config.py)
   models/               Dataclasses: SurfaceData, Weather, Location, ModelConfig, etc.
   physics/              Pure-Python algorithms (RENAMED from algorithms/)
-  components/           Ground, GVF, shadows, SVF resolution
+  components/           Ground, GVF, shadows, SVF resolution, 2026a ground-scheme init
   errors.py             Custom exception hierarchy (all inherit SolweigError)
   constants.py          Physical constants (Stefan-Boltzmann, view factors, etc.)
   solweig_logging.py    Logging (NOT logging.py — watch for stale refs)
@@ -96,6 +96,7 @@ rust/src/               Rust extension (PyO3, compiled as solweig.rustalgos)
   sky.rs                Anisotropic sky radiation (Perez model)
   vegetation.rs         Tree effects (longwave + shortwave)
   ground.rs             Ground temperature + thermal delay
+  ground_surface.rs     UMEP 2026a ground scheme (force-restore/OHM + outgoing-LW march, opt-in)
   utci.rs, pet.rs       Thermal comfort indices
   tmrt.rs               Mean Radiant Temperature
   perez.rs              Perez diffuse sky model math
@@ -225,6 +226,7 @@ Conventional commits: `<type>: <description> (<version>)`
 - GPU contexts (shadow / aniso / GVF) are cached via `OnceLock` and reused process-wide — what *does* get reallocated per call is the cached GPU buffer set when grid dimensions change (cache key: `(rows, cols, has_veg, has_walls)`). Command encoders and bind groups are rebuilt per dispatch, which is normal wgpu usage
 - SVF is the #1 bottleneck (calls shadowing 32–248× per pixel)
 - The `surface.py` decomposition (b85) moved loaders/compute/tiled-SVF/views into sibling modules but kept `SurfaceData` public — internal callers may reach into `surface_loading`, `surface_compute`, `surface_svf_tiled`, `surface_views` directly
+- The 2026a ground scheme is toggled by the *presence* of a `GroundSchemeBundle` in `compute_timestep` (not a boolean): `use_ground_scheme`/`use_outgoing_longwave` must be enabled together, require land cover, reject tiling, and disable the valid-bbox crop (per-pixel state + the ~11 m march need the full raster). Baseline stays byte-identical when the bundle is absent.
 - `solweig.geospatial` is the canonical home for plugin-style helpers (`extract_bounds`, `intersect_bounds`, `resample_to_grid`, `looks_like_relative`, etc.); the b85→b86 top-level re-exports were removed in b87 (accessing `solweig.extract_bounds` raises `AttributeError`)
 
 ---

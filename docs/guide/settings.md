@@ -65,11 +65,39 @@ solweig.calculate(
 | ``human`` | HumanParams | HumanParams() | Body geometry + absorption coefficients |
 | ``physics`` | SimpleNamespace \| None | None (lazy-loaded from bundled JSON) | Tree settings, posture |
 | ``materials`` | SimpleNamespace \| None | None (lazy-loaded from bundled JSON) | Land-cover albedo / emissivity / thermal coefficients |
+| ``use_ground_scheme`` | bool | False | UMEP 2026a force-restore/OHM ground surface temperature (opt-in) |
+| ``use_outgoing_longwave`` | bool | False | UMEP 2026a solid-angle outgoing longwave march (opt-in) |
 
 ``physics`` and ``materials`` are intentionally kept as ``None`` after
 ``Settings.resolve()`` — the underlying JSON files are only loaded
 when downstream code actually needs them. Call
 ``.with_loaded_defaults()`` to force the load explicitly.
+
+## The 2026a ground-surface scheme (opt-in)
+
+``use_ground_scheme`` and ``use_outgoing_longwave`` activate the UMEP 2026a
+ground-surface formulation: a prognostic force-restore/OHM surface
+temperature and a solid-angle outgoing longwave model (see
+[the ground temperature spec](../physics/ground_temperature.md) for the
+physics). Rules:
+
+- Both flags must currently be enabled together; enabling one without the
+  other raises ``ConfigurationError``.
+- The surface must have a land-cover grid (ground classes 0/1/2/5/6/7).
+- Tiled processing is not yet supported with the scheme; rasters must fit
+  in a single tile.
+- The defaults are off, and stay off until the scheme has its own
+  validation entry — the validated baseline physics is unchanged unless
+  you opt in.
+
+```python
+summary = solweig.calculate(
+    surface, weather, location,
+    use_ground_scheme=True,
+    use_outgoing_longwave=True,
+    output_dir="out/",
+)
+```
 
 ## Why a separate `Settings` exists
 

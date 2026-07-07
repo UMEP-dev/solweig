@@ -190,6 +190,91 @@ Pre-sunrise (dectime <= sunrise_frac):
 - The TsWaveDelay model handles smooth transitions via thermal inertia
 - Emissivity assumed constant (typically 0.95)
 
+## UMEP 2026a Ground-Surface Scheme (opt-in)
+
+An alternative ground-surface formulation from UMEP-processing's 2026a
+generation (Bridoux, University of Gothenburg; merged upstream 2026-05) is
+available behind two flags, both default **off**:
+
+- `use_ground_scheme` — replace the sinusoidal Tg parameterization with a
+  prognostic force-restore surface temperature model.
+- `use_outgoing_longwave` — replace the GVF-based Lup and the TsWaveDelay
+  step with a solid-angle view-factor march.
+
+The current port supports the two flags only together. With both off, the
+baseline model above runs unchanged (golden output byte-identical).
+
+### Force-restore surface temperature
+
+Each ground pixel carries a prognostic surface temperature `Tg` (°C,
+absolute — not a deviation from air temperature), a deep-soil temperature
+`Tm`, and the flux history (`Rn`, `Rn_past`, `G`). Per timestep (length
+`Δt` in seconds):
+
+```text
+dTg/dt = 2·G / (C·d) − ω·(Tg − Tm),     ω = 2π / 86400 s⁻¹
+d = sqrt(2·κ / ω)                        (damping depth)
+```
+
+where `C` is the volumetric heat capacity (J m⁻³ K⁻¹) and `κ` the thermal
+diffusivity (m² s⁻¹) of the land-cover class. The ground heat flux `G`
+comes from the Objective Hysteresis Model (Grimmond et al. 1991):
+
+```text
+Rn = (1 − α)·Kdown + Ldown − Lup,   Lup = ε·σ·(Tg + 273.15)⁴ + (1 − ε)·Ldown
+G  = a1·Rn + a2·(Rn − Rn_past) + a3
+```
+
+with per-class OHM coefficients `a1..a3` (`a1` seasonally modulated by a
+latitude-signed sinusoid). Integration is a 2nd-order Runge-Kutta step;
+at shadow transitions (|shadow − shadow_past| > 0.5) the change in `G` is
+clamped to `|a1·ΔRn|` to damp flux spikes. Water pixels (class 7) replace
+the OHM step with a 1 m slab energy balance including a latent heat term.
+The scheme runs day and night (no night zeroing of Tg).
+
+Initial state comes from `initiate_ground_scheme`: per-class seasonal
+sinusoids of the first day's air temperature series set `Tg`/`Tm`, and the
+parameter grids (`C`, `κ`, `a1..a3`) are built from the materials JSON
+(`Heat capacity`, `Thermal_diffusivity`, `OHM_coefficients`, `Tg_ini`/
+`Tm_ini` coefficients). Ground classes 0/1/2/5/6/7 are supported; wall
+material codes (≥ 100) are remapped to roofs.
+
+### Solid-angle outgoing longwave
+
+With `use_outgoing_longwave`, Lup, the ground albedo view factors, and the
+directional ground/wall side longwave come from a 20-azimuth translated-
+raster march out to ~11 m (99 % of the Lambert view factor at a receiver
+height of 1.1 m), replacing the GVF step. The TsWaveDelay step is **not**
+applied to Lup — thermal inertia lives in the force-restore ODE. Kup is
+computed from the march's sunlit/total albedo view factors, and the
+directional side longwave (`gvfLside*`) replaces the Lup-derived ground
+term in Lside: the pipeline switches to the `Lside_veg_v2026` variant
+(reflection term drops Lup; the anisotropic branch contributes zero, with
+directional longwave supplied by the march alone). Wall temperature keeps
+the classic sinusoidal wall model.
+
+Ordering per timestep (matching upstream `Solweig_2026a_calc`): shadows →
+Kdown + isotropic Ldown → force-restore Tg step → outgoing-longwave march
+→ Kup → Lside → Tmrt. In anisotropic mode the Tmrt cylinder longwave term
+is composed as mean(directional Lside) + anisotropic-sky Lside, following
+the 2026a reference.
+
+### Constraints and status
+
+- Requires a land-cover grid; tiled processing is currently rejected.
+- Implemented in `rust/src/ground_surface.rs` and wired into the fused
+  pipeline (`rust/src/pipeline.rs`) via `GroundSchemeBundle`; state is
+  carried by `solweig.components.ground_scheme.GroundSchemeState`.
+- Component parity against the vendored upstream reference is gated by
+  `tests/spec/test_parity_2026a.py`; the end-to-end path is pinned by
+  `tests/golden/test_golden_ground_scheme.py`.
+- Not yet validated against field measurements; defaults stay off until a
+  VALIDATION.md comparison exists.
+
+**Reference:** Grimmond CSB, Cleugh HA, Oke TR (1991) "An objective urban
+heat storage model and its comparison with other schemes." Atmospheric
+Environment 25B(3), 311-326.
+
 ## Validation Status
 
 The TsWaveDelay model parameters (decay constant 33.27) require validation against:
