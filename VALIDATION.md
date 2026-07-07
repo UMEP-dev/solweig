@@ -186,7 +186,12 @@ Consequences:
 - The composition question has been raised with UMEP-processing (see the
   upstream issues drafted 2026-07-07).
 - The port itself is faithful: every component matches the vendored
-  upstream reference (`tests/spec/test_parity_2026a.py`), so these numbers
+  upstream reference (`tests/spec/test_parity_2026a.py`), and an
+  end-to-end check running upstream's own `Solweig_2026a_calc` (vendored
+  Python) against the fused Rust path on identical inputs agrees to
+  within 0.08 °C Tmrt for 22 of 24 hours of a full diurnal cycle (the
+  two exceptions are sunrise/sunset transition hours where the drivers'
+  clearness-index handling legitimately differs). These numbers therefore
   characterise the upstream scheme as published, not the port.
 
 ---
