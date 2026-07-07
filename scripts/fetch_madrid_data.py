@@ -215,19 +215,22 @@ def main() -> int:
         if out_path.exists():
             print(f"{product}: {out_path} already present, skipping")
             continue
-        print(f"{product}: enumerating series {cfg['code']} ...")
-        files = enumerate_series(session, cfg["code"])
+        code = str(cfg["code"])
+        pixel = float(cfg["pixel"])  # type: ignore[arg-type]
+        fill = cfg["fill_nodata_with"]
+        print(f"{product}: enumerating series {code} ...")
+        files = enumerate_series(session, code)
         if not files:
-            print(f"  ERROR: no files found for {cfg['code']} — endpoint layout may have changed", file=sys.stderr)
+            print(f"  ERROR: no files found for {code} — endpoint layout may have changed", file=sys.stderr)
             return 1
         tile_paths = []
         for i, f in enumerate(files):
-            dest = tiles_dir / cfg["code"] / f["name"]
+            dest = tiles_dir / code / f["name"]
             print(f"  [{i + 1}/{len(files)}] {f['name']}")
             tile_paths.append(download_file(session, f["sec"], dest))
             time.sleep(POLITE_DELAY_S)
         out_dir.mkdir(parents=True, exist_ok=True)
-        mosaic_to_extent(tile_paths, cfg["pixel"], cfg["fill_nodata_with"], out_path)
+        mosaic_to_extent(tile_paths, pixel, fill, out_path)
 
     print("done — rasters staged for demos/madrid-demo.py")
     return 0
