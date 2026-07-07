@@ -126,6 +126,8 @@ notebooks = { shell = "jupyter nbconvert --to notebook --execute docs/tutorials/
 [tool.ruff]
 line-length = 120
 indent-width = 4
+# Vendored upstream reference code (parity baselines) must stay verbatim.
+extend-exclude = ["tests/reference"]
 
 [tool.ruff.lint]
 select = [

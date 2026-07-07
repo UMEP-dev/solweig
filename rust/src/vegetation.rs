@@ -36,11 +36,32 @@ pub(crate) struct LsideVegPureResult {
     pub lnorth: Array2<f32>,
 }
 
-/// Pure-ndarray implementation of Lside_veg_v2022a.
-/// Callable from pipeline.rs (fused path) or from the PyO3 wrapper (modular path).
+/// Lside model variant.
+///
+/// `V2022a` is UMEP's default (and this port's validated baseline).
+/// `V2026` is the variant introduced with UMEP-processing's opt-in 2026a
+/// ground-surface scheme (Bridoux, University of Gothenburg, merged
+/// 2026-05): the ground term leaves Lside entirely (the scheme's
+/// `outgoing_longwave_calc` solid-angle march supplies directional
+/// ground+wall longwave instead), the reflection term drops the Lup
+/// contribution (`Lrefl = Ldown * viktrefl * (1-ewall) * 0.5`), and the
+/// anisotropic branch returns zeros. Reference:
+/// tests/reference/umep_2026a/Lside_veg.py (`Lside_veg_v2026`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum LsideVariant {
+    V2022a,
+    V2026,
+}
+
+/// Pure-ndarray implementation of Lside_veg (v2022a / v2026 variants).
+/// Callable from pipeline.rs (fused path) or from the PyO3 wrappers
+/// (modular path). The `Lup*` views are unused by `V2026` (upstream's
+/// v2026 signature has no Lup parameters); callers may pass any
+/// same-shaped array for that variant.
 #[allow(non_snake_case)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn lside_veg_pure(
+pub(crate) fn lside_veg_variant_pure(
+    variant: LsideVariant,
     svfS: ArrayView2<f32>,
     svfW: ArrayView2<f32>,
     svfN: ArrayView2<f32>,
@@ -129,7 +150,12 @@ pub(crate) fn lside_veg_pure(
                            temp_wall: f32|
              -> f32 {
                 if anisotropic_longwave {
-                    return lup * 0.5;
+                    // v2026: directional ground/wall longwave comes entirely
+                    // from the ground scheme's gvfLside*; Lside contributes 0.
+                    return match variant {
+                        LsideVariant::V2022a => lup * 0.5,
+                        LsideVariant::V2026 => 0.0,
+                    };
                 }
                 let svfalfa = (1.0 - svf).clamp(0.0, 1.0).sqrt().asin();
                 let poly_svf_val = poly(svf);
@@ -169,9 +195,19 @@ pub(crate) fn lside_veg_pure(
                 };
                 let lsky = ((svf + svfveg - 1.0) * Lsky_allsky) * viktsky * 0.5;
                 let lveg = SBC * ewall * TaK_pow4 * viktveg * 0.5;
-                let lground = lup * 0.5;
-                let lrefl = (ldown_val + lup) * viktrefl * (1.0 - ewall) * 0.5;
-                lsky + lwallsun + lwallsh + lveg + lground + lrefl
+                match variant {
+                    LsideVariant::V2022a => {
+                        let lground = lup * 0.5;
+                        let lrefl = (ldown_val + lup) * viktrefl * (1.0 - ewall) * 0.5;
+                        lsky + lwallsun + lwallsh + lveg + lground + lrefl
+                    }
+                    // v2026: ground term moves to outgoing_longwave_calc;
+                    // reflection no longer includes Lup.
+                    LsideVariant::V2026 => {
+                        let lrefl = ldown_val * viktrefl * (1.0 - ewall) * 0.5;
+                        lsky + lwallsun + lwallsh + lveg + lrefl
+                    }
+                }
             };
             *least = compute(
                 svfE[(r, c)],
@@ -224,6 +260,76 @@ pub(crate) fn lside_veg_pure(
         lnorth: Array2::from_shape_vec((rows, cols), lnorth_vec)
             .expect("lnorth_vec length mismatches (rows, cols)"),
     }
+}
+
+/// Baseline v2022a entry point — the fused pipeline and the public
+/// `lside_veg` pyfunction call this; behaviour is byte-identical to the
+/// pre-variant implementation.
+#[allow(non_snake_case)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn lside_veg_pure(
+    svfS: ArrayView2<f32>,
+    svfW: ArrayView2<f32>,
+    svfN: ArrayView2<f32>,
+    svfE: ArrayView2<f32>,
+    svfEveg: ArrayView2<f32>,
+    svfSveg: ArrayView2<f32>,
+    svfWveg: ArrayView2<f32>,
+    svfNveg: ArrayView2<f32>,
+    svfEaveg: ArrayView2<f32>,
+    svfSaveg: ArrayView2<f32>,
+    svfWaveg: ArrayView2<f32>,
+    svfNaveg: ArrayView2<f32>,
+    azimuth: f32,
+    altitude: f32,
+    Ta: f32,
+    Tw: f32,
+    SBC: f32,
+    ewall: f32,
+    Ldown: ArrayView2<f32>,
+    esky: f32,
+    t: f32,
+    F_sh: ArrayView2<f32>,
+    CI: f32,
+    LupE: ArrayView2<f32>,
+    LupS: ArrayView2<f32>,
+    LupW: ArrayView2<f32>,
+    LupN: ArrayView2<f32>,
+    anisotropic_longwave: bool,
+    valid: Option<ArrayView2<u8>>,
+) -> LsideVegPureResult {
+    lside_veg_variant_pure(
+        LsideVariant::V2022a,
+        svfS,
+        svfW,
+        svfN,
+        svfE,
+        svfEveg,
+        svfSveg,
+        svfWveg,
+        svfNveg,
+        svfEaveg,
+        svfSaveg,
+        svfWaveg,
+        svfNaveg,
+        azimuth,
+        altitude,
+        Ta,
+        Tw,
+        SBC,
+        ewall,
+        Ldown,
+        esky,
+        t,
+        F_sh,
+        CI,
+        LupE,
+        LupS,
+        LupW,
+        LupN,
+        anisotropic_longwave,
+        valid,
+    )
 }
 
 /// Pure result type for kside_veg isotropic path (no PyO3 dependency).
@@ -487,6 +593,87 @@ pub fn lside_veg(
         LupS.as_array(),
         LupW.as_array(),
         LupN.as_array(),
+        anisotropic_longwave,
+        None,
+    );
+
+    Py::new(
+        py,
+        LsideVegResult {
+            least: result.least.into_pyarray(py).unbind(),
+            lsouth: result.lsouth.into_pyarray(py).unbind(),
+            lwest: result.lwest.into_pyarray(py).unbind(),
+            lnorth: result.lnorth.into_pyarray(py).unbind(),
+        },
+    )
+}
+
+/// Vectorized Rust port of Python `Lside_veg_v2026` (UMEP-processing 2026a
+/// ground-surface scheme). Mirrors the upstream signature: no `Lup*`
+/// parameters — the ground term is supplied by `outgoing_longwave_calc`
+/// upstream, and the anisotropic branch returns zeros.
+#[pyfunction]
+#[allow(non_snake_case)]
+#[allow(clippy::too_many_arguments)]
+pub fn lside_veg_v2026(
+    py: Python,
+    svfS: PyReadonlyArray2<f32>,
+    svfW: PyReadonlyArray2<f32>,
+    svfN: PyReadonlyArray2<f32>,
+    svfE: PyReadonlyArray2<f32>,
+    svfEveg: PyReadonlyArray2<f32>,
+    svfSveg: PyReadonlyArray2<f32>,
+    svfWveg: PyReadonlyArray2<f32>,
+    svfNveg: PyReadonlyArray2<f32>,
+    svfEaveg: PyReadonlyArray2<f32>,
+    svfSaveg: PyReadonlyArray2<f32>,
+    svfWaveg: PyReadonlyArray2<f32>,
+    svfNaveg: PyReadonlyArray2<f32>,
+    azimuth: f32,
+    altitude: f32,
+    Ta: f32,
+    Tw: f32,
+    SBC: f32,
+    ewall: f32,
+    Ldown: PyReadonlyArray2<f32>,
+    esky: f32,
+    t: f32,
+    F_sh: PyReadonlyArray2<f32>,
+    CI: f32,
+    anisotropic_longwave: bool,
+) -> PyResult<Py<LsideVegResult>> {
+    // The Lup views are unused by V2026; Ldown stands in to satisfy the
+    // shared pure-function signature.
+    let ldown = Ldown.as_array();
+    let result = lside_veg_variant_pure(
+        LsideVariant::V2026,
+        svfS.as_array(),
+        svfW.as_array(),
+        svfN.as_array(),
+        svfE.as_array(),
+        svfEveg.as_array(),
+        svfSveg.as_array(),
+        svfWveg.as_array(),
+        svfNveg.as_array(),
+        svfEaveg.as_array(),
+        svfSaveg.as_array(),
+        svfWaveg.as_array(),
+        svfNaveg.as_array(),
+        azimuth,
+        altitude,
+        Ta,
+        Tw,
+        SBC,
+        ewall,
+        ldown,
+        esky,
+        t,
+        F_sh.as_array(),
+        CI,
+        ldown,
+        ldown,
+        ldown,
+        ldown,
         anisotropic_longwave,
         None,
     );
