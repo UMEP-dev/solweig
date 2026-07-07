@@ -412,9 +412,9 @@ def calculate(
 
     Notes:
         Modelled downwelling longwave (L↓) carries a known +18 to +55 W/m²
-        positive bias inherited from the UMEP Jonsson et al. (2006) formulation.
+        positive bias that traces to the Jonsson et al. (2006) formulation.
         The bias is steady across hours and grows with reduced sky-view; see
-        ``VALIDATION.md § Ldown overestimation``. K↓ at any single pixel is
+        ``VALIDATION.md § Ldown positive bias``. K↓ at any single pixel is
         shadow-edge-sensitive and may spike on a single mis-aligned hour;
         spatially-averaged K↓ has much lower error.
 

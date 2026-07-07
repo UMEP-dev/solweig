@@ -312,4 +312,4 @@ observations across all validation sites. This is a formulation issue
 inherited from UMEP (Jonsson et al. 2006: non-sky hemisphere filled with
 wall emissions at air temperature, while real shaded walls are cooler) and
 is not run- or sun-position-dependent. See
-[`VALIDATION.md § Ldown overestimation`](https://github.com/UMEP-dev/solweig/blob/main/VALIDATION.md#ldown-overestimation).
+[`VALIDATION.md § Ldown positive bias`](https://github.com/UMEP-dev/solweig/blob/main/VALIDATION.md#ldown-positive-bias).

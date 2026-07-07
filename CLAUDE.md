@@ -274,6 +274,21 @@ For documentation-only / docstring / nav fixes, the commit history
 entry below only when a fix sets a non-obvious convention that future
 sessions should know about.
 
+### Release checklist (every version bump, no exceptions)
+
+1. `pyproject.toml` version + `CITATION.cff` version and date-released.
+2. `VALIDATION.md`: the `## Summary — v...` header (version + date), a new
+   version-history row (no "unreleased" markers once pushed), and the
+   README validation table if the numbers moved.
+3. README feature/options tables if the release adds user-facing flags.
+4. `docs/about/changelog.md` if it carries an entry for the release.
+5. `poe docs_build` (strict) and `poe verify_project` before the release
+   commit; tag `v<version>` after pushing.
+
+Added 2026-07-07 after a b90 release went out with the VALIDATION.md
+summary header still reading b89 and an "(Unreleased.)" marker in the
+history row.
+
 ### Standing conventions (live)
 
 - `calculate()` signature is `calculate(surface, weather, location, *, output_dir, ...)` and returns `TimeseriesSummary` — historically many examples had the argument order wrong; always verify generated examples match this.

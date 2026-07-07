@@ -1,8 +1,8 @@
 # Validation Report
 
 SOLWEIG is validated against field radiation measurements from three sites in
-Gothenburg, Sweden. All validation data — geodata, met files, measurement CSVs,
-and POI coordinates (as GeoJSON) — are self-contained under `tests/validation/`
+Gothenburg, Sweden. All validation data (geodata, met files, measurement CSVs,
+and POI coordinates as GeoJSON) are self-contained under `tests/validation/`
 and run automatically in CI on every push and PR.
 
 Each site's POI (point of interest) is loaded at runtime from a `poi.geojson`
@@ -18,7 +18,11 @@ a glance.
 
 ---
 
-## Summary — v0.1.0b89 (2026-07-06)
+## Summary — v0.1.0b90 (2026-07-07)
+
+Baseline numbers are identical to b89: b90 adds the opt-in 2026a ground
+scheme with defaults off (byte-identical baseline, re-validated 31/31 on
+release day). The opt-in scheme has its own field comparison further down.
 
 | Metric               | Kronenhuset | Gustav Adolfs |          GVC |
 | -------------------- | ----------: | ------------: | -----------: |
@@ -28,11 +32,12 @@ a glance.
 | Days                 |           1 |             3 |            3 |
 | Total obs hours      |          12 |            43 |           30 |
 
-> **⚠️ Read this before interpreting the radiation panels.** The model carries a
-> known **+18 to +55 W/m² L↓ overestimation** at every site — a formulation issue,
-> not a calibration error. See [§ Ldown overestimation](#ldown-overestimation)
-> below. K↓ at open sites is shadow-edge-sensitive and can spike on a single
-> mis-aligned hour; see [§ Kdown at open sites](#kdown-at-open-sites).
+> **Read this before interpreting the radiation panels.** Modelled L↓ sits
+> 18 to 55 W/m² above the observations at every site. This traces to the
+> published Ldown formulation rather than to calibration; see
+> [§ Ldown positive bias](#ldown-positive-bias) below. K↓ at open sites is
+> shadow-edge-sensitive and can spike on a single mis-aligned hour; see
+> [§ Kdown at open sites](#kdown-at-open-sites).
 
 ---
 
@@ -41,7 +46,7 @@ a glance.
 - **Type:** Enclosed courtyard, central Gothenburg
 - **Period:** 2005-10-07 (1 day, 12 daytime hours)
 - **Resolution:** 1 m, EPSG:3007
-- **POI:** (51, 117) — from `POI_KR.shp` measurement station coordinates
+- **POI:** (51, 117), from `POI_KR.shp` measurement station coordinates
 - **Reference:** Lindberg, Holmer & Thorsson (2008)
 - **Data:** `tests/validation/kronenhuset/` (DSM, DEM, CDSM, landcover, met, poi.geojson)
 - **Notes:** The only site that directly validates individual radiation budget
@@ -55,9 +60,9 @@ a glance.
   observations during that window, suggesting the modelled shadow boundary
   exits the POI a touch early. This single transition drives most of the
   +2.8 °C Tmrt bias.
-- The L↓ panel shows a steady ~+30 W/m² offset across every hour — the
-  cool-wall bias is a systematic formulation issue, not sun-position dependent
-  (see Known limitations).
+- The L↓ panel shows a steady ~+30 W/m² offset across every hour. The
+  cool-wall bias is systematic and independent of sun position (see Known
+  limitations).
 
 ---
 
@@ -66,7 +71,7 @@ a glance.
 - **Type:** Open square, central Gothenburg
 - **Period:** 2005-10-11, 2006-07-26, 2006-08-01 (3 days, 43 daytime hours)
 - **Resolution:** 2 m, EPSG:3006
-- **POI:** (33, 77) — from `test_POI.shp` measurement station coordinates
+- **POI:** (33, 77), from `test_POI.shp` measurement station coordinates
 - **Reference:** Lindberg, Holmer & Thorsson (2008)
 - **Data:** `tests/validation/gustav_adolfs/` (DSM, DEM, CDSM, landcover, met, poi.geojson)
 - **Notes:** One autumn day (heavily overcast) and two summer days.
@@ -78,7 +83,7 @@ a glance.
   the POI is in shade most of the day.
 - 2006-07-26 (clear summer): good Tmrt agreement; K↓ tracks closely.
 - 2006-08-01 (clear summer): a sharp afternoon K↓ divergence (~600 W/m²
-  spike) — most likely partial cloud or a shadow-edge timing offset that the
+  spike), most likely partial cloud or a shadow-edge timing offset that the
   hourly met data cannot resolve. This event dominates the day's K↓ RMSE.
 
 ---
@@ -88,7 +93,7 @@ a glance.
 - **Type:** University campus courtyard, Gothenburg
 - **Period:** 2010-07-07, 07-10, 07-12 (3 days, 30 daytime hours)
 - **Resolution:** 2 m, EPSG:3006
-- **POI:** (51, 122) — from `POI_GVC.shp` Site 1 measurement station coordinates
+- **POI:** (51, 122), from `POI_GVC.shp` Site 1 measurement station coordinates
 - **Reference:** Lindberg & Grimmond (2011)
 - **Data:** `tests/validation/gvc/` (DSM, DEM, CDSM, landcover, met, poi.geojson)
 - **Notes:** Three clear summer days. The POI corresponds to Site 1 from the
@@ -99,15 +104,15 @@ a glance.
 - 2010-07-07: clean agreement; the POI transitions into shade after midday and
   modelled Tmrt follows observations closely.
 - 2010-07-10: only 7 hours, mostly in shade; modelled Tmrt sits a few °C above
-  observed (no abrupt divergence — likely the L↓ cool-wall bias).
-- 2010-07-12: large early-afternoon divergence — the model keeps the POI
-  sunlit longer than reality, inflating Tmrt by 15–20 °C at the peak. This is
+  observed (no abrupt divergence; likely the L↓ cool-wall bias).
+- 2010-07-12: large early-afternoon divergence. The model keeps the POI
+  sunlit longer than reality, raising Tmrt by 15–20 °C at the peak. This is
   the dominant driver of the day's +5.2 °C bias.
 - The Site 1 measurement station sits at the edge of a dense tree canopy in
   the CDSM (heights of 7–18 m immediately to the west and south), so the
   modelled shadow state is sensitive to sub-pixel canopy position at 2 m
-  resolution — the dominant source of day-to-day bias variability at this
-  site.
+  resolution. This is the dominant source of day-to-day bias variability at
+  this site.
 
 ---
 
@@ -119,15 +124,16 @@ Point-level downwelling shortwave (Kdown) is sensitive to shadow timing.
 At any single pixel the shadow state is binary, so a small shift in the
 modelled shadow boundary produces ~600–800 W/m² differences between adjacent
 hourly timesteps. The visible spike on Gustav Adolfs 2006-08-01 illustrates
-this — a single misaligned hour drives the day's K↓ RMSE up to 157 W/m².
+this: a single misaligned hour drives the day's K↓ RMSE up to 157 W/m².
 Spatially averaged Kdown would show considerably lower error.
 
-### Ldown overestimation
+### Ldown positive bias
 
-The model overestimates Ldown at all sites (bias +18 to +55 W/m²). The SOLWEIG
-Ldown formulation (Jonsson et al. 2006) fills the non-sky hemisphere with wall
-emissions at emissivity 0.90 and air temperature. In practice, shaded walls are
-cooler than air temperature, which introduces a positive bias.
+Modelled Ldown exceeds the observations at all sites (bias +18 to +55 W/m²).
+The SOLWEIG Ldown formulation (Jonsson et al. 2006) fills the non-sky
+hemisphere with wall emissions at emissivity 0.90 and air temperature. In
+practice, shaded walls are cooler than air temperature, which introduces a
+positive bias.
 
 - At SVF = 1.0 (open sky), clear-sky Ldown matches observations well.
 - The bias increases at sites with lower SVF, where more of the hemisphere is
@@ -143,7 +149,7 @@ cooler than air temperature, which introduces a positive bias.
 
 When the POI sits adjacent to dense canopy or a shadow edge, the modelled
 sun/shade state is sensitive to sub-pixel CDSM position at 2 m resolution.
-This produces day-by-day bias swings of several °C in Tmrt — most visible at
+This produces day-by-day bias swings of several °C in Tmrt, most visible at
 GVC, where 2010-07-07 has bias +0.9 °C but 2010-07-12 reaches +5.2 °C using
 the same site, POI, and surface model.
 
@@ -166,25 +172,26 @@ site JSONs predate). POI Tmrt against measurements:
 | GVC | 2010-07-10 | 6.0 / +2.9 | 17.3 / +16.3 |
 | GVC | 2010-07-12 | 8.6 / +7.9 | 21.1 / +20.8 |
 
-The bias is one-directional and large. The flux decomposition localises it:
-Kdown/Kup/Ldown are essentially unchanged, and the scheme's Lup at the
-Kronenhuset POI is *better* than baseline (bias +0.3 vs +8.3 W/m²), so the
-force-restore ground temperature itself is sound. The excess enters through
-the directional/cylinder Lside composition of `Solweig_2026a_calc`: the
-solid-angle march's directional side longwave feeds the Fside term, and in
-anisotropic mode the 2026a code additionally adds the mean of those
-directional terms to the Fcyl term (2025a used only the anisotropic-sky
-Lside there). An isotropic diagnostic at Kronenhuset isolates the two
-contributions: RMSE 8.9 / bias +7.2 °C (baseline 5.8 / +0.9), i.e. roughly
-a third of the anisotropic-mode bias remains without the Fcyl addition.
+The bias is consistently positive. The flux decomposition localises it:
+Kdown, Kup and Ldown are essentially unchanged, and the scheme's Lup at the
+Kronenhuset POI is closer to the observations than the baseline (bias +0.3
+vs +8.3 W/m²), so the force-restore ground temperature itself appears sound.
+The excess enters through the directional and cylinder Lside composition of
+`Solweig_2026a_calc`: the solid-angle march's directional side longwave
+feeds the Fside term, and in anisotropic mode the 2026a code additionally
+adds the mean of those directional terms to the Fcyl term (2025a used only
+the anisotropic-sky Lside there). An isotropic diagnostic at Kronenhuset
+separates the two contributions: RMSE 8.9 / bias +7.2 °C (baseline 5.8 /
++0.9), so roughly a third of the anisotropic-mode bias remains without the
+Fcyl addition.
 
 Consequences:
 
-- `use_ground_scheme` / `use_outgoing_longwave` stay **off by default**;
-  the scheme should not be used for production Tmrt until the composition
-  question is resolved upstream.
-- The composition question has been raised with UMEP-processing (see the
-  upstream issues drafted 2026-07-07).
+- `use_ground_scheme` / `use_outgoing_longwave` stay off by default. Until
+  the composition question is settled upstream, scheme output is best
+  treated as qualitative.
+- A question about the composition is open with the upstream developers
+  (raised 2026-07-07 alongside the other findings from this port).
 - The port itself is faithful: every component matches the vendored
   upstream reference (`tests/spec/test_parity_2026a.py`), and an
   end-to-end check running upstream's own `Solweig_2026a_calc` (vendored
@@ -262,7 +269,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b87 | 2026-05-27 |     3 |      1.5–7.5 °C | GPU/CPU surface improvements + deprecation removal — **zero numerical change, byte-identical golden output**. (1) **Breaking:** top-level geospatial helpers (b85→b86 `DeprecationWarning` shim) removed — import from `solweig.geospatial` instead; old names now raise `AttributeError`. (2) `solweig.disable_gpu()` now toggles all three GPU paths (shadows + aniso + GVF) in a single call; pre-b87 it only flipped shadows so "CPU-only" runs weren't actually CPU-only. (3) New `solweig.enable_gpu()`. (4) Fixed a lazy-init bug where `is_gpu_available()` silently re-enabled GPU after `disable_gpu()`. (5) GPU metrics surface: `gpu_dispatch_count()` / `gpu_fallback_count()` / `reset_gpu_metrics()` — thread-safe atomic counters incremented at every GPU dispatch / fallback site. Lets tests assert "GPU path actually ran". (6) New shadow + SVF GPU/CPU parity tests (`tests/spec/test_gpu_cpu_parity.py`); documents a small known difference at canopy-edge `svf_veg*` pixels — building/aveg SVF byte-identical; veg drift up to 0.042 in <1% of pixels, propagates to <0.5 °C Tmrt. (7) New GPU/CPU runtime-ratio benchmark — appends to `tests/benchmarks/logs/gpu_cpu_ratio_history.md`. (8) Corrected outdated CLAUDE.md "GPU context recreated per call" claim — contexts are cached via `OnceLock`; only buffers reallocate per shape change. |
 | 0.1.0b88 | 2026-05-27 |     3 |      1.5–7.5 °C | Internal-only release — no code, plugin, runtime, or numerical change. Moves timing-based benchmarks off CI to a local-only `gpu_perf_gate` marker; CI keeps the hardware-stable memory bench. Validation 31/31 pass, unchanged from b82 baseline. |
 | 0.1.0b89 | 2026-07-06 |     3 |      1.5–7.4 °C | Pre-bump correctness sweep. (1) **Pressure unit fix in `clearnessindex_2013b`**: `Weather.pressure` is hPa but the function applied classic UMEP's kPa→mb ×10, driving p to ~10 000 mb and underestimating clear-sky I0 by ~20–25 % (743 vs 916 W/m² at 30° zenith); CI now crosses the <0.95 Ldown cloud-correction threshold correctly. Validation shifts are small because all three sites use measured direct/diffuse radiation (CI affects only the Ldown correction): Kronenhuset unchanged (6.7/0.51), Gustav Adolfs slightly improved (5.6–7.4 °C, R² 0.79–0.88), GVC 1.5–6.2 °C, R² 0.80–0.99. New spec gate `tests/spec/test_clearness_index.py`. (2) **Per-field EPW missing codes**: the shared `na_values` set nulled legitimate data (RH 99 %, GHI/DNI/DHI 999 W/m²) and missed real sentinels (dry-bulb 99.9, pressure 999999 Pa); no numerical change for bundled or validation datasets (scanned: no affected values). `from_epw` default now loads the whole first day as documented, not just the first timestep. (3) **Tiled SVF path fixed** (runtime NameError) and cancellation now raises `ComputationCancelled` instead of persisting partial SVF caches (untouched tiles at SVF=1.0) or writing the prepare fingerprint without SVF. (4) `ModelConfig.from_json` reads the legacy `Value` nesting (user parameter files were silently ignored); no change at defaults. (5) **GVF source-area march fixed at non-1 m pixels**: the metres→pixels conversion multiplied by pixel size where UMEP divides (`gvf_geometry.rs`, `sun.rs`), so at 2 m pixels the Smidt et al. source area marched 144 m instead of 36 m (and at 0.5 m only 9 m); at coarse pixels the over-long march could also panic on small rasters (march now clamped to the raster extent). New parity gate `tests/spec/test_gvf_pixel_scale_parity.py` pins GVF against UMEP's `gvf_2018a` at 0.5/1/2 m. Kronenhuset (1 m) byte-identical; the 2 m sites now reproduce what UMEP itself computes: Gustav Adolfs 5.7–7.3 °C (R² 0.80–0.88), GVC 2.4–6.9 °C (R² 0.65–0.99) — mixed movement vs the pre-fix numbers, which had benefited from the unphysically long source-area averaging. (6) **Cached GVF sunwall mask unified with UMEP semantics** (fully sunlit walls only, matching `gvf_2018a`; the per-timestep cached path previously counted any partially sunlit wall): Kronenhuset improves to 6.6 °C RMSE / R² 0.52 / bias +2.6; the 2 m sites shift ≤0.03 °C. Final b89 validation: 25/25 pass, Tmrt RMSE 2.4–7.3 °C across the seven site-days. |
-| 0.1.0b90 | 2026-07-07 |     3 |      2.4–7.3 °C | (Unreleased.) UMEP 2026a ground-surface scheme wired into the fused pipeline behind the opt-in `use_ground_scheme` / `use_outgoing_longwave` flags (force-restore/OHM surface temperature + solid-angle outgoing longwave march + `Lside_veg_v2026`, ordering per upstream `Solweig_2026a_calc`). **Defaults off — baseline physics unchanged, golden output byte-identical, validation 31/31 pass with numbers identical to b89.** Scheme components parity-gated against the vendored upstream reference (`tests/spec/test_parity_2026a.py`). The scheme requires a land-cover grid and currently rejects tiled processing. Field comparison of the opt-in scheme (see "UMEP 2026a ground scheme: field comparison"): Tmrt RMSE 12.9–22.0 °C, bias +12.5 to +21.4 °C across the seven site-days — the upstream Lside composition runs hot, raised upstream; defaults stay off. |
+| 0.1.0b90 | 2026-07-07 |     3 |      2.4–7.3 °C | UMEP 2026a ground-surface scheme wired into the fused pipeline behind the opt-in `use_ground_scheme` / `use_outgoing_longwave` flags (force-restore/OHM surface temperature + solid-angle outgoing longwave march + `Lside_veg_v2026`, ordering per upstream `Solweig_2026a_calc`). Defaults off: baseline physics unchanged, golden output byte-identical, validation 31/31 pass with numbers identical to b89. Scheme components parity-gated against the vendored upstream reference (`tests/spec/test_parity_2026a.py`). The scheme requires a land-cover grid and currently rejects tiled processing. A field comparison of the opt-in scheme (see "UMEP 2026a ground scheme: field comparison") found Tmrt substantially above the observations (RMSE 12.9–22.0 °C, bias +12.5 to +21.4 °C over seven site-days); a question about the radiation composition is open with the upstream developers and the defaults stay off. |
 
 ---
 
