@@ -34,6 +34,13 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Above this many pixels, preprocess() streams its relative→absolute height
+# conversion in row-blocks so the transient temporaries stay bounded instead of
+# allocating a full-raster copy per step. Below it, the whole raster is one
+# block (behaviour unchanged). ~50 Mpx matches the memmap threshold in tiling.
+_PREPROCESS_STREAM_MIN_PIXELS = 50_000_000
+_PREPROCESS_STREAM_BLOCK_ROWS = 2048
+
 
 class _ComputationCache:
     """Per-timestep computation caches for ``calculate_core_fused``.
@@ -391,6 +398,10 @@ class SurfaceData:
     _buffer_pool: BufferPool | None = field(default=None, init=False, repr=False)  # Reusable array pool
     _gvf_geometry_cache: object = field(default=None, init=False, repr=False)  # Rust GVF geometry cache
     _valid_mask: NDArray[np.bool_] | None = field(default=None, init=False, repr=False)  # Combined valid mask
+    # Row-block height for the streamed preprocess() conversion. None = whole
+    # raster (one block). prepare() lowers it for large rasters so the transform
+    # temporaries stay O(block) instead of O(raster).
+    _preprocess_block_rows: int | None = field(default=None, init=False, repr=False)
     # Per-timestep computation caches (grouped in _ComputationCache)
     _cache: _ComputationCache = field(default_factory=_ComputationCache, init=False, repr=False)
 
@@ -1163,98 +1174,123 @@ class SurfaceData:
                 # _gaussian_smooth_2d also runs in float32.
                 self.dem = _gaussian_smooth_2d(self.dem, self.dem_smooth_sigma)
 
+        # ── Height conversions (steps 1-5), streamed in row-blocks ───────────
+        # Every step below is per-pixel (elementwise), so processing the raster
+        # in row-blocks and applying all steps to each block in order is
+        # bit-for-bit identical to the whole-array form (verified by
+        # tests/test_preprocess_streaming.py). Doing it in place, block by
+        # block, keeps the transient temporaries at O(block) instead of
+        # O(raster) — the transform no longer allocates a full-raster copy per
+        # np.where/np.maximum, which was the dominant memory spike in prepare()
+        # on very large rasters. Block height defaults to the whole raster
+        # (one block, unchanged behaviour); prepare() lowers it for large
+        # rasters.
         threshold = np.float32(max(0.1, self.min_object_height))
         zero32 = np.float32(0.0)
         nan32 = np.float32(np.nan)
 
-        # Step 1: Convert DSM from relative to absolute (requires DEM)
-        if self.dsm_relative:
-            if self.dem is None:
-                raise ValueError(
-                    "DSM is flagged as relative (dsm_relative=True) but no DEM "
-                    "is provided. A DEM is required to convert relative DSM "
-                    "(height above ground) to absolute elevations."
-                )
-            logger.info("Converting relative DSM to absolute: DSM = DEM + nDSM")
-            self.dsm = np.asarray(self.dem + self.dsm, dtype=np.float32)
-            self.dsm_relative = False
+        if self.dsm_relative and self.dem is None:
+            raise ValueError(
+                "DSM is flagged as relative (dsm_relative=True) but no DEM "
+                "is provided. A DEM is required to convert relative DSM "
+                "(height above ground) to absolute elevations."
+            )
 
-        # Step 1b: Ensure DSM is never below DEM (terrain is the minimum surface)
-        # This handles cases where an absolute DSM has gaps or zero-valued
-        # pixels (e.g. a building-only nDSM passed without dsm_relative=True)
-        # that would otherwise sit below the terrain, producing incorrect
-        # shadows.
-        if self.dem is not None:
-            below = self.dsm < self.dem
-            if np.any(below):
-                n = int(below.sum())
-                logger.info(f"Raising {n} DSM pixels to DEM (DSM was below terrain)")
-                self.dsm = np.asarray(np.maximum(self.dsm, self.dem), dtype=np.float32)
-
-        # Step 1c: Flatten sub-threshold DSM features to DEM
-        # Small nDSM residuals (kerbs, street furniture, LiDAR noise) cast
-        # spurious shadows at low sun angles.  Flatten to DEM where the DSM
-        # protrudes less than min_object_height above the terrain.
-        if self.dem is not None and self.min_object_height > 0:
-            ndsm = self.dsm - self.dem
-            small = (ndsm > 0) & (ndsm < self.min_object_height)
-            n_flat = int(small.sum())
-            if n_flat:
-                self.dsm[small] = self.dem[small]
-                logger.info(
-                    f"Flattened {n_flat} DSM pixels below {self.min_object_height}m "
-                    f"nDSM to DEM (removing sub-threshold features)"
-                )
-
-        # Step 2: Auto-generate TDSM from trunk ratio if CDSM provided but not TDSM
-        if self.cdsm is not None and self.tdsm is None:
-            logger.info(f"Auto-generating TDSM from CDSM using trunk_ratio={self.trunk_ratio}")
-            self.tdsm = np.asarray(self.cdsm * self.trunk_ratio, dtype=np.float32)
+        # Which steps run (evaluated once; the per-pixel work happens per block)
+        do_dsm_abs = self.dsm_relative
+        do_tdsm_autogen = self.cdsm is not None and self.tdsm is None
+        if do_tdsm_autogen and self.cdsm is not None:
+            # Allocate the TDSM layer once; it is filled from CDSM per block.
+            self.tdsm = np.empty_like(self.cdsm)
             self.tdsm_relative = self.cdsm_relative
+        do_cdsm_abs = self.cdsm_relative and self.cdsm is not None
+        do_tdsm_abs = self.tdsm_relative and self.tdsm is not None
+        do_canopy_clear = self.cdsm is not None
+        have_dem = self.dem is not None
 
-        # Use DEM as base if available, otherwise DSM (now absolute after step 1)
-        base = self.dem if self.dem is not None else self.dsm
+        n_raised = n_flat = n_cleared = 0
+        rows, cols = self.dsm.shape
+        # Explicit override (tests) wins; otherwise stream only large rasters.
+        if self._preprocess_block_rows is not None:
+            block_rows = self._preprocess_block_rows
+        elif rows * cols > _PREPROCESS_STREAM_MIN_PIXELS:
+            block_rows = _PREPROCESS_STREAM_BLOCK_ROWS
+        else:
+            block_rows = rows
 
-        # Step 3: Convert CDSM from relative to absolute
-        # Sub-threshold vegetation is set to NaN (absent), NOT to DEM height.
-        # Setting it to DEM would make the shadow caster treat bare ground as
-        # "vegetation at ground level," producing false vegetation shadows on
-        # every steep slope.
-        if self.cdsm_relative and self.cdsm is not None:
-            cdsm_rel = np.where(np.isnan(self.cdsm), zero32, self.cdsm)
-            cdsm_abs = np.where(~np.isnan(base), base + cdsm_rel, nan32)
-            cdsm_abs = np.where(cdsm_abs - base < threshold, nan32, cdsm_abs)
-            self.cdsm = np.asarray(cdsm_abs, dtype=np.float32)
+        for r0 in range(0, rows, block_rows):
+            r1 = min(r0 + block_rows, rows)
+            dsm = self.dsm[r0:r1]  # view — in-place writes persist to self.dsm
+            dem = self.dem[r0:r1] if self.dem is not None else None
+
+            if dem is not None:
+                # Step 1: DSM relative → absolute (DSM = DEM + nDSM)
+                if do_dsm_abs:
+                    dsm += dem
+                # Step 1b: DSM never below DEM
+                below_dem = dsm < dem
+                n_raised += int(below_dem.sum())
+                np.maximum(dsm, dem, out=dsm)
+                # Step 1c: flatten sub-threshold DSM features to DEM
+                if self.min_object_height > 0:
+                    ndsm = dsm - dem
+                    small = (ndsm > 0) & (ndsm < self.min_object_height)
+                    n_flat += int(small.sum())
+                    dsm[small] = dem[small]
+
+            base = dem if dem is not None else dsm  # DSM absolute for this block
+
+            # Step 2: auto-generate TDSM = CDSM * trunk_ratio (CDSM still relative)
+            if do_tdsm_autogen and self.cdsm is not None and self.tdsm is not None:
+                self.tdsm[r0:r1] = self.cdsm[r0:r1] * self.trunk_ratio
+
+            # Step 3: CDSM relative → absolute (sub-threshold veg → NaN, not DEM)
+            if do_cdsm_abs and self.cdsm is not None:
+                cdsm = self.cdsm[r0:r1]
+                cdsm_rel = np.where(np.isnan(cdsm), zero32, cdsm)
+                cdsm_abs = np.where(~np.isnan(base), base + cdsm_rel, nan32)
+                cdsm_abs = np.where(cdsm_abs - base < threshold, nan32, cdsm_abs)
+                cdsm[:] = cdsm_abs
+            # Step 4: TDSM relative → absolute
+            if do_tdsm_abs and self.tdsm is not None:
+                tdsm = self.tdsm[r0:r1]
+                tdsm_rel = np.where(np.isnan(tdsm), zero32, tdsm)
+                tdsm_abs = np.where(~np.isnan(base), base + tdsm_rel, nan32)
+                tdsm_abs = np.where(tdsm_abs - base < threshold, nan32, tdsm_abs)
+                tdsm[:] = tdsm_abs
+            # Step 5: clear canopy (and trunk) below the DSM surface
+            if do_canopy_clear and self.cdsm is not None:
+                cdsm = self.cdsm[r0:r1]
+                below = cdsm < dsm
+                nb = int(below.sum())
+                if nb:
+                    n_cleared += nb
+                    cdsm[below] = nan32
+                    if self.tdsm is not None:
+                        self.tdsm[r0:r1][below] = nan32
+
+        # Clear relative flags and emit the same summary logging as before.
+        if do_dsm_abs:
+            logger.info("Converting relative DSM to absolute: DSM = DEM + nDSM")
+            self.dsm_relative = False
+        if n_raised:
+            logger.info(f"Raising {n_raised} DSM pixels to DEM (DSM was below terrain)")
+        if n_flat:
+            logger.info(
+                f"Flattened {n_flat} DSM pixels below {self.min_object_height}m nDSM to DEM "
+                "(removing sub-threshold features)"
+            )
+        if do_tdsm_autogen:
+            logger.info(f"Auto-generating TDSM from CDSM using trunk_ratio={self.trunk_ratio}")
+        base_label = "DEM" if have_dem else "DSM"
+        if do_cdsm_abs:
             self.cdsm_relative = False
-            logger.info(f"Converted relative CDSM to absolute (base: {'DEM' if self.dem is not None else 'DSM'})")
-
-        # Step 4: Convert TDSM from relative to absolute
-        if self.tdsm_relative and self.tdsm is not None:
-            tdsm_rel = np.where(np.isnan(self.tdsm), zero32, self.tdsm)
-            tdsm_abs = np.where(~np.isnan(base), base + tdsm_rel, nan32)
-            tdsm_abs = np.where(tdsm_abs - base < threshold, nan32, tdsm_abs)
-            self.tdsm = np.asarray(tdsm_abs, dtype=np.float32)
+            logger.info(f"Converted relative CDSM to absolute (base: {base_label})")
+        if do_tdsm_abs:
             self.tdsm_relative = False
-            logger.info(f"Converted relative TDSM to absolute (base: {'DEM' if self.dem is not None else 'DSM'})")
-
-        # Step 5: NaN out CDSM where canopy is below the DSM surface
-        # Canopy below the DSM is physically impossible — it means the
-        # vegetation layer sits inside a building or underground.  Mark as
-        # absent (NaN) so the shadow caster skips these pixels entirely.
-        # NOTE: Only CDSM is checked against DSM.  TDSM (trunk height) is
-        # naturally below the canopy top, and the DSM already includes the
-        # canopy, so trunk < DSM is expected at every tree pixel.  Clearing
-        # TDSM here would destroy all trunk data and break pergola shadows.
-        if self.cdsm is not None:
-            below = self.cdsm < self.dsm
-            if np.any(below):
-                n = int(below.sum())
-                self.cdsm[below] = np.float32(np.nan)
-                # Also clear TDSM at the same pixels — if canopy is inside
-                # a building, the trunk is too.
-                if self.tdsm is not None:
-                    self.tdsm[below] = np.float32(np.nan)
-                logger.info(f"Cleared {n} vegetation pixels below DSM (canopy was underground)")
+            logger.info(f"Converted relative TDSM to absolute (base: {base_label})")
+        if n_cleared:
+            logger.info(f"Cleared {n_cleared} vegetation pixels below DSM (canopy was underground)")
 
         self._preprocessed = True
 
