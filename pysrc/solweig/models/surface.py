@@ -492,20 +492,45 @@ class SurfaceData:
                 f"DSM raster not found in {cleaned_dir} or {directory}.\nRun SurfaceData.prepare() first."
             )
 
-        # Load DSM (required)
-        dsm_arr, gt, crs_wkt, _ = io.load_raster(str(raster_dir / "dsm.tif"))
+        # Prefer the .npy memmap sidecar (written by save_cleaned) so large
+        # rasters are not read fully into RAM — only the tile windows actually
+        # touched page in. Fall back to the GeoTIFF for legacy prepared dirs
+        # (e.g. the QGIS plugin) that have no sidecar. mmap_mode="c" is copy-on-
+        # write: reads page from disk, any in-place write goes to a private
+        # page, so the array behaves like a normal writable ndarray while
+        # staying disk-backed and bounded.
+        def _read_layer(name: str) -> np.ndarray | None:
+            npy = raster_dir / f"{name}.npy"
+            if npy.exists():
+                return np.load(npy, mmap_mode="c")
+            tif = raster_dir / f"{name}.tif"
+            if tif.exists():
+                arr, _, _, _ = io.load_raster(str(tif))
+                return arr
+            return None
+
+        # DSM (required). When the memmap sidecar is present the geotransform
+        # and CRS come from metadata.json (written from the same source by
+        # save_cleaned), avoiding a full read of dsm.tif; otherwise read the
+        # GeoTIFF header path as before.
+        dsm_arr = _read_layer("dsm")
+        if dsm_arr is None:
+            raise FileNotFoundError(f"DSM raster not found in {raster_dir}.\nRun SurfaceData.prepare() first.")
+        if (raster_dir / "dsm.npy").exists() and "geotransform" in metadata:
+            gt = list(metadata["geotransform"])
+            crs_wkt = metadata.get("crs_wkt", "")
+        else:
+            _, gt, crs_wkt, _ = io.load_raster(str(raster_dir / "dsm.tif"))
         logger.info(f"  DSM: {dsm_arr.shape[1]}×{dsm_arr.shape[0]} pixels")
 
         # Load optional layers based on metadata flags
         def _load_if_present(name: str, flag: str) -> np.ndarray | None:
             if not metadata.get(flag, False):
                 return None
-            try:
-                arr, _, _, _ = io.load_raster(str(raster_dir / f"{name}.tif"))
-                return arr
-            except FileNotFoundError:
-                logger.warning(f"  {name}.tif flagged in metadata but not found")
-                return None
+            arr = _read_layer(name)
+            if arr is None:
+                logger.warning(f"  {name} flagged in metadata but not found")
+            return arr
 
         cdsm = _load_if_present("cdsm", "has_cdsm")
         dem = _load_if_present("dem", "has_dem")
@@ -514,13 +539,8 @@ class SurfaceData:
         land_cover = lc.astype(np.uint8) if lc is not None else None
 
         # Load walls (always present after prepare)
-        wall_height = None
-        wall_aspect = None
-        try:
-            wall_height, _, _, _ = io.load_raster(str(raster_dir / "wall_height.tif"))
-            wall_aspect, _, _, _ = io.load_raster(str(raster_dir / "wall_aspect.tif"))
-        except FileNotFoundError:
-            pass
+        wall_height = _read_layer("wall_height")
+        wall_aspect = _read_layer("wall_aspect")
 
         # Validate before expensive SVF loading
         base_surface = dem if dem is not None else dsm_arr
@@ -1557,7 +1577,18 @@ class SurfaceData:
         out.mkdir(parents=True, exist_ok=True)
         gt = self._geotransform or [0, self.pixel_size, 0, 0, 0, -self.pixel_size]
         crs = self._crs_wkt or ""
-        io.save_raster(str(out / "dsm.tif"), self.dsm, gt, crs)
+
+        # Each base layer is written twice: a GeoTIFF (georeferenced, for
+        # interop and output) and a raw ``.npy`` sidecar. The .npy is what
+        # SurfaceData.load() memory-maps, so a subsequent load / per-timestep
+        # run never holds the full base rasters in RAM — only the tile windows
+        # it touches page in. The array is already resident here, so np.save is
+        # just a disk dump (no extra memory). Mirrors the SVF memmap cache.
+        def _save_layer(name: str, arr: np.ndarray, npy_dtype: np.dtype | type) -> None:
+            io.save_raster(str(out / f"{name}.tif"), np.asarray(arr, dtype=np.float32), gt, crs)
+            np.save(out / f"{name}.npy", np.ascontiguousarray(arr, dtype=npy_dtype))
+
+        _save_layer("dsm", self.dsm, np.float32)
         for name, arr in [
             ("cdsm", self.cdsm),
             ("dem", self.dem),
@@ -1566,9 +1597,10 @@ class SurfaceData:
             ("wall_aspect", self.wall_aspect),
         ]:
             if arr is not None:
-                io.save_raster(str(out / f"{name}.tif"), arr, gt, crs)
+                _save_layer(name, arr, np.float32)
         if self.land_cover is not None:
             io.save_raster(str(out / "land_cover.tif"), self.land_cover.astype(np.float32), gt, crs)
+            np.save(out / "land_cover.npy", np.ascontiguousarray(self.land_cover, dtype=np.uint8))
         if self._valid_mask is not None:
             io.save_raster(str(out / "valid_mask.tif"), self._valid_mask.astype(np.float32), gt, crs)
 
