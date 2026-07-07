@@ -37,6 +37,23 @@ Data sources
 
 Native CRS: EPSG:25830 (ETRS89 / UTM zone 30N)
 Raster extent: (410679, 4442245) – (465663, 4499872)
+
+Measured run (2026-07-07, Apple M-series laptop, isotropic sky, 3 daytime
+timesteps on the full 21991x23050 = 507 Mpx extent):
+
+- Surface prep (walls + tiled SVF over 16 tiles): ~350 s, peak ~30 GB RAM.
+- Per-timestep calculation: ~350 s/step compute (16 auto-tiles).
+- Peak RSS for the whole run: ~33 GB.
+
+Memory note: the per-timestep calculation is tiled and its peak is bounded
+by the tile size, not the raster size. The ~33 GB peak above comes almost
+entirely from the one-time surface prep, which still assembles a few
+full-raster arrays at once (SVF layers, the valid mask, the valid-bounds
+crop). That step is O(raster area), roughly 30 GB at 500 Mpx, so this scale
+needs a machine with tens of GB free — an earlier run OOMed when only 16 GB
+was free. Anisotropic sky at this extent additionally needs the sky-patch
+shadow-matrix cache (~113 GB on disk for 153 patches), so the full extent is
+run isotropically here; anisotropic is better suited to a windowed bbox.
 """
 
 import math
