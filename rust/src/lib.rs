@@ -4,6 +4,7 @@ mod emissivity_models;
 #[cfg(feature = "gpu")]
 mod gpu;
 mod ground;
+mod ground_surface;
 mod gvf;
 mod gvf_geometry;
 mod morphology;
@@ -169,6 +170,12 @@ fn register_ground_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
     submodule.add_function(wrap_pyfunction!(ground::ts_wave_delay, &submodule)?)?;
     submodule.add_function(wrap_pyfunction!(ground::ts_wave_delay_batch, &submodule)?)?;
     submodule.add_class::<ground::TsWaveDelayBatchResult>()?;
+    // UMEP 2026a ground-surface scheme (opt-in)
+    submodule.add_function(wrap_pyfunction!(
+        ground_surface::surface_temperature_calc,
+        &submodule
+    )?)?;
+    submodule.add_class::<ground_surface::SurfaceTemperatureStep>()?;
     py_module.add_submodule(&submodule)?;
     Ok(())
 }

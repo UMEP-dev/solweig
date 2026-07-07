@@ -182,3 +182,123 @@ def test_v2026_iso_differs_from_v2022a_by_ground_and_lup_reflection():
     got = _run_rust(95.0, 35.0, 0.9, aniso=False)
     for e, g in zip((v2022.least, v2022.lsouth, v2022.lwest, v2022.lnorth), got, strict=True):
         np.testing.assert_allclose(g, np.asarray(e), rtol=0, atol=0)
+
+
+# ── Ground-surface scheme: surface temperature (force-restore/OHM/RK2) ──────
+
+matplotlib = pytest.importorskip("matplotlib")  # vendored module imports it
+
+from solweig.rustalgos import ground as rust_ground  # noqa: E402
+from umep_2026a.ground_surface import surfaceTemperature_calc  # noqa: E402
+
+
+def _ground_scene():
+    """Synthetic per-landcover grids, including water pixels and a shadow edge."""
+    rng = np.random.default_rng(7)
+    shape = SHAPE
+    lc = np.zeros(shape, dtype=np.float32)
+    lc[:, 8:14] = 1.0  # asphalt band
+    lc[18:24, 0:6] = 7.0  # water pocket
+    alb = np.where(lc == 1, 0.18, np.where(lc == 7, 0.05, 0.2)).astype(np.float32)
+    emis = np.where(lc == 7, 0.98, 0.95).astype(np.float32)
+    cap = np.where(lc == 1, 1.94e6, np.where(lc == 7, 4.18e6, 2.11e6)).astype(np.float32)
+    diff = np.where(lc == 1, 3.8e-7, np.where(lc == 7, 1e-7, 7.2e-7)).astype(np.float32)
+    a1 = np.where(lc == 1, 0.5, np.where(lc == 7, 0.1, 0.61)).astype(np.float32)
+    a2 = np.where(lc == 1, 0.28, np.where(lc == 7, 0.0, 0.28)).astype(np.float32)
+    a3 = np.where(lc == 1, -31.45, np.where(lc == 7, -10.0, -23.9)).astype(np.float32)
+    tg0 = (24.0 + rng.uniform(-2.0, 6.0, shape)).astype(np.float32)
+    tm0 = np.full(shape, 22.0, dtype=np.float32)
+    shadow_a = np.ones(shape, dtype=np.float32)
+    shadow_a[:, 0:6] = 0.0
+    shadow_b = np.ones(shape, dtype=np.float32)
+    shadow_b[0:10, :] = 0.0  # abrupt transition exercises the damping mask
+    return lc, alb, emis, cap, diff, a1, a2, a3, tg0, tm0, shadow_a, shadow_b
+
+
+def test_surface_temperature_matches_upstream_over_chained_steps():
+    """Rust force-restore/OHM/RK2 step matches the vendored reference.
+
+    Four chained hourly steps with varying forcing and a shadow flip (which
+    exercises the ground-heat-flux damping mask) and water pixels (slab
+    model). State (Tg, Rn, Rn_past, G) carries between steps in both
+    implementations.
+    """
+    lc, alb, emis, cap, diff, a1, a2, a3, tg0, tm0, shadow_a, shadow_b = _ground_scene()
+    shape = lc.shape
+    timestep_s = 3600.0
+    rh = 55.0
+
+    forcing = [
+        (620.0, 380.0, shadow_a, shadow_a),
+        (710.0, 390.0, shadow_b, shadow_a),  # shadow flip
+        (300.0, 370.0, shadow_b, shadow_b),
+        (0.0, 350.0, shadow_a, shadow_b),  # evening + flip back
+    ]
+
+    # Upstream (float64, in-place mutation: pass fresh copies it may own)
+    tg_py = tg0.astype(np.float64).copy()
+    rn_py = np.zeros(shape, dtype=np.float64)
+    rn_past_py = np.zeros(shape, dtype=np.float64)
+    g_py = np.zeros(shape, dtype=np.float64)
+
+    # Rust (float32, functional)
+    tg_rs = tg0.copy()
+    rn_rs = np.zeros(shape, dtype=np.float32)
+    rn_past_rs = np.zeros(shape, dtype=np.float32)
+    g_rs = np.zeros(shape, dtype=np.float32)
+
+    for step, (kdown_v, ldown_v, shadow, shadow_past) in enumerate(forcing):
+        kdown = np.full(shape, kdown_v)
+        ldown = np.full(shape, ldown_v)
+
+        tg_py, rn_py, rn_past_py, g_py = surfaceTemperature_calc(
+            kdown.astype(np.float64),
+            ldown.astype(np.float64),
+            rn_py,
+            rn_past_py,
+            g_py,
+            tg_py,
+            tm0.astype(np.float64),
+            alb.astype(np.float64),
+            emis.astype(np.float64),
+            cap.astype(np.float64),
+            diff.astype(np.float64),
+            lc.astype(np.float64),
+            a1.astype(np.float64),
+            a2.astype(np.float64),
+            a3.astype(np.float64),
+            timestep_s,
+            rh,
+            shadow.astype(np.float64),
+            shadow_past.astype(np.float64),
+        )
+
+        result = rust_ground.surface_temperature_calc(
+            kdown.astype(np.float32),
+            ldown.astype(np.float32),
+            rn_rs,
+            rn_past_rs,
+            g_rs,
+            tg_rs,
+            tm0,
+            alb,
+            emis,
+            cap,
+            diff,
+            lc,
+            a1,
+            a2,
+            a3,
+            timestep_s,
+            rh,
+            shadow,
+            shadow_past,
+        )
+        tg_rs = np.asarray(result.tg)
+        rn_rs = np.asarray(result.rn)
+        rn_past_rs = np.asarray(result.rn_past)
+        g_rs = np.asarray(result.g)
+
+        np.testing.assert_allclose(tg_rs, tg_py, rtol=1e-3, atol=0.05, err_msg=f"Tg mismatch at step {step}")
+        np.testing.assert_allclose(rn_rs, rn_py, rtol=1e-3, atol=0.5, err_msg=f"Rn mismatch at step {step}")
+        np.testing.assert_allclose(g_rs, g_py, rtol=1e-3, atol=0.5, err_msg=f"G mismatch at step {step}")
