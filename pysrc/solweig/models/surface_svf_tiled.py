@@ -122,7 +122,7 @@ def _compute_svf_tiled(
 
     # Pre-allocate output arrays as memmaps on disk to avoid massive RAM
     # use for very large rasters (e.g. >100M pixels).
-    outputs: dict[str, np.ndarray] = {}
+    outputs: dict[str, np.memmap] = {}
     svf_memmap_dir = working_path / "svf_memmaps"
     svf_memmap_dir.mkdir(parents=True, exist_ok=True)
     for name in all_fields:
@@ -132,7 +132,12 @@ def _compute_svf_tiled(
             mode="w+",
             shape=(rows, cols),
         )
-        mm[:] = 1.0  # default for untouched pixels / masked edges
+        # No blanket ``mm[:] = 1.0`` pre-fill: the tile write_slices partition
+        # the raster exactly (generate_tiles cores cover every pixel once), so
+        # every output pixel is overwritten by its tile in _process_result.
+        # A whole-array pre-fill would dirty all ~30 GB of these mappings up
+        # front (the cold-prepare RSS spike); w+ zero-init plus full tile
+        # coverage gives byte-identical output without it.
         outputs[name] = mm
 
     # Pre-allocate memmap files for shadow matrices (bitpacked uint8, on disk)
@@ -254,6 +259,19 @@ def _compute_svf_tiled(
             vb = np.asarray(tile_result.veg_blocks_bldg_sh_matrix)
             vegshmat_mm[ws] = veg if core_only else veg[cs]
             vbshmat_mm[ws] = vb if core_only else vb[cs]
+
+        # Flush this tile's freshly written pages so the OS can write them back
+        # and reclaim them: resident memory then tracks a few tiles instead of
+        # accumulating the whole-raster mapping (writes are disjoint per tile).
+        for name in svf_fields:
+            outputs[name].flush()
+        if use_veg:
+            for name in veg_fields:
+                outputs[name].flush()
+        shmat_mm.flush()
+        if use_veg:
+            vegshmat_mm.flush()
+            vbshmat_mm.flush()
 
     # Kick off first tile
     thread, box, runner, core_only = _submit_tile(tiles[0])
@@ -377,8 +395,7 @@ def _compute_svf_tiled(
 
     # Flush all SVF memmaps to disk
     for arr in outputs.values():
-        if hasattr(arr, "flush"):
-            arr.flush()  # type: ignore[union-attr]
+        arr.flush()
     if hasattr(ones, "flush"):
         ones.flush()  # type: ignore[union-attr]
 

@@ -35,14 +35,14 @@ def findwalls(a: NDArray[np.floating], walllimit: float) -> NDArray[np.float32]:
 
     walls = np.zeros_like(a, dtype=np.float32)
 
-    # Max of 4 cardinal neighbors for all interior pixels
-    max_neighbors = np.maximum.reduce(
-        [
-            a[:-2, 1:-1],  # north
-            a[2:, 1:-1],  # south
-            a[1:-1, :-2],  # west
-            a[1:-1, 2:],  # east
-        ]
+    # Max of 4 cardinal neighbors for all interior pixels. Use pairwise
+    # np.maximum rather than np.maximum.reduce([...]): the list form first
+    # stacks the 4 slices into a (4, H-2, W-2) temporary (~8 GB at 500 Mpx),
+    # whereas the pairwise form holds only two full-size temporaries. The
+    # result is bit-identical (element-wise max, same NaN propagation).
+    max_neighbors = np.maximum(
+        np.maximum(a[:-2, 1:-1], a[2:, 1:-1]),  # north, south
+        np.maximum(a[1:-1, :-2], a[1:-1, 2:]),  # west, east
     )
     walls[1:-1, 1:-1] = max_neighbors
 

@@ -428,15 +428,18 @@ def _calculate_timeseries(
         _mm_dir = Path(_memmap_tmpdir.name)
         logger.info(f"Large raster ({total_pixels / 1e6:.1f}M pixels) — using memmap in {_mm_dir}")
 
+        # No eager arr[:] = nan/0 fill: the tile loop writes every pixel of
+        # every summary grid (tile write_slices from generate_tiles partition
+        # the raster), so the default is never read. A whole-array fill would
+        # dirty all ~30 GB of these mappings before the first tile runs — the
+        # calc-side RSS spike. w+ zero-init plus full tile coverage is
+        # byte-identical without it. (The <50 Mpx branch below keeps the
+        # explicit nan/zero fill: cheap at that size and clearer.)
         def _mm_nan(name: str) -> np.ndarray:
-            arr = np.memmap(_mm_dir / f"{name}.dat", dtype=np.float32, mode="w+", shape=shape)
-            arr[:] = np.nan
-            return arr
+            return np.memmap(_mm_dir / f"{name}.dat", dtype=np.float32, mode="w+", shape=shape)
 
         def _mm_zero(name: str) -> np.ndarray:
-            arr = np.memmap(_mm_dir / f"{name}.dat", dtype=np.float32, mode="w+", shape=shape)
-            arr[:] = 0
-            return arr
+            return np.memmap(_mm_dir / f"{name}.dat", dtype=np.float32, mode="w+", shape=shape)
     else:
 
         def _mm_nan(name: str) -> np.ndarray:
@@ -625,6 +628,15 @@ def _calculate_timeseries(
                 full_grids[name][ws] = getattr(tile_summary, name)[cs]
             for t_val, grid in tile_summary.utci_hours_above.items():
                 full_utci_hours[t_val][ws] = grid[cs]
+            # Flush this tile's written pages (memmap branch only) so resident
+            # memory tracks the active tile, not the whole-raster summary stack.
+            # getattr keeps it a no-op for the small-raster ndarray branch
+            # (plain ndarrays have no ``flush``).
+            if _memmap_tmpdir is not None:
+                for arr in (*full_grids.values(), *full_utci_hours.values()):
+                    _flush = getattr(arr, "flush", None)
+                    if _flush is not None:
+                        _flush()
 
             if n_tiles > 1:
                 logger.debug(f"  Tile {tile_idx + 1}/{n_tiles} complete")
