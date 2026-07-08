@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta90
+version=0.1.0-beta91
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,8 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta91
+    - Library gains memory-bounded prepare() for large rasters (layer-sequential windowing; >50 Mpx cold-build peak RAM cut ~3x, from ~30 GB to ~10 GB on a 507 Mpx raster). No plugin UI or numerical change from b90.
     0.1.0-beta90
     - Library gains the opt-in UMEP 2026a ground-surface scheme (use_ground_scheme / use_outgoing_longwave; Python API only, not yet exposed in the plugin UI). Defaults off; plugin behaviour and numerical output unchanged from b89.
     - A field comparison of the opt-in scheme is documented in VALIDATION.md; the scheme is experimental and off by default.

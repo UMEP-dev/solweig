@@ -161,6 +161,11 @@ the spatial computation internally (see
 [Working with GeoTIFFs](geotiffs.md#large-rasters)); no chunking of the
 weather series is needed.
 
+Surface preparation is memory-bounded as well: above roughly 50 megapixels,
+`SurfaceData.prepare()` processes input layers one at a time through
+disk-backed storage instead of holding the whole stack in memory (see
+[Working with GeoTIFFs](geotiffs.md#large-rasters)).
+
 ## Performance
 
 | Grid size | Surface prep (SVF) | Per timestep | 72 timesteps |

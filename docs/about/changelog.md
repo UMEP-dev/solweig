@@ -4,6 +4,45 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
+## 0.1.0b91 — 2026-07-08
+
+Large-raster memory reductions. **No numerical change**: output is
+byte-identical, and golden tests and validation site numbers are unchanged from
+b90 (validation 31/31 pass). Measured cold Madrid (507 megapixels, isotropic):
+prepare peak 35.6 → 27.3 GB, overall peak RSS 38.1 → 32.9 GB.
+
+- Base-layer load and alignment in `prepare()` processes one layer at a time
+  through disk-backed storage instead of holding the whole layer stack as
+  resident RAM.
+- `findwalls` uses pairwise `np.maximum` instead of stacking the four cardinal
+  neighbour grids, removing an ~8 GB whole-raster temporary (the largest
+  hard-RAM spike). Element-wise max and NaN handling are identical, so wall
+  outputs are unchanged.
+- The tiled-SVF output arrays and the tiled-calc summary grids no longer
+  pre-fill the whole memmap up front and are flushed per tile. The tiles cover
+  every pixel, so this is byte-identical while keeping resident memory to the
+  active tile.
+- Fixed a latent macOS hazard: `np.asarray(memmap)` returns a plain-ndarray
+  view, so an `isinstance` check missed disk-backed layers and a save over a
+  live mapping could wedge the process in uninterruptible kernel state.
+  Disk-backed layers are now detected by walking the array's base chain.
+
+Known reproducibility note: large-raster `calculate()` output is deterministic
+for a given tile size but shifts by ~0.029 °C mean (a small near-threshold tail
+up to ~3 °C) across different tile sizes, because the compute kernels round
+differently for different tile array shapes. This is floating-point-class, not
+a correctness issue; pin `tile_size` for bit-reproducible large-raster runs.
+
+## 0.1.0b90 — 2026-07-07
+
+Opt-in UMEP 2026a ground-surface scheme (`use_ground_scheme` /
+`use_outgoing_longwave`), Python API only, not exposed in the plugin UI.
+Defaults off, so model output is unchanged from b89 (golden output
+byte-identical, validation 31/31 pass with b89 numbers). The scheme requires a
+land-cover grid, rejects tiled processing, and currently runs warm against the
+validation sites; a question about its radiation composition is open with the
+upstream developers. See `VALIDATION.md` for the field comparison.
+
 ## 0.1.0b89 — 2026-07-06
 
 Correctness release from a full-repository review. **Numerical output

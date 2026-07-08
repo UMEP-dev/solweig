@@ -164,10 +164,16 @@ For rasters exceeding available memory, SOLWEIG tiles the computation internally
 ```python
 results = solweig.calculate(
     surface=surface,
-    location=location,
     weather=weather,
+    location=location,
     output_dir="output/",
 )
 ```
 
 No explicit tiling configuration is required.
+
+For large rasters, surface preparation also processes base layers one at a
+time. Above roughly 50 megapixels, `SurfaceData.prepare()` loads, resamples,
+and spills each input layer to a disk-backed file one layer at a time, rather
+than holding the whole layer stack as resident RAM, with no change to the
+prepared output.

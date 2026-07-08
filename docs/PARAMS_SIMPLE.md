@@ -64,7 +64,7 @@ Contents per landcover class:
 
 ## Model Behaviour Flags
 
-Two parameters control principal model behaviour:
+These parameters control principal model behaviour:
 
 ### `use_anisotropic_sky` (default: follows `ModelConfig`, currently `True`)
 
@@ -77,6 +77,15 @@ If set to `True`, shadow matrices must be prepared in advance.
 
 - `False` — Deciduous trees (seasonal leaf on/off)
 - `True` — Evergreen trees (year-round canopy)
+
+### `use_ground_scheme` / `use_outgoing_longwave` (default: `False`)
+
+Opt-in UMEP 2026a ground-surface scheme (force-restore/OHM surface
+temperature and the solid-angle outgoing-longwave march). Experimental: the
+two flags must be enabled together, a land-cover grid is required, tiled
+processing is not supported, and the scheme currently runs warm against the
+validation sites. Left off, model output is unchanged. See the
+[Settings guide](guide/settings.md) for details.
 
 ---
 
