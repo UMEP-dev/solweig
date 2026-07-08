@@ -21,9 +21,10 @@ a glance.
 ## Summary — v0.1.0b91 (2026-07-08)
 
 Baseline numbers are identical to b89. b90 added the opt-in 2026a ground
-scheme with defaults off; b91 makes `prepare()` memory-bounded for large
-rasters with no numerical change (cleaned layers byte-identical, re-validated
-31/31). The opt-in scheme has its own field comparison further down.
+scheme with defaults off; b91 reduces large-raster memory use (prepare
+load/align and walls, plus the tiled SVF and summary outputs) with no
+numerical change — output is byte-identical and re-validated 31/31. The opt-in
+scheme has its own field comparison further down.
 
 | Metric               | Kronenhuset | Gustav Adolfs |          GVC |
 | -------------------- | ----------: | ------------: | -----------: |

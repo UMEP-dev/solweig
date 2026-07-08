@@ -66,6 +66,11 @@ Surface temperature model with thermal inertia.
 
 [:octicons-arrow-right-24: Ground temperature specification](ground_temperature.md)
 
+An experimental, opt-in refinement (the UMEP 2026a force-restore/OHM surface
+temperature scheme) is available and off by default; see the
+[ground-scheme settings](../guide/settings.md) and the
+[experimental tutorial](../tutorials/05-ground-scheme-experimental.md).
+
 ### 6. Mean Radiant Temperature
 
 Integration of all radiation fluxes into Tmrt.

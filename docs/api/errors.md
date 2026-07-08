@@ -7,9 +7,10 @@ SOLWEIG uses structured exceptions for diagnostic error reporting.
 ```
 SolweigError (base)
 ├── InvalidSurfaceData
-├── GridShapeMismatch
+│   └── GridShapeMismatch
 ├── MissingPrecomputedData
 ├── WeatherDataError
+├── ComputationCancelled
 └── ConfigurationError
 ```
 
@@ -73,6 +74,15 @@ except SolweigError as e:
 ## WeatherDataError
 
 ::: solweig.errors.WeatherDataError
+    options:
+      show_source: false
+      heading_level: 3
+
+---
+
+## ComputationCancelled
+
+::: solweig.errors.ComputationCancelled
     options:
       show_source: false
       heading_level: 3
