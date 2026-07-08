@@ -45,16 +45,11 @@ timesteps on the full 21991x23050 = 507 Mpx extent):
 - Per-timestep calculation: ~350 s/step compute (16 auto-tiles).
 - Peak RSS for the whole run: ~33 GB.
 
-Memory note: the per-timestep calculation is tiled and its peak is bounded
-by the tile size, not the raster size. The ~33 GB peak above is the one-time
-surface prep, and it is O(raster area), not tile-bounded: holding the
-prepared full-raster surface (base layers + SVF/shadow memmaps) is ~14 GB at
-500 Mpx, and the cold prep adds ~16 GB of transient full-raster copies while
-loading the source rasters, resampling the 5 m DEM to 2.5 m, doing the
-relative->absolute (DSM = DEM + nDSM) conversion, and re-saving the cleaned
-rasters. So this scale needs a machine with tens of GB free — an earlier run
-OOMed when only 16 GB was free. (Meaningfully lowering the prep peak means
-streaming those assembly steps tile-by-tile, which is not yet done.)
+Memory note: both the per-timestep calculation (tiled) and the one-time
+surface prep (layer-sequential: each layer is loaded, resampled, and spilled
+to a disk memmap before the next loads) are memory-bounded. Measured cold
+prep peak on this extent: ~10.5 GB; holding the prepared surface afterwards
+is ~8 GB, with pages reclaimable because the layers are disk-backed.
 Anisotropic sky at this extent additionally needs the sky-patch shadow-matrix
 cache (~113 GB on disk for 153 patches), so the full extent is run
 isotropically here; anisotropic is better suited to a windowed bbox.
