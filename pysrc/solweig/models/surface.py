@@ -42,6 +42,25 @@ _PREPROCESS_STREAM_MIN_PIXELS = 50_000_000
 _PREPROCESS_STREAM_BLOCK_ROWS = 2048
 
 
+def _backing_memmap(arr) -> np.memmap | None:
+    """Return the np.memmap backing ``arr`` (walking views), else None.
+
+    ``np.asarray(memmap)`` returns a plain-ndarray VIEW whose ``.base`` is the
+    memmap, so ``isinstance(arr, np.memmap)`` alone misses disk-backed arrays.
+    Missing them is not benign: ``np.save`` onto a file the same process still
+    maps truncates it under the live mapping, which wedges the write in
+    uninterruptible kernel state on macOS (unkillable process).
+    """
+    a = arr
+    for _ in range(8):  # views nest shallowly; bound the walk
+        if a is None:
+            return None
+        if isinstance(a, np.memmap):
+            return a
+        a = getattr(a, "base", None)
+    return None
+
+
 class _ComputationCache:
     """Per-timestep computation caches for ``calculate_core_fused``.
 
@@ -825,14 +844,21 @@ class SurfaceData:
         # Load and validate DSM — dsm is str | Path after the isinstance guard above
         dsm_arr, dsm_transform, dsm_crs, pixel_size = surface_loading.load_and_validate_dsm(dsm_path, pixel_size)
 
-        # Load optional terrain rasters — these are str | Path | None after array branch
-        terrain_rasters = surface_loading.load_terrain_rasters(
-            cast("str | Path | None", cdsm),
-            cast("str | Path | None", dem),
-            cast("str | Path | None", tdsm),
-            cast("str | Path | None", land_cover),
-            trunk_ratio,
-        )
+        # Memory-bounded path for very large rasters: layers are loaded,
+        # aligned and spilled to disk memmaps ONE AT A TIME instead of holding
+        # the whole stack in RAM (see load_align_layers_sequential). The
+        # decision uses the DSM size as the proxy for the target grid.
+        large_raster = dsm_arr.size > _PREPROCESS_STREAM_MIN_PIXELS
+
+        if not large_raster:
+            # Load optional terrain rasters — these are str | Path | None after array branch
+            terrain_rasters = surface_loading.load_terrain_rasters(
+                cast("str | Path | None", cdsm),
+                cast("str | Path | None", dem),
+                cast("str | Path | None", tdsm),
+                cast("str | Path | None", land_cover),
+                trunk_ratio,
+            )
 
         # Load preprocessing data (walls, SVF). ``working_path`` was
         # already constructed above for the fast-path check — reuse it.
@@ -846,15 +872,33 @@ class SurfaceData:
         )
 
         # Compute extent, validate bbox, and resample all rasters
-        aligned_rasters = surface_loading.align_rasters(
-            dsm_arr,
-            dsm_transform,
-            dsm_crs,
-            pixel_size,
-            terrain_rasters,
-            preprocess_data,
-            bbox,
-        )
+        if large_raster:
+            aligned_rasters = surface_loading.load_align_layers_sequential(
+                dsm_arr,
+                dsm_transform,
+                dsm_crs,
+                pixel_size,
+                {
+                    "cdsm": cast("str | Path | None", cdsm),
+                    "dem": cast("str | Path | None", dem),
+                    "tdsm": cast("str | Path | None", tdsm),
+                    "land_cover": cast("str | Path | None", land_cover),
+                },
+                preprocess_data,
+                bbox,
+                spill_dir=working_path / "cleaned",
+            )
+            del dsm_arr  # RAM copy released; aligned_rasters holds the memmap
+        else:
+            aligned_rasters = surface_loading.align_rasters(
+                dsm_arr,
+                dsm_transform,
+                dsm_crs,
+                pixel_size,
+                terrain_rasters,
+                preprocess_data,
+                bbox,
+            )
 
         # Create SurfaceData instance
         surface_data = surface_loading.create_surface_instance(
@@ -1090,7 +1134,9 @@ class SurfaceData:
         # Compute walls if not provided
         if surface_data.wall_height is None or surface_data.wall_aspect is None:
             logger.info("  Computing walls from DSM...")
-            dsm_f32 = surface_data.dsm.astype(np.float32)
+            # asarray, not astype: keeps a float32 (possibly memmap-backed) DSM
+            # as-is instead of copying 2 GB into RAM on very large rasters.
+            dsm_f32 = np.asarray(surface_data.dsm, dtype=np.float32)
             walls = wa.findwalls(dsm_f32, 1.0)
             dsm_scale = 1.0 / pixel_size
             dirwalls = wa.filter1Goodwin_as_aspect_v3(walls, dsm_scale, dsm_f32)
@@ -1201,7 +1247,15 @@ class SurfaceData:
         do_tdsm_autogen = self.cdsm is not None and self.tdsm is None
         if do_tdsm_autogen and self.cdsm is not None:
             # Allocate the TDSM layer once; it is filled from CDSM per block.
-            self.tdsm = np.empty_like(self.cdsm)
+            # When CDSM is a spilled memmap (large-raster path), allocate the
+            # TDSM as a sibling memmap so the new layer is disk-backed too.
+            cdsm_mm = _backing_memmap(self.cdsm)
+            cdsm_file = cdsm_mm.filename if cdsm_mm is not None else None
+            if cdsm_file is not None:
+                tdsm_path = Path(str(cdsm_file)).parent / "tdsm.npy"
+                self.tdsm = np.lib.format.open_memmap(tdsm_path, mode="w+", dtype=np.float32, shape=self.cdsm.shape)
+            else:
+                self.tdsm = np.empty_like(self.cdsm)
             self.tdsm_relative = self.cdsm_relative
         do_cdsm_abs = self.cdsm_relative and self.cdsm is not None
         do_tdsm_abs = self.tdsm_relative and self.tdsm is not None
@@ -1209,14 +1263,8 @@ class SurfaceData:
         have_dem = self.dem is not None
 
         n_raised = n_flat = n_cleared = 0
-        rows, cols = self.dsm.shape
-        # Explicit override (tests) wins; otherwise stream only large rasters.
-        if self._preprocess_block_rows is not None:
-            block_rows = self._preprocess_block_rows
-        elif rows * cols > _PREPROCESS_STREAM_MIN_PIXELS:
-            block_rows = _PREPROCESS_STREAM_BLOCK_ROWS
-        else:
-            block_rows = rows
+        rows = self.dsm.shape[0]
+        block_rows = self._fill_block_rows()
 
         for r0 in range(0, rows, block_rows):
             r1 = min(r0 + block_rows, rows)
@@ -1292,6 +1340,7 @@ class SurfaceData:
         if n_cleared:
             logger.info(f"Cleared {n_cleared} vegetation pixels below DSM (canopy was underground)")
 
+        self._flush_memmap_layers()
         self._preprocessed = True
 
     def compute_svf(self) -> None:
@@ -1433,40 +1482,71 @@ class SurfaceData:
 
         tol = np.float32(tolerance)
 
+        # In-place, block-wise fill. Per-pixel semantics are identical to the
+        # previous whole-array np.where form (arr[mask] = src[mask] ≡
+        # np.where(mask, src, arr)), but the layers are updated through views,
+        # so memmap-backed layers on the large-raster path stay disk-backed
+        # and temporaries are O(block) instead of O(raster).
+        rows = self.dsm.shape[0]
+        block = self._fill_block_rows()
+
         # DSM: fill with DEM where available
         if self.dem is not None:
-            dsm_nan = np.isnan(self.dsm)
-            if np.any(dsm_nan):
-                n = int(dsm_nan.sum())
-                self.dsm = np.asarray(np.where(dsm_nan, self.dem, self.dsm), dtype=np.float32)
+            n = 0
+            for r0 in range(0, rows, block):
+                r1 = min(r0 + block, rows)
+                dsm = self.dsm[r0:r1]
+                nan_mask = np.isnan(dsm)
+                nb = int(nan_mask.sum())
+                if nb:
+                    n += nb
+                    dsm[nan_mask] = self.dem[r0:r1][nan_mask]
+            if n:
                 logger.info(f"  Filled {n} NaN DSM pixels with DEM")
 
-        base = self.dem if self.dem is not None else self.dsm
-        base_label = "DEM" if self.dem is not None else "DSM"
+        base_is_dem = self.dem is not None
+        base_label = "DEM" if base_is_dem else "DSM"
 
-        # CDSM: fill NaN with base, clamp near-ground noise
-        if self.cdsm is not None:
-            cdsm_nan = np.isnan(self.cdsm)
-            if np.any(cdsm_nan):
-                n = int(cdsm_nan.sum())
-                self.cdsm = np.asarray(np.where(cdsm_nan, base, self.cdsm), dtype=np.float32)
-                logger.info(f"  Filled {n} NaN CDSM pixels with {base_label}")
-            near_ground = np.abs(self.cdsm - base) < tol
-            if np.any(near_ground):
-                self.cdsm = np.asarray(np.where(near_ground, base, self.cdsm), dtype=np.float32)
+        # CDSM / TDSM: fill NaN with base, clamp near-ground noise
+        dem_arr = self.dem  # narrowed local for the type checker
+        for attr in ("cdsm", "tdsm"):
+            arr = getattr(self, attr)
+            if arr is None:
+                continue
+            n = 0
+            for r0 in range(0, rows, block):
+                r1 = min(r0 + block, rows)
+                a = arr[r0:r1]
+                b = dem_arr[r0:r1] if dem_arr is not None else self.dsm[r0:r1]
+                nan_mask = np.isnan(a)
+                nb = int(nan_mask.sum())
+                if nb:
+                    n += nb
+                    a[nan_mask] = b[nan_mask]
+                near_ground = np.abs(a - b) < tol
+                if near_ground.any():
+                    a[near_ground] = b[near_ground]
+            if n:
+                logger.info(f"  Filled {n} NaN {attr.upper()} pixels with {base_label}")
 
-        # TDSM: same treatment as CDSM
-        if self.tdsm is not None:
-            tdsm_nan = np.isnan(self.tdsm)
-            if np.any(tdsm_nan):
-                n = int(tdsm_nan.sum())
-                self.tdsm = np.asarray(np.where(tdsm_nan, base, self.tdsm), dtype=np.float32)
-                logger.info(f"  Filled {n} NaN TDSM pixels with {base_label}")
-            near_ground = np.abs(self.tdsm - base) < tol
-            if np.any(near_ground):
-                self.tdsm = np.asarray(np.where(near_ground, base, self.tdsm), dtype=np.float32)
-
+        self._flush_memmap_layers()
         self._nan_filled = True
+
+    def _fill_block_rows(self) -> int:
+        """Row-block height for in-place layer transforms (fill_nan/preprocess)."""
+        rows, cols = self.dsm.shape
+        if self._preprocess_block_rows is not None:
+            return self._preprocess_block_rows
+        if rows * cols > _PREPROCESS_STREAM_MIN_PIXELS:
+            return _PREPROCESS_STREAM_BLOCK_ROWS
+        return rows
+
+    def _flush_memmap_layers(self) -> None:
+        """msync any memmap-backed layers so dirty pages become reclaimable."""
+        for attr in ("dsm", "cdsm", "dem", "tdsm", "wall_height", "wall_aspect"):
+            mm = _backing_memmap(getattr(self, attr))
+            if mm is not None:
+                mm.flush()
 
     def compute_valid_mask(self) -> NDArray[np.bool_]:
         """Compute combined valid mask: True where ALL ground-reference layers have finite data.
@@ -1512,6 +1592,7 @@ class SurfaceData:
                 arr[invalid] = np.nan
         if self.land_cover is not None:
             self.land_cover[invalid] = 255
+        self._flush_memmap_layers()
 
     def crop_to_valid_bbox(self) -> tuple[int, int, int, int]:
         """Crop all arrays to minimum bounding box of valid pixels.
@@ -1618,11 +1699,37 @@ class SurfaceData:
         # interop and output) and a raw ``.npy`` sidecar. The .npy is what
         # SurfaceData.load() memory-maps, so a subsequent load / per-timestep
         # run never holds the full base rasters in RAM — only the tile windows
-        # it touches page in. The array is already resident here, so np.save is
-        # just a disk dump (no extra memory). Mirrors the SVF memmap cache.
-        def _save_layer(name: str, arr: np.ndarray, npy_dtype: np.dtype | type) -> None:
-            io.save_raster(str(out / f"{name}.tif"), np.asarray(arr, dtype=np.float32), gt, crs)
-            np.save(out / f"{name}.npy", np.ascontiguousarray(arr, dtype=npy_dtype))
+        # it touches page in. Mirrors the SVF memmap cache.
+        #
+        # Large-raster path: the layers are ALREADY memmaps over exactly these
+        # .npy files (spilled by load_align_layers_sequential and updated in
+        # place by the streamed fill_nan/preprocess), so the .npy write is a
+        # flush, not a rewrite — np.save onto a live-mapped file would truncate
+        # it under the mapping. The .tif is written as a plain GeoTIFF because
+        # the COG writer buffers the full raster plus overviews in memory.
+        large = self.dsm.shape[0] * self.dsm.shape[1] > _PREPROCESS_STREAM_MIN_PIXELS
+
+        def _save_layer(name: str, arr, npy_dtype: np.dtype | type) -> None:
+            npy_path = out / f"{name}.npy"
+            mm = _backing_memmap(arr)
+            fname = mm.filename if mm is not None else None
+            if mm is not None and fname is not None and Path(str(fname)).resolve() == npy_path.resolve():
+                # Already on disk at this path. Sync writable mappings; a
+                # copy-on-write ('c') mapping cannot flush and must not be
+                # np.save'd over its own live mapping either — its on-disk
+                # content is already the persisted state.
+                if mm.mode != "c":
+                    mm.flush()
+            else:
+                np.save(npy_path, np.ascontiguousarray(arr, dtype=npy_dtype))
+            io.save_raster(
+                str(out / f"{name}.tif"),
+                np.asarray(arr, dtype=np.float32),
+                gt,
+                crs,
+                use_cog=not large,
+                generate_preview=not large,
+            )
 
         _save_layer("dsm", self.dsm, np.float32)
         for name, arr in [
@@ -1635,10 +1742,22 @@ class SurfaceData:
             if arr is not None:
                 _save_layer(name, arr, np.float32)
         if self.land_cover is not None:
-            io.save_raster(str(out / "land_cover.tif"), self.land_cover.astype(np.float32), gt, crs)
+            io.save_raster(
+                str(out / "land_cover.tif"),
+                self.land_cover.astype(np.float32),
+                gt,
+                crs,
+                use_cog=not large,
+                generate_preview=not large,
+            )
             np.save(out / "land_cover.npy", np.ascontiguousarray(self.land_cover, dtype=np.uint8))
         if self._valid_mask is not None:
-            io.save_raster(str(out / "valid_mask.tif"), self._valid_mask.astype(np.float32), gt, crs)
+            if large:
+                # Informational raster only (load() re-derives the mask);
+                # skipping avoids a full-raster bool->float32 copy.
+                logger.debug("  valid_mask.tif skipped for large raster")
+            else:
+                io.save_raster(str(out / "valid_mask.tif"), self._valid_mask.astype(np.float32), gt, crs)
 
         # Write top-level metadata.json used by SurfaceData.load() and the
         # prepare() fast-path. Keys mirror the QGIS plugin's own

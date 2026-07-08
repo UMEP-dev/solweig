@@ -382,6 +382,32 @@ def load_preprocessing_data(
     return result
 
 
+# ── 3b. Header-only raster metadata (for layer-sequential alignment) ───────
+
+
+def _read_raster_header(path: str | Path) -> tuple[list[float], tuple[int, int]]:
+    """Read a raster's geotransform and shape without loading its data.
+
+    Returns ``(gdal_style_transform, (rows, cols))``. Backend-agnostic:
+    rasterio in the standard environment, GDAL under QGIS.
+    """
+    if GDAL_ENV:
+        from osgeo import gdal
+
+        ds = gdal.Open(str(path))
+        if ds is None:
+            raise FileNotFoundError(f"Could not open raster: {path}")
+        transform = list(ds.GetGeoTransform())
+        shape = (ds.RasterYSize, ds.RasterXSize)
+        ds = None
+        return transform, shape
+    else:
+        import rasterio
+
+        with rasterio.open(path) as src:
+            return list(src.transform.to_gdal()), (src.height, src.width)
+
+
 # ── 4. Grid alignment + resampling ─────────────────────────────────────────
 
 
@@ -538,6 +564,182 @@ def align_rasters(
         "land_cover_arr": terrain_rasters["land_cover_arr"],
         "wall_height_arr": preprocess_data["wall_height_arr"],
         "wall_aspect_arr": preprocess_data["wall_aspect_arr"],
+        "svf_data": preprocess_data["svf_data"],
+        "shadow_data": preprocess_data["shadow_data"],
+    }
+
+
+def load_align_layers_sequential(
+    dsm_arr,
+    dsm_transform,
+    dsm_crs,
+    pixel_size: float,
+    terrain_paths: dict,
+    preprocess_data: dict,
+    bbox: list[float] | None,
+    spill_dir: str | Path,
+) -> dict:
+    """Layer-sequential variant of :func:`load_terrain_rasters` + :func:`align_rasters`.
+
+    Memory-bounding path for very large rasters. The whole-array pipeline
+    loads every layer into RAM and keeps the full stack alive through
+    alignment, preprocessing and save (~2 GB per float32 layer at 500 Mpx,
+    six-plus layers at once). Here each layer is handled one at a time:
+    load → resample to the target grid (same :func:`resample_to_grid`
+    call and parameters as :func:`align_rasters`, so the maths is
+    identical) → spill to ``spill_dir/<name>.npy`` → replace the RAM array
+    with an ``r+`` memmap over that file. Peak residency is ~2 layer
+    arrays (the one being processed plus its resample destination)
+    regardless of how many layers the surface has.
+
+    The target bounding box is computed up front from raster *headers*
+    (no data read), using the same intersection/validation logic as
+    :func:`align_rasters`. Returns the same dict contract as
+    :func:`align_rasters`. Downstream, ``preprocess()`` streams its
+    conversions in place through these memmaps and ``save_cleaned()``
+    reuses the spilled ``.npy`` files directly.
+    """
+    from .. import io
+
+    spill = Path(spill_dir)
+    spill.mkdir(parents=True, exist_ok=True)
+    logger.info("Computing spatial extent and resolution (layer-sequential, memory-bounded)...")
+
+    # ── Target bbox from headers (bounds only, no pixel data) ──
+    bounds_list = [extract_bounds(dsm_transform, dsm_arr.shape)]
+    headers: dict[str, tuple[list[float], tuple[int, int]] | None] = {}
+    for name in ("cdsm", "dem", "tdsm", "land_cover"):
+        p = terrain_paths.get(name)
+        if p is not None:
+            hdr = _read_raster_header(p)
+            headers[name] = hdr
+            bounds_list.append(extract_bounds(hdr[0], hdr[1]))
+        else:
+            headers[name] = None
+    for name in ("wall_height", "wall_aspect"):
+        arr = preprocess_data[f"{name}_arr"]
+        tf = preprocess_data[f"{name}_transform"]
+        if arr is not None and tf is not None:
+            bounds_list.append(extract_bounds(tf, arr.shape))
+
+    if bbox is not None:
+        computed_intersection = intersect_bounds(bounds_list)
+        user_minx, user_miny, user_maxx, user_maxy = bbox
+        int_minx, int_miny, int_maxx, int_maxy = computed_intersection
+        if (
+            user_minx < int_minx - 1e-6
+            or user_maxx > int_maxx + 1e-6
+            or user_miny < int_miny - 1e-6
+            or user_maxy > int_maxy + 1e-6
+        ):
+            raise ValueError(
+                f"Specified bbox {bbox} extends beyond the intersection of input rasters "
+                f"{computed_intersection}. Bbox must be within or equal to the intersection."
+            )
+        target_bbox = bbox
+        logger.info(f"  Using user-specified extent: {target_bbox}")
+    else:
+        target_bbox = intersect_bounds(bounds_list)
+        logger.info(f"  Auto-computed extent from raster intersection: {target_bbox}")
+
+    expected_h = int(np.round((target_bbox[3] - target_bbox[1]) / pixel_size))
+    expected_w = int(np.round((target_bbox[2] - target_bbox[0]) / pixel_size))
+    expected_shape = (expected_h, expected_w)
+
+    def _needs_resample(shape, transform) -> bool:
+        layer_bounds = extract_bounds(transform, shape)
+        layer_px = abs(transform[1]) if isinstance(transform, list) else abs(transform.a)
+        return (
+            abs(layer_bounds[0] - target_bbox[0]) > 1e-6
+            or abs(layer_bounds[1] - target_bbox[1]) > 1e-6
+            or abs(layer_bounds[2] - target_bbox[2]) > 1e-6
+            or abs(layer_bounds[3] - target_bbox[3]) > 1e-6
+            or abs(layer_px - pixel_size) > 1e-6
+            or shape != expected_shape
+        )
+
+    def _spill(name: str, arr) -> np.ndarray:
+        path = spill / f"{name}.npy"
+        np.save(path, np.ascontiguousarray(arr, dtype=np.float32))
+        return np.load(path, mmap_mode="r+")
+
+    resampled_any = False
+
+    # ── DSM (already in RAM from load_and_validate_dsm) ──
+    if _needs_resample(dsm_arr.shape, dsm_transform):
+        dsm_arr, dsm_transform = resample_to_grid(
+            dsm_arr, dsm_transform, target_bbox, pixel_size, method="bilinear", src_crs=dsm_crs
+        )
+        resampled_any = True
+    dsm_arr = _spill("dsm", dsm_arr)
+
+    # ── Terrain layers, one at a time ──
+    out: dict = {"cdsm_arr": None, "dem_arr": None, "tdsm_arr": None, "land_cover_arr": None}
+    method_by_name = {"cdsm": "bilinear", "dem": "bilinear", "tdsm": "bilinear", "land_cover": "nearest"}
+    log_by_name = {
+        "cdsm": "  ✓ Canopy DSM (CDSM) provided",
+        "dem": "  ✓ Ground elevation (DEM) provided",
+        "tdsm": "  ✓ Trunk DSM (TDSM) provided",
+        "land_cover": "  ✓ Land cover provided (albedo/emissivity derived from classification)",
+    }
+    for name in ("cdsm", "dem", "tdsm", "land_cover"):
+        p = terrain_paths.get(name)
+        if p is None:
+            continue
+        arr, transform, _, _ = io.load_raster(str(p))
+        logger.info(log_by_name[name])
+        if _needs_resample(arr.shape, transform):
+            arr, _ = resample_to_grid(
+                arr, transform, target_bbox, pixel_size, method=method_by_name[name], src_crs=dsm_crs
+            )
+            resampled_any = True
+        out[f"{name}_arr"] = _spill(name, arr)
+        del arr
+    if terrain_paths.get("cdsm") is None:
+        logger.info("  → No vegetation data - simulation without trees/vegetation")
+    if terrain_paths.get("tdsm") is None and terrain_paths.get("cdsm") is not None:
+        logger.info("  → No TDSM provided - will auto-generate from CDSM")
+
+    # ── Walls (loaded by load_preprocessing_data; spill to release RAM) ──
+    for name in ("wall_height", "wall_aspect"):
+        arr = preprocess_data[f"{name}_arr"]
+        tf = preprocess_data[f"{name}_transform"]
+        if arr is None:
+            out[f"{name}_arr"] = None
+            continue
+        if tf is not None and _needs_resample(arr.shape, tf):
+            arr, _ = resample_to_grid(arr, tf, target_bbox, pixel_size, method="bilinear", src_crs=dsm_crs)
+            resampled_any = True
+        out[f"{name}_arr"] = _spill(name, arr)
+        preprocess_data[f"{name}_arr"] = None  # release the RAM copy
+
+    # ── SVF shape check (same semantics as align_rasters) ──
+    if preprocess_data["svf_data"] is not None and preprocess_data["svf_data"].svf.shape != dsm_arr.shape:
+        logger.warning(
+            f"  ⚠ SVF shape {preprocess_data['svf_data'].svf.shape} doesn't match target shape "
+            f"{dsm_arr.shape} - SVF resampling not yet implemented. "
+            f"SVF cache will be dropped; recompute via SurfaceData.prepare() or compute_svf()."
+        )
+        preprocess_data["svf_data"] = None
+        preprocess_data["shadow_data"] = None
+
+    if resampled_any:
+        logger.info(f"  ✓ Resampled to {dsm_arr.shape[1]}×{dsm_arr.shape[0]} pixels")
+    else:
+        logger.info("  ✓ No resampling needed - all rasters match target grid")
+    logger.info(f"  Layers spilled to memmaps under {spill}")
+
+    return {
+        "dsm_arr": dsm_arr,
+        "dsm_transform": dsm_transform,
+        "dsm_crs": dsm_crs,
+        "pixel_size": pixel_size,
+        "cdsm_arr": out["cdsm_arr"],
+        "dem_arr": out["dem_arr"],
+        "tdsm_arr": out["tdsm_arr"],
+        "land_cover_arr": out["land_cover_arr"],
+        "wall_height_arr": out["wall_height_arr"],
+        "wall_aspect_arr": out["wall_aspect_arr"],
         "svf_data": preprocess_data["svf_data"],
         "shadow_data": preprocess_data["shadow_data"],
     }
