@@ -474,7 +474,7 @@ def _warm_tile_pages(surface: SurfaceData, tile: TileSpec) -> None:
     def _touch(arr: object) -> None:
         if arr is not None and getattr(arr, "ndim", 0) == 2:
             with contextlib.suppress(Exception):
-                float(np.asarray(arr[read_slice]).sum())  # faults pages resident, retains no copy
+                float(np.asarray(arr)[read_slice].sum())  # faults pages resident, retains no copy
 
     for name in ("dsm", "cdsm", "tdsm", "dem", "land_cover", "albedo", "emissivity", "wall_height", "wall_aspect"):
         _touch(getattr(surface, name, None))

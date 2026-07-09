@@ -487,10 +487,21 @@ class TimeseriesSummary:
 
         from .output_async import async_output_enabled
 
-        if async_output_enabled() and len(jobs) > 1:
+        # Each grid is written as a Cloud-Optimized GeoTIFF, which buffers the whole
+        # raster (plus overviews) in memory via a rasterio MemoryFile. Cap the write
+        # concurrency by grid size so the summary export cannot spike memory on large
+        # rasters: a 507 Mpx float32 grid is ~2 GB each, so writing many at once
+        # (the previous unconditional 8 workers) added ~20 GB at the end of a run and
+        # OOM'd near-limit large-raster jobs. Budget the concurrent write buffers to
+        # ~1 GB — parallel for small grids, one at a time for big ones.
+        per_write_bytes = int(jobs[0][1].nbytes * 1.6) if jobs else 0  # raster + ~overviews
+        budget_bytes = 1 << 30  # ~1 GB of concurrent COG write buffers
+        max_workers = max(1, min(len(jobs), 8, budget_bytes // max(per_write_bytes, 1)))
+
+        if async_output_enabled() and len(jobs) > 1 and max_workers > 1:
             from concurrent.futures import ThreadPoolExecutor
 
-            with ThreadPoolExecutor(max_workers=min(len(jobs), 8), thread_name_prefix="solweig-summary") as ex:
+            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="solweig-summary") as ex:
                 for _ in ex.map(lambda job: _save(*job), jobs):
                     pass
         else:

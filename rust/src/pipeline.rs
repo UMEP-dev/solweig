@@ -27,8 +27,6 @@ use crate::vegetation::{kside_veg_isotropic_pure, lside_veg_pure, lside_veg_vari
 use crate::gpu::AnisoGpuContext;
 #[cfg(feature = "gpu")]
 use crate::gpu::GvfGpuContext;
-#[cfg(feature = "gpu")]
-use crate::gpu::GvfPrecomputeGpuContext;
 
 use std::time::Instant;
 
@@ -144,31 +142,17 @@ pub fn is_gvf_gpu_enabled() -> bool {
     GVF_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-// ── GPU GVF geometry precompute context (shares device with shadows) ────
-
-#[cfg(feature = "gpu")]
-static GVF_PRECOMPUTE_GPU_CONTEXT: OnceLock<Option<GvfPrecomputeGpuContext>> = OnceLock::new();
-
+// ── GPU GVF geometry precompute ─────────────────────────────────────────
+//
+// The precompute now runs on the shared `GvfGpuContext` (see above): it writes
+// blocking_distance/facesh straight into the resident geometry buffers the
+// per-timestep dispatch reads, so there is no readback+re-upload round trip.
+// One CPU mirror of the geometry is still produced (fallback + Python
+// inspection). This flag gates whether the geometry march runs on the GPU;
+// toggle via pipeline.enable/disable_gvf_precompute_gpu().
 #[cfg(feature = "gpu")]
 static GVF_PRECOMPUTE_GPU_ENABLED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(true);
-
-#[cfg(feature = "gpu")]
-fn get_gvf_precompute_gpu_context() -> Option<&'static GvfPrecomputeGpuContext> {
-    if !GVF_PRECOMPUTE_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
-        return None;
-    }
-    GVF_PRECOMPUTE_GPU_CONTEXT
-        .get_or_init(|| {
-            let shadow_ctx = crate::shadowing::get_gpu_context()?;
-            let device = shadow_ctx.device.clone();
-            let queue = shadow_ctx.queue.clone();
-            let ctx = GvfPrecomputeGpuContext::new(device, queue);
-            eprintln!("[GPU] GVF precompute GPU context initialized");
-            Some(ctx)
-        })
-        .as_ref()
-}
 
 #[cfg(feature = "gpu")]
 #[pyfunction]
@@ -405,36 +389,43 @@ pub fn precompute_gvf_cache(
     let first_ht = human_height.round().max(1.0);
     let second_ht = human_height * 20.0;
 
-    // Build the geometry cache: try the GPU precompute first, fall back to the
-    // CPU path on any error (and latch the precompute GPU off for this run).
+    // Build the geometry cache. When the GPU is available, the precompute
+    // shader writes blocking_distance/facesh straight into the GVF context's
+    // resident geometry buffers (and returns a CPU mirror), so the per-timestep
+    // dispatch reads them in place with no re-upload. On any GPU error we fall
+    // back to the CPU precompute (which then uploads the geometry below).
     #[cfg(feature = "gpu")]
-    let cache = {
+    let (cache, gpu_resident) = {
         let mut built: Option<GvfGeometryCache> = None;
-        if let Some(ctx) = get_gvf_precompute_gpu_context() {
-            match precompute_gvf_geometry_gpu(
-                ctx,
-                buildings.as_array(),
-                wall_asp.as_array(),
-                wall_ht.as_array(),
-                alb_grid.as_array(),
-                pixel_size,
-                first_ht,
-                second_ht,
-                wall_albedo,
-            ) {
-                Ok(c) => {
-                    crate::shadowing::record_gpu_dispatch();
-                    built = Some(c);
-                }
-                Err(e) => {
-                    eprintln!("[GPU] GVF precompute failed, falling back to CPU: {}", e);
-                    crate::shadowing::record_gpu_fallback();
-                    GVF_PRECOMPUTE_GPU_ENABLED
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+        let mut resident = false;
+        if GVF_PRECOMPUTE_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Some(ctx) = get_gvf_gpu_context() {
+                match precompute_gvf_geometry_gpu(
+                    ctx,
+                    buildings.as_array(),
+                    wall_asp.as_array(),
+                    wall_ht.as_array(),
+                    alb_grid.as_array(),
+                    pixel_size,
+                    first_ht,
+                    second_ht,
+                    wall_albedo,
+                ) {
+                    Ok(c) => {
+                        crate::shadowing::record_gpu_dispatch();
+                        built = Some(c);
+                        resident = true;
+                    }
+                    Err(e) => {
+                        eprintln!("[GPU] GVF precompute failed, falling back to CPU: {}", e);
+                        crate::shadowing::record_gpu_fallback();
+                        GVF_PRECOMPUTE_GPU_ENABLED
+                            .store(false, std::sync::atomic::Ordering::Relaxed);
+                    }
                 }
             }
         }
-        built.unwrap_or_else(|| {
+        let cache = built.unwrap_or_else(|| {
             precompute_gvf_geometry_cpu(
                 buildings.as_array(),
                 wall_asp.as_array(),
@@ -445,7 +436,8 @@ pub fn precompute_gvf_cache(
                 second_ht,
                 wall_albedo,
             )
-        })
+        });
+        (cache, resident)
     };
 
     #[cfg(not(feature = "gpu"))]
@@ -460,18 +452,22 @@ pub fn precompute_gvf_cache(
         wall_albedo,
     );
 
-    // Upload geometry to the GVF runtime GPU context if available.
+    // If the geometry was computed on the CPU (GPU precompute disabled or fell
+    // back) but the per-timestep GVF still runs on the GPU, upload it. When the
+    // GPU precompute ran, the geometry is already resident — skip the upload.
     #[cfg(feature = "gpu")]
     {
-        if let Some(ctx) = get_gvf_gpu_context() {
-            match ctx.upload_geometry(&cache) {
-                Ok(()) => {
-                    crate::shadowing::record_gpu_dispatch();
-                }
-                Err(e) => {
-                    eprintln!("[GPU] GVF geometry upload failed, falling back to CPU: {}", e);
-                    crate::shadowing::record_gpu_fallback();
-                    GVF_GPU_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
+        if !gpu_resident {
+            if let Some(ctx) = get_gvf_gpu_context() {
+                match ctx.upload_geometry(&cache) {
+                    Ok(()) => {
+                        crate::shadowing::record_gpu_dispatch();
+                    }
+                    Err(e) => {
+                        eprintln!("[GPU] GVF geometry upload failed, falling back to CPU: {}", e);
+                        crate::shadowing::record_gpu_fallback();
+                        GVF_GPU_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
+                    }
                 }
             }
         }

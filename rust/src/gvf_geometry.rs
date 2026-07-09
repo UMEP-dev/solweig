@@ -366,7 +366,7 @@ pub(crate) fn precompute_gvf_geometry_cpu(
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn precompute_gvf_geometry_gpu(
-    ctx: &crate::gpu::GvfPrecomputeGpuContext,
+    ctx: &crate::gpu::GvfGpuContext,
     buildings: ArrayView2<f32>,
     wall_aspect: ArrayView2<f32>,
     wall_ht: ArrayView2<f32>,
@@ -404,7 +404,10 @@ pub(crate) fn precompute_gvf_geometry_gpu(
 
     let azimuths_deg: Vec<f32> = azimuth_a.to_vec();
 
-    let raw = ctx.precompute(
+    // Runs the precompute shader into the resident geometry buffers and returns
+    // the CPU mirror (albnosh + per-azimuth bd/facesh). Geometry stays on the
+    // GPU for the per-timestep dispatches — no re-upload.
+    let raw = ctx.precompute_geometry(
         buildings,
         wall_aspect,
         wall_ht,

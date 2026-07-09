@@ -4,6 +4,36 @@ Concise user-facing summary of changes. For the full per-version history of ever
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.
 
+## 0.1.0b92 — 2026-07-09
+
+Performance and GPU-utilisation work. Validation is unchanged (31/31 pass) and
+output is byte-identical except where noted. The main change: the per-tile
+ground view factor (GVF) geometry precompute, previously a CPU-only step that
+left the GPU idle for roughly 0.6 to 1.2 s per tile, now runs on the GPU (about
+2.7× faster), matching the CPU result to ~6e-8.
+
+- **GVF geometry on the GPU.** A new wgpu compute kernel does the GVF geometry
+  precompute, with a CPU fallback and an
+  `enable`/`disable`/`is_gvf_precompute_gpu_enabled` toggle, running as a
+  distinct labelled phase per tile. Precompute and the per-timestep GVF share
+  one GPU context, so the geometry is computed once into resident buffers and
+  read in place across all of a tile's timesteps (no readback/re-upload).
+  Byte-identical: GPU and CPU Tmrt match exactly.
+- **Empty-tile compute skip.** Tiles that fall entirely outside the valid data
+  (irregular extents) skip the whole shadow/GVF/aniso/radiation compute. Output
+  is byte-identical on valid pixels; the only change is that shadow over nodata
+  is now NaN rather than a spurious "sunlit" 1.0.
+- **Async and overlapped I/O.** Tiled GeoTIFF writes run on a background thread,
+  the next tile's data is prefetched while the current tile computes, and the
+  summary GeoTIFF export is written in parallel (about 5× faster, concurrency
+  bounded by grid size so large rasters don't spike memory). All byte-identical;
+  disable with `SOLWEIG_ASYNC_OUTPUT=0`.
+- **Night-shadow skip.** With the sun below the horizon there are no cast
+  shadows, so the shadow ray-march is skipped (byte-identical).
+- **Fix.** Isotropic runs over an irregular extent could panic in the
+  side-radiation kernel (a non-contiguous cropped valid mask); the mask is now
+  made contiguous at the FFI boundary.
+
 ## 0.1.0b91 — 2026-07-08
 
 Large-raster memory reductions. **No numerical change**: output is
