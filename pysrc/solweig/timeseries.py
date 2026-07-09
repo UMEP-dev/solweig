@@ -554,6 +554,22 @@ def _calculate_timeseries(
                 track_scalars=False,
             )
 
+            # 2a. Ground view factor geometry as a distinct, labelled phase.
+            # It depends only on the tile geometry (not on time/weather), so it is
+            # computed once here and reused across every one of this tile's
+            # timesteps. Surfacing it turns what looked like a per-tile gap into an
+            # explicit, understood step and keeps the per-timestep compute clean.
+            # Byte-identical: warm_gvf_geometry fills the same cache the compute
+            # would fill inline, with the same resolved human/materials.
+            if tile_gss is None and tile_surface.auxiliary.has_walls:
+                from .computation import warm_gvf_geometry
+
+                _plural = "s" if n_steps != 1 else ""
+                logger.info(
+                    f"  {tile_desc}: pre-computing ground view factor (reused across {n_steps} timestep{_plural})"
+                )
+                warm_gvf_geometry(tile_surface, human, materials, pixel_size)
+
             # 2. Run exactly like the non-tiled path
             for t_idx, weather in enumerate(weather_series):
                 result = _calculate_single(

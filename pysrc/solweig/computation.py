@@ -695,3 +695,64 @@ def calculate_core_fused(
         pet=None,
         state=output_state,
     )
+
+
+def warm_gvf_geometry(surface, human, materials, pixel_size: float) -> None:
+    """Precompute a tile's GVF-geometry cache (the ~1 s+ per-tile CPU precompute).
+
+    Run on a background thread ahead of a tile's first daytime compute so the GVF
+    geometry ray-trace overlaps the previous tile's GPU work instead of leaving the
+    GPU idle inline. Populates the same cache slots (``buildings_mask_cache``,
+    ``land_cover_props_cache``, ``gvf_geometry_cache``) with the same keys and
+    inputs as ``calculate_core_fused``, so the cached values are byte-identical and
+    the tile's compute simply reads them. ``albedo_wall`` is the unconditional 0.20
+    default used there. Only the full-grid case is warmed (cropped tiles use a
+    separate keyed slot and will recompute — correct, just no speedup). Best-effort:
+    any error is swallowed so a prefetch failure never affects correctness.
+    """
+    from .buffers import as_float32
+    from .components.gvf import detect_building_mask
+    from .rustalgos import pipeline
+
+    aux = surface.auxiliary
+    if not aux.has_walls:
+        return
+    cache = surface._cache
+    if cache.gvf_geometry_cache is not None:
+        return
+    geom = surface.geometry
+    optical = surface.optical
+    wall_ht = aux.wall_height
+    wall_asp = aux.wall_aspect
+    if wall_ht is None or wall_asp is None:
+        return
+
+    try:
+        buildings_key = (_arr_key(geom.dsm), _arr_key(optical.land_cover), _arr_key(wall_ht), float(pixel_size))
+        buildings = cache.get_or_compute(
+            "buildings_mask_cache",
+            buildings_key,
+            lambda: detect_building_mask(geom.dsm, optical.land_cover, wall_ht, pixel_size),
+        )
+        lc_props_key = (
+            _arr_key(optical.land_cover),
+            _arr_key(optical.albedo),
+            _arr_key(optical.emissivity),
+            id(materials),
+        )
+        alb_grid = cache.get_or_compute(
+            "land_cover_props_cache",
+            lc_props_key,
+            lambda: surface.get_land_cover_properties(materials),
+        )[0]
+        cache.gvf_geometry_cache = pipeline.precompute_gvf_cache(
+            as_float32(buildings),
+            as_float32(wall_asp),
+            as_float32(wall_ht),
+            as_float32(alb_grid),
+            float(pixel_size),
+            float(human.height),
+            0.20,  # must match the albedo_wall default in calculate_core_fused
+        )
+    except Exception:
+        pass
