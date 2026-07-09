@@ -210,11 +210,16 @@ pub(crate) fn calculate_shadows_rust(
     let num_cols = shape[1];
     let dim = (num_rows, num_cols);
 
-    // Handle zenith case (altitude >= 89.5°): no shadows cast from directly overhead.
-    // This avoids tan(90°) = infinity which breaks the shadow propagation loop.
-    // For SVF calculations, zenith patches represent looking straight up - all points
-    // can see the sky in this direction (no obstruction).
-    if altitude_deg >= 89.5 {
+    // No obstruction shadows to cast in two cases; both return the all-sunlit result:
+    //  * Zenith (altitude >= 89.5°): sun directly overhead. Avoids tan(90°)=inf in the
+    //    propagation loop. For SVF, zenith patches see the whole sky (no obstruction).
+    //  * Below the horizon (altitude < 0°, i.e. night): the shadow march advances the
+    //    ray height by tan(altitude) < 0, so it runs downward and can never meet an
+    //    obstruction — every pixel comes out "sunlit" (1.0), identical to running the
+    //    full cast (verified). Skipping the march is pure work saved: shortwave is
+    //    zeroed at night, so the shadow value does not affect any output. Sky-patch
+    //    (SVF) altitudes are always >= 0, so this branch only fires for the night sun.
+    if altitude_deg >= 89.5 || altitude_deg < 0.0 {
         return ShadowingResultRust {
             bldg_sh: Array2::<f32>::ones(dim),
             veg_sh: Array2::<f32>::ones(dim),
