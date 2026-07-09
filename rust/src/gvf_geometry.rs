@@ -252,7 +252,7 @@ fn precompute_azimuth_geometry(
 /// This runs the building ray-trace once and caches the results.
 /// Subsequent timesteps skip the geometry and only compute thermal quantities.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn precompute_gvf_geometry(
+pub(crate) fn precompute_gvf_geometry_cpu(
     buildings: ArrayView2<f32>,
     wall_aspect: ArrayView2<f32>,
     wall_ht: ArrayView2<f32>,
@@ -352,4 +352,133 @@ pub(crate) fn precompute_gvf_geometry(
         cached_albnosh_w: albnosh_w,
         cached_albnosh_n: albnosh_n,
     }
+}
+
+/// GPU-accelerated variant of [`precompute_gvf_geometry_cpu`].
+///
+/// Runs the per-pixel/per-azimuth building march on the GPU (one thread per
+/// output pixel, all azimuths looped internally) and assembles a
+/// `GvfGeometryCache` identical in layout to the CPU path. `first`/`second`
+/// are derived with the exact same expression as the CPU path so both agree
+/// bit-for-bit. The per-azimuth albedo accumulator fields
+/// (`albnosh_accum*`, `wallnosh_accum*`, `wall_influence*`) are write-only
+/// after the in-shader reduction and are left empty here.
+#[cfg(feature = "gpu")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn precompute_gvf_geometry_gpu(
+    ctx: &crate::gpu::GvfPrecomputeGpuContext,
+    buildings: ArrayView2<f32>,
+    wall_aspect: ArrayView2<f32>,
+    wall_ht: ArrayView2<f32>,
+    alb_grid: ArrayView2<f32>,
+    pixel_scale: f32,
+    first_ht: f32,
+    second_ht: f32,
+    wall_albedo: f32,
+) -> Result<GvfGeometryCache, String> {
+    let (rows, cols) = (buildings.nrows(), buildings.ncols());
+    let first = (first_ht / pixel_scale).round().max(1.);
+    let second = (second_ht / pixel_scale)
+        .round()
+        .min(rows.max(cols) as f32);
+
+    let azimuth_a: Array1<f32> = Array1::range(5.0, 359.0, 20.0);
+    let num_azimuths = azimuth_a.len();
+    let num_steps = second as usize;
+    if num_steps == 0 {
+        return Err("GVF precompute: second resolves to zero steps".to_string());
+    }
+
+    // Precompute per-azimuth shifts on the CPU (identical to the CPU path);
+    // the shader consumes them, and they are also stored in the cache for the
+    // CPU runtime fallback.
+    let shifts: Vec<Vec<(isize, isize)>> = azimuth_a
+        .iter()
+        .map(|&az| {
+            let az_rad = az * (PI / 180.);
+            (0..num_steps)
+                .map(|n| compute_shift(az_rad, n as f32))
+                .collect()
+        })
+        .collect();
+
+    let azimuths_deg: Vec<f32> = azimuth_a.to_vec();
+
+    let raw = ctx.precompute(
+        buildings,
+        wall_aspect,
+        wall_ht,
+        alb_grid,
+        &azimuths_deg,
+        &shifts,
+        num_steps,
+        first,
+        second,
+        wall_albedo,
+    )?;
+
+    let rc = rows * cols;
+    if raw.albnosh.len() != 5 * rc
+        || raw.blocking_distance.len() != num_azimuths * rc
+        || raw.facesh.len() != num_azimuths * rc
+    {
+        return Err(format!(
+            "GVF precompute GPU output size mismatch: albnosh={}, bd={}, facesh={} (expected {}/{}/{})",
+            raw.albnosh.len(),
+            raw.blocking_distance.len(),
+            raw.facesh.len(),
+            5 * rc,
+            num_azimuths * rc,
+            num_azimuths * rc,
+        ));
+    }
+
+    let chan = |i: usize| -> Result<Array2<f32>, String> {
+        Array2::from_shape_vec((rows, cols), raw.albnosh[i * rc..(i + 1) * rc].to_vec())
+            .map_err(|e| format!("albnosh channel {}: {}", i, e))
+    };
+    let cached_albnosh = chan(0)?;
+    let cached_albnosh_e = chan(1)?;
+    let cached_albnosh_s = chan(2)?;
+    let cached_albnosh_w = chan(3)?;
+    let cached_albnosh_n = chan(4)?;
+
+    let empty = || Array2::<f32>::zeros((0, 0));
+    let mut az_geoms = Vec::with_capacity(num_azimuths);
+    for (i, az_shifts) in shifts.into_iter().enumerate() {
+        let offset = i * rc;
+        let bd_u16: Vec<u16> = raw.blocking_distance[offset..offset + rc]
+            .iter()
+            .map(|&v| v as u16)
+            .collect();
+        let blocking_distance = Array2::from_shape_vec((rows, cols), bd_u16)
+            .map_err(|e| format!("blocking_distance az {}: {}", i, e))?;
+        let facesh =
+            Array2::from_shape_vec((rows, cols), raw.facesh[offset..offset + rc].to_vec())
+                .map_err(|e| format!("facesh az {}: {}", i, e))?;
+
+        az_geoms.push(AzimuthGeometry {
+            azimuth_deg: azimuth_a[i],
+            blocking_distance,
+            shifts: az_shifts,
+            facesh,
+            albnosh_accum_first: empty(),
+            albnosh_accum: empty(),
+            wallnosh_accum_first: empty(),
+            wallnosh_accum: empty(),
+            wall_influence_first: empty(),
+            wall_influence: empty(),
+        });
+    }
+
+    Ok(GvfGeometryCache {
+        azimuths: az_geoms,
+        first,
+        second,
+        cached_albnosh,
+        cached_albnosh_e,
+        cached_albnosh_s,
+        cached_albnosh_w,
+        cached_albnosh_n,
+    })
 }

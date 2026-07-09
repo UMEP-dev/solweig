@@ -238,6 +238,18 @@ fn register_pipeline_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
             pipeline::is_gvf_gpu_enabled,
             &submodule
         )?)?;
+        submodule.add_function(wrap_pyfunction!(
+            pipeline::enable_gvf_precompute_gpu,
+            &submodule
+        )?)?;
+        submodule.add_function(wrap_pyfunction!(
+            pipeline::disable_gvf_precompute_gpu,
+            &submodule
+        )?)?;
+        submodule.add_function(wrap_pyfunction!(
+            pipeline::is_gvf_precompute_gpu_enabled,
+            &submodule
+        )?)?;
     }
 
     py_module.add_submodule(&submodule)?;

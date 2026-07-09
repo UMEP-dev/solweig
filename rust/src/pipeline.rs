@@ -5,8 +5,8 @@
 //!
 //! Supports both isotropic and anisotropic (Perez) sky models.
 
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Zip};
-use numpy::{IntoPyArray, PyArray2, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3};
+use ndarray::{s, Array1, Array2, Array3, ArrayView1, ArrayView2, Zip};
+use numpy::{IntoPyArray, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3};
 use pyo3::prelude::*;
 use std::sync::OnceLock;
 
@@ -15,7 +15,9 @@ use crate::ground_surface::{outgoing_longwave_calc_pure, surface_temperature_cal
 use crate::gvf::{gvf_calc_pure, gvf_calc_with_cache, GvfResultPure};
 #[cfg(feature = "gpu")]
 use crate::gvf::gvf_calc_with_cache_gpu;
-use crate::gvf_geometry::{precompute_gvf_geometry, GvfGeometryCache};
+use crate::gvf_geometry::{precompute_gvf_geometry_cpu, GvfGeometryCache};
+#[cfg(feature = "gpu")]
+use crate::gvf_geometry::precompute_gvf_geometry_gpu;
 use crate::shadowing::{calculate_shadows_rust, ShadowingResultRust};
 use crate::sky::{anisotropic_sky_pure, cylindric_wedge_pure_masked};
 use crate::tmrt::compute_tmrt_from_dir_sums_pure;
@@ -25,6 +27,8 @@ use crate::vegetation::{kside_veg_isotropic_pure, lside_veg_pure, lside_veg_vari
 use crate::gpu::AnisoGpuContext;
 #[cfg(feature = "gpu")]
 use crate::gpu::GvfGpuContext;
+#[cfg(feature = "gpu")]
+use crate::gpu::GvfPrecomputeGpuContext;
 
 use std::time::Instant;
 
@@ -138,6 +142,55 @@ pub fn disable_gvf_gpu() {
 /// Check if GPU acceleration is enabled for GVF
 pub fn is_gvf_gpu_enabled() -> bool {
     GVF_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+// ── GPU GVF geometry precompute context (shares device with shadows) ────
+
+#[cfg(feature = "gpu")]
+static GVF_PRECOMPUTE_GPU_CONTEXT: OnceLock<Option<GvfPrecomputeGpuContext>> = OnceLock::new();
+
+#[cfg(feature = "gpu")]
+static GVF_PRECOMPUTE_GPU_ENABLED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(true);
+
+#[cfg(feature = "gpu")]
+fn get_gvf_precompute_gpu_context() -> Option<&'static GvfPrecomputeGpuContext> {
+    if !GVF_PRECOMPUTE_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    GVF_PRECOMPUTE_GPU_CONTEXT
+        .get_or_init(|| {
+            let shadow_ctx = crate::shadowing::get_gpu_context()?;
+            let device = shadow_ctx.device.clone();
+            let queue = shadow_ctx.queue.clone();
+            let ctx = GvfPrecomputeGpuContext::new(device, queue);
+            eprintln!("[GPU] GVF precompute GPU context initialized");
+            Some(ctx)
+        })
+        .as_ref()
+}
+
+#[cfg(feature = "gpu")]
+#[pyfunction]
+/// Enable GPU acceleration for the GVF geometry precompute
+pub fn enable_gvf_precompute_gpu() {
+    GVF_PRECOMPUTE_GPU_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
+    eprintln!("[GPU] GVF precompute GPU acceleration enabled");
+}
+
+#[cfg(feature = "gpu")]
+#[pyfunction]
+/// Disable GPU acceleration for the GVF geometry precompute (CPU fallback)
+pub fn disable_gvf_precompute_gpu() {
+    GVF_PRECOMPUTE_GPU_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
+    eprintln!("[GPU] GVF precompute GPU acceleration disabled");
+}
+
+#[cfg(feature = "gpu")]
+#[pyfunction]
+/// Check if GPU acceleration is enabled for the GVF geometry precompute
+pub fn is_gvf_precompute_gpu_enabled() -> bool {
+    GVF_PRECOMPUTE_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 // Scalar input structs (WeatherScalars / HumanScalars / ConfigScalars)
@@ -254,6 +307,85 @@ pub struct PyGvfGeometryCache {
     pub(crate) inner: GvfGeometryCache,
 }
 
+/// Read-only accessors — introspection hooks for parity tests. These expose
+/// the purely-geometric cached fields (identical between the CPU and GPU
+/// precompute paths) without changing how the cache is consumed internally.
+#[pymethods]
+impl PyGvfGeometryCache {
+    #[getter]
+    fn first(&self) -> f32 {
+        self.inner.first
+    }
+
+    #[getter]
+    fn second(&self) -> f32 {
+        self.inner.second
+    }
+
+    #[getter]
+    fn num_azimuths(&self) -> usize {
+        self.inner.azimuths.len()
+    }
+
+    fn cached_albnosh<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.inner.cached_albnosh.clone().into_pyarray(py)
+    }
+
+    fn cached_albnosh_e<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.inner.cached_albnosh_e.clone().into_pyarray(py)
+    }
+
+    fn cached_albnosh_s<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.inner.cached_albnosh_s.clone().into_pyarray(py)
+    }
+
+    fn cached_albnosh_w<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.inner.cached_albnosh_w.clone().into_pyarray(py)
+    }
+
+    fn cached_albnosh_n<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.inner.cached_albnosh_n.clone().into_pyarray(py)
+    }
+
+    /// Per-azimuth blocking distances, stacked `[num_azimuths, rows, cols]`.
+    fn blocking_distance_all<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray3<u32>> {
+        let naz = self.inner.azimuths.len();
+        let (rows, cols) = if naz > 0 {
+            (
+                self.inner.azimuths[0].blocking_distance.nrows(),
+                self.inner.azimuths[0].blocking_distance.ncols(),
+            )
+        } else {
+            (0, 0)
+        };
+        let mut out = Array3::<u32>::zeros((naz, rows, cols));
+        for (i, geom) in self.inner.azimuths.iter().enumerate() {
+            Zip::from(out.slice_mut(s![i, .., ..]))
+                .and(&geom.blocking_distance)
+                .for_each(|o, &b| *o = b as u32);
+        }
+        out.into_pyarray(py)
+    }
+
+    /// Per-azimuth facesh masks, stacked `[num_azimuths, rows, cols]`.
+    fn facesh_all<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray3<f32>> {
+        let naz = self.inner.azimuths.len();
+        let (rows, cols) = if naz > 0 {
+            (
+                self.inner.azimuths[0].facesh.nrows(),
+                self.inner.azimuths[0].facesh.ncols(),
+            )
+        } else {
+            (0, 0)
+        };
+        let mut out = Array3::<f32>::zeros((naz, rows, cols));
+        for (i, geom) in self.inner.azimuths.iter().enumerate() {
+            out.slice_mut(s![i, .., ..]).assign(&geom.facesh);
+        }
+        out.into_pyarray(py)
+    }
+}
+
 /// Precompute GVF geometry cache for a given set of surface arrays.
 ///
 /// This runs the building ray-trace once (18 azimuths, parallelized).
@@ -273,7 +405,51 @@ pub fn precompute_gvf_cache(
     let first_ht = human_height.round().max(1.0);
     let second_ht = human_height * 20.0;
 
-    let cache = precompute_gvf_geometry(
+    // Build the geometry cache: try the GPU precompute first, fall back to the
+    // CPU path on any error (and latch the precompute GPU off for this run).
+    #[cfg(feature = "gpu")]
+    let cache = {
+        let mut built: Option<GvfGeometryCache> = None;
+        if let Some(ctx) = get_gvf_precompute_gpu_context() {
+            match precompute_gvf_geometry_gpu(
+                ctx,
+                buildings.as_array(),
+                wall_asp.as_array(),
+                wall_ht.as_array(),
+                alb_grid.as_array(),
+                pixel_size,
+                first_ht,
+                second_ht,
+                wall_albedo,
+            ) {
+                Ok(c) => {
+                    crate::shadowing::record_gpu_dispatch();
+                    built = Some(c);
+                }
+                Err(e) => {
+                    eprintln!("[GPU] GVF precompute failed, falling back to CPU: {}", e);
+                    crate::shadowing::record_gpu_fallback();
+                    GVF_PRECOMPUTE_GPU_ENABLED
+                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+        }
+        built.unwrap_or_else(|| {
+            precompute_gvf_geometry_cpu(
+                buildings.as_array(),
+                wall_asp.as_array(),
+                wall_ht.as_array(),
+                alb_grid.as_array(),
+                pixel_size,
+                first_ht,
+                second_ht,
+                wall_albedo,
+            )
+        })
+    };
+
+    #[cfg(not(feature = "gpu"))]
+    let cache = precompute_gvf_geometry_cpu(
         buildings.as_array(),
         wall_asp.as_array(),
         wall_ht.as_array(),
@@ -284,7 +460,7 @@ pub fn precompute_gvf_cache(
         wall_albedo,
     );
 
-    // Upload geometry to GPU if available
+    // Upload geometry to the GVF runtime GPU context if available.
     #[cfg(feature = "gpu")]
     {
         if let Some(ctx) = get_gvf_gpu_context() {
