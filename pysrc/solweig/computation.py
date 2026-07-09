@@ -199,6 +199,35 @@ def calculate_core_fused(
     if ground_scheme_state is not None:
         output_mask |= _OUT_SHADOW
 
+    # Fast path — fully-nodata tile. The geometric tiler (generate_tiles) emits a
+    # grid of tiles regardless of coverage, so on an irregular raster (e.g. Madrid)
+    # some tiles fall entirely outside the valid data. Such a tile produces only
+    # NaN outputs, so skip the whole shadow/GVF/aniso/radiation compute and return
+    # NaN directly. The summary accumulator gates on finite Tmrt, so this yields the
+    # identical 0.0 sun/shade-hours and NaN means as the full compute; the only
+    # change is the per-timestep shadow raster, which becomes NaN over nodata rather
+    # than a spurious "sunlit" 1.0 (invalid pixels are not tagged nodata otherwise).
+    # The 2026a ground scheme carries per-pixel state and marches across the grid, so
+    # it is excluded here (it also runs untiled on the full raster).
+    if ground_scheme_state is None and not bool(np.any(valid_mask_u8)):
+        if state is None:
+            state = ThermalState.initial((rows, cols))
+
+        def _nan_grid() -> np.ndarray:
+            return np.full((rows, cols), np.nan, dtype=np.float32)
+
+        return SolweigResult(
+            tmrt=_nan_grid(),
+            shadow=_nan_grid() if output_mask & _OUT_SHADOW else None,
+            kdown=_nan_grid() if output_mask & _OUT_KDOWN else None,
+            kup=_nan_grid() if output_mask & _OUT_KUP else None,
+            ldown=_nan_grid() if output_mask & _OUT_LDOWN else None,
+            lup=_nan_grid() if output_mask & _OUT_LUP else None,
+            utci=None,
+            pet=None,
+            state=state.copy() if return_state_copy else state,
+        )
+
     # Land cover properties
     lc_props_key = (_arr_key(optical.land_cover), _arr_key(optical.albedo), _arr_key(optical.emissivity), id(materials))
     alb_grid, emis_grid, tgk_grid, tstart_grid, tmaxlst_grid = cache.get_or_compute(
