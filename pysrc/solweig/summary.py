@@ -454,25 +454,25 @@ class TimeseriesSummary:
                 no_data_val=np.nan,
             )
 
-        # Tmrt grids
-        _save("tmrt_mean", self.tmrt_mean)
-        _save("tmrt_max", self.tmrt_max)
-        _save("tmrt_min", self.tmrt_min)
-        _save("tmrt_day_mean", self.tmrt_day_mean)
-        _save("tmrt_night_mean", self.tmrt_night_mean)
-
-        # UTCI grids
-        _save("utci_mean", self.utci_mean)
-        _save("utci_max", self.utci_max)
-        _save("utci_min", self.utci_min)
-        _save("utci_day_mean", self.utci_day_mean)
-        _save("utci_night_mean", self.utci_night_mean)
-
-        # Sun/shade
-        _save("sun_hours", self.sun_hours)
-        _save("shade_hours", self.shade_hours)
-
-        # UTCI threshold exceedance (labelled day/night in filename)
+        # Collect every grid, then write them concurrently. The files are
+        # independent and io.save_raster releases the GIL in the GDAL encode, so
+        # this turns the serial summary export (a large GPU-idle tail, dominant on
+        # short runs) into a parallel one. The arrays already exist, so there is no
+        # extra memory. Gated by SOLWEIG_ASYNC_OUTPUT.
+        jobs: list[tuple[str, NDArray[np.floating]]] = [
+            ("tmrt_mean", self.tmrt_mean),
+            ("tmrt_max", self.tmrt_max),
+            ("tmrt_min", self.tmrt_min),
+            ("tmrt_day_mean", self.tmrt_day_mean),
+            ("tmrt_night_mean", self.tmrt_night_mean),
+            ("utci_mean", self.utci_mean),
+            ("utci_max", self.utci_max),
+            ("utci_min", self.utci_min),
+            ("utci_day_mean", self.utci_day_mean),
+            ("utci_night_mean", self.utci_night_mean),
+            ("sun_hours", self.sun_hours),
+            ("shade_hours", self.shade_hours),
+        ]
         day_set = set(self.heat_thresholds_day)
         night_set = set(self.heat_thresholds_night)
         for threshold, arr in sorted(self.utci_hours_above.items()):
@@ -481,7 +481,21 @@ class TimeseriesSummary:
                 suffix = "_day"
             elif threshold in night_set and threshold not in day_set:
                 suffix = "_night"
-            _save(f"utci_hours_above_{threshold:g}{suffix}", arr)
+            jobs.append((f"utci_hours_above_{threshold:g}{suffix}", arr))
+
+        jobs = [(name, arr) for name, arr in jobs if arr is not None and arr.size]
+
+        from .output_async import async_output_enabled
+
+        if async_output_enabled() and len(jobs) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=min(len(jobs), 8), thread_name_prefix="solweig-summary") as ex:
+                for _ in ex.map(lambda job: _save(*job), jobs):
+                    pass
+        else:
+            for name, arr in jobs:
+                _save(name, arr)
 
 
 # GridAccumulator was extracted to grid_accumulator.py to keep this module
