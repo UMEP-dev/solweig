@@ -526,7 +526,11 @@ def calculate_core_fused(
     tmaxlst_call = _sel(tmaxlst_grid)
     buildings_call = _sel(buildings)
     lc_grid_call = _sel(lc_grid)
-    valid_mask_call = _sel(valid_mask_u8)
+    # The u8 valid mask is consumed by-slice on the isotropic side-radiation path
+    # (rust/src/vegetation.rs), which requires C-contiguous data. A cropped view
+    # (use_crop) is non-contiguous, so materialise it contiguous at the boundary —
+    # the f32 arrays reach that path as freshly-built contiguous Rust arrays.
+    valid_mask_call = np.ascontiguousarray(_sel(valid_mask_u8))
     tgmap1_call = _sel(state.tgmap1)
     tgmap1_e_call = _sel(state.tgmap1_e)
     tgmap1_s_call = _sel(state.tgmap1_s)
