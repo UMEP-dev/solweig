@@ -322,6 +322,7 @@ def _calculate_timeseries(
         _calculate_auto_tile_size,
         _extract_tile_surface,
         _slice_tile_precomputed,
+        _warm_tile_pages,
         calculate_buffer_distance,
         compute_max_tile_side,
         generate_tiles,
@@ -492,11 +493,35 @@ def _calculate_timeseries(
     start_time = time.time()
     tile_loop_completed = False
 
+    # Tile read-ahead: a background thread warms the next tile's memmap pages while
+    # the current tile computes, so its disk read overlaps compute instead of the
+    # main thread blocking on it. Bounded to one prefetch in flight (skipped when
+    # the reader can't keep up), warming only reclaimable page-cache pages, so hard
+    # memory is unchanged. Shares the SOLWEIG_ASYNC_OUTPUT gate with write-behind.
+    from concurrent.futures import Future, ThreadPoolExecutor
+
+    from .output_async import async_output_enabled
+
+    _prefetch_executor: ThreadPoolExecutor | None = (
+        ThreadPoolExecutor(max_workers=1, thread_name_prefix="solweig-prefetch")
+        if (async_output_enabled() and n_tiles > 1)
+        else None
+    )
+    _prefetch_future: Future[None] | None = None
+
     # ── Main loop: process each tile's full timeseries ───────────────────
     try:
         for tile_idx, tile in enumerate(tiles):
             tile_desc = f"Tile {tile_idx + 1}/{n_tiles}" if n_tiles > 1 else "SOLWEIG timeseries"
             _tile_progress = None if progress_callback is not None else ProgressReporter(total=n_steps, desc=tile_desc)
+
+            # Read-ahead: warm the next tile's pages while this tile computes.
+            if (
+                _prefetch_executor is not None
+                and tile_idx + 1 < n_tiles
+                and (_prefetch_future is None or _prefetch_future.done())
+            ):
+                _prefetch_future = _prefetch_executor.submit(_warm_tile_pages, surface, tiles[tile_idx + 1])
 
             # 1. Cut tile (with overlap buffer)
             tile_surface = _extract_tile_surface(surface, tile, pixel_size, precomputed=precomputed)
@@ -646,6 +671,9 @@ def _calculate_timeseries(
             del tile_surface, tile_precomputed, tile_state, tile_gss, tile_accum, tile_summary
         tile_loop_completed = True
     finally:
+        if _prefetch_executor is not None:
+            _prefetch_executor.shutdown(wait=True, cancel_futures=True)
+            _prefetch_executor = None
         if _tiled_writer is not None and not tile_loop_completed:
             _tiled_writer.close(success=False)
             _tiled_writer = None

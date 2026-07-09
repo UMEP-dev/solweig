@@ -12,6 +12,7 @@ ensuring physically accurate ground temperature modeling with thermal inertia.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 
@@ -457,6 +458,34 @@ def _extract_tile_surface(
     if surface._nan_filled:
         tile_surface._nan_filled = True
     return tile_surface
+
+
+def _warm_tile_pages(surface: SurfaceData, tile: TileSpec) -> None:
+    """Fault a tile's memmap-backed layer pages into the OS page cache.
+
+    Run on a background thread ahead of computing the tile, so the disk read
+    overlaps the previous tile's compute; the main-thread extraction then hits
+    warm pages instead of blocking on disk. Reads (never copies) the tile slice
+    of each 2-D layer, so the pages stay reclaimable — no extra hard allocation.
+    A no-op for in-RAM layers. Any error is swallowed: prefetch is best-effort.
+    """
+    read_slice = tile.read_slice
+
+    def _touch(arr: object) -> None:
+        if arr is not None and getattr(arr, "ndim", 0) == 2:
+            with contextlib.suppress(Exception):
+                float(np.asarray(arr[read_slice]).sum())  # faults pages resident, retains no copy
+
+    for name in ("dsm", "cdsm", "tdsm", "dem", "land_cover", "albedo", "emissivity", "wall_height", "wall_aspect"):
+        _touch(getattr(surface, name, None))
+    svf = getattr(surface, "svf", None)
+    if svf is not None:
+        for value in vars(svf).values():
+            _touch(value)
+    shadow_matrices = getattr(surface, "shadow_matrices", None)
+    if shadow_matrices is not None:
+        for value in vars(shadow_matrices).values():
+            _touch(value)
 
 
 def _slice_tile_precomputed(
