@@ -143,6 +143,16 @@ def _write_outputs(
         )
 
 
+def _write_tile_windows(
+    jobs: list[tuple[Path, NDArray[np.floating], tuple[slice, slice]]],
+) -> None:
+    """Write a batch of (file, data, window) windowed writes (runs on a worker thread)."""
+    from . import io
+
+    for path, data, window in jobs:
+        io.write_raster_window(path_str=path, data=data, window=window)
+
+
 class TiledGeoTiffWriter:
     """Writes per-timestep GeoTIFFs tile-by-tile using windowed writes.
 
@@ -170,6 +180,17 @@ class TiledGeoTiffWriter:
         self._open_files: dict[str, Path] = {}
         self._all_files: dict[tuple[str, str], Path] = {}
         self._final_files: dict[tuple[str, str], Path] = {}
+
+        # Async windowed writes: offload each tile's GDAL write to a background
+        # thread so the next tile's GPU dispatch overlaps the disk write. Bounded
+        # to one in-flight write (max_pending=1), so the extra memory is a single
+        # tile's copied output arrays. Gated by SOLWEIG_ASYNC_OUTPUT (default on).
+        self._async = async_output_enabled()
+        self._max_pending = 1
+        self._executor: ThreadPoolExecutor | None = (
+            ThreadPoolExecutor(max_workers=1, thread_name_prefix="solweig-tilewrite") if self._async else None
+        )
+        self._pending: deque[Future[None]] = deque()
 
     def open_timestep(self, timestamp: dt, output_names: list[str]) -> None:
         """Create empty GeoTIFFs for the current timestep."""
@@ -236,14 +257,45 @@ class TiledGeoTiffWriter:
     def write_tile_at(
         self, timestamp: dt, write_slice: tuple[slice, slice], arrays: dict[str, NDArray[np.floating]]
     ) -> None:
-        """Write tile window to pre-created files for a specific timestep."""
+        """Write tile window to pre-created files for a specific timestep.
+
+        With async output enabled the windowed writes are offloaded to a
+        background thread, so the caller proceeds to the next tile's compute
+        (GPU dispatch) while this tile's GeoTIFF windows are written. The tile
+        cores are copied to decouple them from the reused result buffers; with
+        max_pending=1 at most one tile's copies are in flight.
+        """
         from . import io
 
         ts_str = timestamp.strftime("%Y%m%d_%H%M")
+        jobs: list[tuple[Path, NDArray[np.floating], tuple[slice, slice]]] = []
         for name, data in arrays.items():
-            key = (ts_str, name)
-            if key in self._all_files:
-                io.write_raster_window(path_str=self._all_files[key], data=data, window=write_slice)
+            path = self._all_files.get((ts_str, name))
+            if path is not None:
+                jobs.append((path, data, write_slice))
+        if not jobs:
+            return
+
+        if self._executor is None:
+            for path, data, window in jobs:
+                io.write_raster_window(path_str=path, data=data, window=window)
+            return
+
+        # Backpressure first (bounds in-flight writes and memory), then copy this
+        # tile's cores contiguous and submit them as a single background write.
+        self._drain_completed()
+        while len(self._pending) >= self._max_pending:
+            self._pending.popleft().result()
+        copied = [(path, np.ascontiguousarray(data), window) for path, data, window in jobs]
+        self._pending.append(self._executor.submit(_write_tile_windows, copied))
+
+    def _drain_completed(self) -> None:
+        while self._pending and self._pending[0].done():
+            self._pending.popleft().result()
+
+    def _flush_pending(self) -> None:
+        while self._pending:
+            self._pending.popleft().result()
 
     def finalize_precreated(self) -> None:
         """Promote successfully written temporary rasters to final filenames."""
@@ -259,6 +311,13 @@ class TiledGeoTiffWriter:
 
     def close(self, *, success: bool | None = None) -> None:
         """Finalize or clean up pre-created files, then clear writer state."""
+        if self._executor is not None:
+            if success is False:
+                self._pending.clear()  # abort: drop queued writes rather than wait
+            else:
+                self._flush_pending()  # finish every write before promoting files
+            self._executor.shutdown(wait=True, cancel_futures=True)
+            self._executor = None
         if success is True:
             self.finalize_precreated()
         elif success is False:
