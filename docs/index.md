@@ -3,7 +3,7 @@
 **Spatially resolved mean radiant temperature and thermal comfort modelling for urban environments.**
 
 !!! warning "Experimental"
-    This package and QGIS plugin are released for testing and discussion purposes. The API is stabilising but may change. Feedback and bug reports are welcome — [open an issue](https://github.com/UMEP-dev/solweig/issues).
+    This package is an experimental, compatibility-focused implementation of the SOLWEIG model: a Rust core with optional GPU acceleration, installed with a single pip command on Mac, Linux and Windows, usable from Python or inside QGIS. It is not the reference implementation. The science is taken from [UMEP](https://github.com/UMEP-dev/UMEP-processing), where it continues to be developed, and parity tests pin this package against the reference Python. The API is stabilising but may change. Feedback and bug reports are welcome — [open an issue](https://github.com/UMEP-dev/solweig/issues).
 
 SOLWEIG computes **Mean Radiant Temperature (Tmrt)** and thermal comfort indices (**UTCI**, **PET**) for urban environments. Given a building height model and weather data, it produces high-resolution maps of the radiation environment experienced by a person at ground level.
 

@@ -9,7 +9,7 @@ Adapted from the [UMEP](https://github.com/UMEP-dev/UMEP-processing) (Urban Mult
 ![UTCI thermal comfort map](docs/UTCI.jpg)
 _DSM/DEM data: [PNOA-LiDAR](https://pnoa.ign.es/pnoa-lidar), Instituto Geográfico Nacional (IGN), Spain. CC BY 4.0._
 
-> **Experimental:** This package and QGIS plugin are released for testing and discussion purposes. The API is stabilising but may change. Feedback and bug reports welcome — [open an issue](https://github.com/UMEP-dev/solweig/issues).
+> **Experimental:** This package is an experimental, compatibility-focused implementation of the SOLWEIG model, not the reference implementation. The science is taken from [UMEP](https://github.com/UMEP-dev/UMEP-processing), where it continues to be developed, and parity tests pin this package against the reference Python. The API is stabilising but may change. Feedback and bug reports welcome — [open an issue](https://github.com/UMEP-dev/solweig/issues).
 
 **[Documentation](https://umep-dev.github.io/solweig/)** · [Installation](https://umep-dev.github.io/solweig/getting-started/installation/) · [Quick Start](https://umep-dev.github.io/solweig/getting-started/quick-start/) · [API Reference](https://umep-dev.github.io/solweig/api/)
 
