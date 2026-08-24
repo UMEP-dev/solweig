@@ -124,6 +124,47 @@ class TestReadRequiredVersion:
         Version(plugin_pkg._read_required_version())  # must not raise
 
 
+class TestShippedMetadataIsLoadable:
+    """
+    Guards on the shipped ``metadata.txt``.
+
+    QGIS reads plugin metadata with ``configparser`` interpolation enabled,
+    so a bare ``%`` anywhere in a value (a changelog percentage, say) makes
+    plugin loading fail with "'%' must be followed by '%' or '('". Percent
+    signs must be written as ``%%``. Only the value actually fetched gets
+    interpolated, which is why ``_read_required_version`` (it reads just
+    ``version``) never noticed.
+    """
+
+    @staticmethod
+    def _shipped_config():
+        import configparser
+
+        config = configparser.ConfigParser()  # BasicInterpolation, matching QGIS
+        config.read(plugin_pkg._PLUGIN_DIR / "metadata.txt")
+        return config
+
+    def test_every_field_interpolates(self):
+        config = self._shipped_config()
+        for section in config.sections():
+            for option in config.options(section):
+                config.get(section, option)  # must not raise InterpolationSyntaxError
+
+    def test_version_matches_pyproject(self):
+        """metadata.txt tracks pyproject.toml, the single source of truth."""
+        import re
+        from pathlib import Path
+
+        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject.read_text(encoding="utf-8"), re.MULTILINE)
+        assert match is not None, "no version in pyproject.toml"
+        assert plugin_pkg._read_required_version() == match.group(1)
+
+    def test_changelog_has_an_entry_for_the_current_version(self):
+        config = self._shipped_config()
+        assert config.get("general", "version") in config.get("general", "changelog")
+
+
 # ---------------------------------------------------------------------------
 # _check_version
 # ---------------------------------------------------------------------------

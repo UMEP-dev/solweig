@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta91
+version=0.1.0-beta92
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,11 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta92
+    - Fixes an out-of-memory crash at the end of large tiled runs: the summary GeoTIFF export now caps in-flight write buffers at about 1 GB instead of writing all outputs at once.
+    - Faster large-raster runs, with output unchanged on valid data: fully-nodata tiles skip computation, tiled GeoTIFF writes and next-tile reads overlap the computation, and the GVF geometry precompute runs on the GPU.
+    - In tiled runs, shadow output over fully-nodata tiles is now NaN instead of a spurious sunlit value of 1.0.
+    - Fixes a crash in isotropic mode when the valid-data crop was active.
     0.1.0-beta91
     - Library gains memory-bounded prepare() for large rasters (layer-sequential windowing; >50 Mpx cold-build peak RAM cut ~3x, from ~30 GB to ~10 GB on a 507 Mpx raster). No plugin UI or numerical change from b90.
     0.1.0-beta90
@@ -52,12 +57,12 @@ changelog=
     - A field comparison of the opt-in scheme is documented in VALIDATION.md; the scheme is experimental and off by default.
     0.1.0-beta89
     - Correctness release from a full-repository review; numerical output changes for some runs (see VALIDATION.md).
-    - Clearness-index pressure unit fixed (hPa was scaled as kPa): clear-sky irradiance was ~20-25% underestimated for EPW/values-driven runs.
+    - Clearness-index pressure unit fixed (hPa was scaled as kPa): clear-sky irradiance was ~20-25%% underestimated for EPW/values-driven runs.
     - GVF source area fixed at non-1 m pixel sizes (marched 144 m instead of 36 m at 2 m pixels); new UMEP parity gate at 0.5/1/2 m. 1 m runs unchanged.
     - Cached GVF sunwall mask unified with UMEP semantics (fully sunlit walls only).
     - Tiled SVF preprocessing fixed (crashed with NameError after computing all tiles); cancelling SVF preprocessing no longer persists a partial cache — the plugin now stops gracefully via solweig.ComputationCancelled.
     - Plugin loads cleanly when solweig is not installed (per-algorithm import isolation); anisotropic-sky hint points at the correct toolbox algorithm.
-    - EPW parsing uses per-field missing codes (RH 99% and GHI 999 W/m2 are valid data again); ModelConfig.from_json actually reads legacy parameter files.
+    - EPW parsing uses per-field missing codes (RH 99%% and GHI 999 W/m2 are valid data again); ModelConfig.from_json actually reads legacy parameter files.
     - Stale shadow-matrix caches raise a clear error instead of aborting QGIS; SVF caches invalidate when the trunk layer changes; land-cover nodata maps to the nodata class instead of "paved".
     0.1.0-beta88
     - CI / test-categorisation only — zero plugin behaviour change.
@@ -68,20 +73,20 @@ changelog=
     - solweig.disable_gpu() now disables all three GPU paths (shadows, anisotropic sky, GVF) in a single call. Pre-b87 it only flipped shadows so "CPU-only" tests weren't actually CPU-only.
     - New solweig.enable_gpu() mirrors disable_gpu(). Fixed a lazy-init bug that silently re-enabled GPU after disable_gpu().
     - New GPU metrics: solweig.gpu_dispatch_count() / gpu_fallback_count() / reset_gpu_metrics(). Atomic counters at every Rust GPU dispatch site; lets tests assert "GPU path actually ran".
-    - New shadow + SVF GPU/CPU parity tests + runtime-ratio benchmark. Documents a small known difference in svf_veg* edge pixels (<1%, propagates to <0.5 °C Tmrt).
+    - New shadow + SVF GPU/CPU parity tests + runtime-ratio benchmark. Documents a small known difference in svf_veg* edge pixels (<1%%, propagates to <0.5 °C Tmrt).
     - Plugin: no functional change.
     0.1.0-beta86
     - No numerical change (golden tests byte-identical, validation site numbers unchanged)
     - Hot-file decomposition: io.py / summary.py / models/weather.py / models/precomputed.py split below 700-line threshold (every public symbol re-exported, no caller changes)
     - models/surface.py further extracted (1731 lines now, down from 3037 at b85): surface_loading, surface_compute, surface_svf_tiled, surface_serialization, surface_views
-    - Test coverage 75% → 81% (cleared the 80% target) via +117 focused unit tests
+    - Test coverage 75%% → 81%% (cleared the 80%% target) via +117 focused unit tests
     - solweig.Settings + solweig.ThermalState added to the top-level public surface (mkdocs API docs follow)
     - QGIS plugin: 349 LOC of dead create_surface_from_parameters chain removed; production path uses SurfaceData.prepare() directly
     - QGIS plugin metadata changelog trimmed (254 → 96 lines); older betas link to GitHub releases
     - Public docs: physics specs (SVF / shadows / GVF / radiation / ground temp / Tmrt / UTCI / PET) rendered in-site via mkdocs-include-markdown; dev docs (PRINCIPLES / INVARIANTS / ARCHITECTURE) moved to repo root; tutorial notebooks gain proper alt text via custom mkdocs hook
     - Audit script: 9th axis added (axis_canonical_docs) — validates that repo-root canonical docs exist, have inbound references, and have valid relative .md links
     - Performance gates tightened ~3–10× (matrix budgets 1.5–4.0 s → 0.5–0.85 s; ratio caps 5/4/6 → 2/2.5/2)
-    - Memory benchmark re-measured at 377 B/px (Feb baseline 370; b85 refactors added under 2%)
+    - Memory benchmark re-measured at 377 B/px (Feb baseline 370; b85 refactors added under 2%%)
     0.1.0-beta85
     - Architecture stabilisation: no numerical change, golden tests byte-identical
     - Rust FFI bundling: compute_timestep drops from 43 args to 18 (SvfBundle + StateBundle)
