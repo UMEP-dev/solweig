@@ -85,6 +85,7 @@ nav:
       - Quick Start: getting-started/quick-start.md
       - Installation: getting-started/installation.md
   - Tutorials:
+      - Overview & Running Locally: tutorials/index.md
       - Athens Quick Start: tutorials/01-athens-quickstart.md
       - Timeseries Analysis: tutorials/02-timeseries-analysis.md
       - Thermal Comfort: tutorials/03-thermal-comfort.md
