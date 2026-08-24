@@ -9,6 +9,7 @@ SolweigError (base)
 ├── InvalidSurfaceData
 │   └── GridShapeMismatch
 ├── MissingPrecomputedData
+├── StalePrecomputedData
 ├── WeatherDataError
 ├── ComputationCancelled
 └── ConfigurationError
@@ -56,6 +57,15 @@ except SolweigError as e:
 ## MissingPrecomputedData
 
 ::: solweig.errors.MissingPrecomputedData
+    options:
+      show_source: false
+      heading_level: 3
+
+---
+
+## StalePrecomputedData
+
+::: solweig.errors.StalePrecomputedData
     options:
       show_source: false
       heading_level: 3

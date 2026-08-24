@@ -104,6 +104,11 @@ class ShadowArrays:
         self._steradians = None
 
     @property
+    def spatial_shape(self) -> tuple[int, int]:
+        """Grid shape (rows, cols) the shadow matrices were computed for."""
+        return (int(self._shmat_u8.shape[0]), int(self._shmat_u8.shape[1]))
+
+    @property
     def shmat(self) -> NDArray[np.floating]:
         """Building shadow matrix as float32 (0.0-1.0). Unpacked from bitpacked on demand."""
         if self._shmat_f32 is None:

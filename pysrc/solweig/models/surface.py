@@ -486,6 +486,9 @@ class SurfaceData:
                 is missing.
             ValueError: If the loaded CDSM/TDSM appears to contain
                 relative heights instead of absolute elevations.
+            StalePrecomputedData: If the directory's SVF cache was
+                computed for a different raster (grid shape mismatch)
+                and no matching cache exists.
 
         Example::
 
@@ -608,9 +611,16 @@ class SurfaceData:
         surface._preprocessed = True
         surface._nan_filled = True
 
-        # Load SVF and shadow matrices (expensive — done after validation)
+        # Load SVF and shadow matrices (expensive — done after validation).
+        # expected_shape guards against stale caches from a different raster
+        # lingering in the prepared directory (issue #13): mismatched caches
+        # are skipped, and if only mismatched ones exist this raises
+        # StalePrecomputedData naming the offending path.
         if load_svf:
-            precomputed = PrecomputedData.prepare(svf_dir=str(directory))
+            precomputed = PrecomputedData.prepare(
+                svf_dir=str(directory),
+                expected_shape=(int(dsm_arr.shape[0]), int(dsm_arr.shape[1])),
+            )
             if precomputed.svf is not None:
                 surface.svf = precomputed.svf
             if precomputed.shadow_matrices is not None:

@@ -78,6 +78,7 @@ from .errors import (  # noqa: E402
     InvalidSurfaceData,
     MissingPrecomputedData,
     SolweigError,
+    StalePrecomputedData,
     WeatherDataError,
 )
 
@@ -321,6 +322,7 @@ __all__ = [
     "InvalidSurfaceData",
     "GridShapeMismatch",
     "MissingPrecomputedData",
+    "StalePrecomputedData",
     "WeatherDataError",
     "ConfigurationError",
     "ComputationCancelled",

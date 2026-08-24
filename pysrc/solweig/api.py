@@ -145,6 +145,16 @@ def validate_inputs(
             if grid is not None and grid.shape != dsm_shape:
                 raise GridShapeMismatch(name, dsm_shape, grid.shape)
 
+    # Backstop for user-supplied precomputed data: catch caches built for a
+    # different raster here rather than deep inside the Rust pipeline.
+    if precomputed is not None:
+        if precomputed.svf is not None and precomputed.svf.svf.shape != dsm_shape:
+            raise GridShapeMismatch("precomputed.svf", dsm_shape, precomputed.svf.svf.shape)
+        if precomputed.shadow_matrices is not None and precomputed.shadow_matrices.spatial_shape != dsm_shape:
+            raise GridShapeMismatch("precomputed.shadow_matrices", dsm_shape, precomputed.shadow_matrices.spatial_shape)
+    if aux.shadow_matrices is not None and aux.shadow_matrices.spatial_shape != dsm_shape:
+        raise GridShapeMismatch("shadow_matrices", dsm_shape, aux.shadow_matrices.spatial_shape)
+
     # Check SVF is available (required for all calculations)
     if not aux.has_svf and (precomputed is None or precomputed.svf is None):
         raise MissingPrecomputedData(

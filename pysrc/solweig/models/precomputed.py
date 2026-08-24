@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 
 from ..cache import CacheMetadata, pixel_size_tag
+from ..errors import StalePrecomputedData
 from ..solweig_logging import get_logger
 
 if TYPE_CHECKING:
@@ -427,6 +428,7 @@ class PrecomputedData:
         cls,
         walls_dir: str | Path | None = None,
         svf_dir: str | Path | None = None,
+        expected_shape: tuple[int, int] | None = None,
     ) -> PrecomputedData:
         """
         Prepare preprocessing data from directories.
@@ -443,9 +445,22 @@ class PrecomputedData:
             svf_dir: Directory containing SVF preprocessing files:
                 - svfs.zip: SVF arrays (required if svf_dir provided)
                 - shadowmats.npz: Shadow matrices for anisotropic sky (optional)
+            expected_shape: Grid shape (rows, cols) of the DSM the caches
+                must match. When given, a cached SVF or shadow dataset with
+                a different grid is treated as stale rather than loaded:
+                candidate directories that mismatch are skipped (with a
+                warning naming the path), and if every available SVF cache
+                mismatches, :class:`~solweig.errors.StalePrecomputedData`
+                is raised instead of returning data that would fail later
+                with a confusing grid-shape error. Mismatched shadow
+                matrices are dropped with a warning (they are optional).
 
         Returns:
             PrecomputedData with loaded arrays. Missing data is set to None.
+
+        Raises:
+            StalePrecomputedData: If ``expected_shape`` is given and the only
+                SVF caches found were computed for a different grid.
 
         Example:
             # Prepare all preprocessing
@@ -466,30 +481,47 @@ class PrecomputedData:
         wall_aspect_arr = None
         svf_arrays = None
         shadow_arrays = None
+        # Stale SVF caches seen while searching: (path, cached grid shape).
+        # Reported in the StalePrecomputedData error when no valid cache exists.
+        stale_svf: list[tuple[Path, tuple[int, int]]] = []
 
         def _load_svf_from_dir(base: Path) -> SvfArrays | None:
             memmap_dir = base / "memmap"
             svf_zip = base / "svfs.zip"
             if memmap_dir.exists() and (memmap_dir / "svf.npy").exists():
-                logger.info(f"  Loaded SVF memmap cache from {memmap_dir}")
-                return SvfArrays.from_memmap(memmap_dir)
-            if svf_zip.exists():
-                logger.info(f"  Loaded SVF zip from {svf_zip}")
-                return SvfArrays.from_zip(str(svf_zip))
-            return None
+                loaded, source = SvfArrays.from_memmap(memmap_dir), memmap_dir
+            elif svf_zip.exists():
+                loaded, source = SvfArrays.from_zip(str(svf_zip)), base
+            else:
+                return None
+            shape = (int(loaded.svf.shape[0]), int(loaded.svf.shape[1]))
+            if expected_shape is not None and shape != tuple(expected_shape):
+                logger.warning(
+                    f"  Skipping stale SVF cache in {source}: computed for grid {shape}, "
+                    f"expected {tuple(expected_shape)}"
+                )
+                stale_svf.append((source, shape))
+                return None
+            logger.info(f"  Loaded SVF cache from {source}")
+            return loaded
 
         def _load_shadow_from_dir(base: Path) -> ShadowArrays | None:
             shadow_npz = base / "shadowmats.npz"
-            if shadow_npz.exists():
-                logger.info(f"  Loaded shadow matrices from {shadow_npz}")
-                return ShadowArrays.from_npz(str(shadow_npz))
-
             shadow_memmap_dir = base / "shadow_memmaps"
-            metadata = shadow_memmap_dir / "metadata.json"
-            if shadow_memmap_dir.exists() and metadata.exists():
-                logger.info(f"  Loaded shadow memmaps from {shadow_memmap_dir}")
-                return ShadowArrays.from_memmap(shadow_memmap_dir)
-            return None
+            if shadow_npz.exists():
+                loaded, source = ShadowArrays.from_npz(str(shadow_npz)), shadow_npz
+            elif shadow_memmap_dir.exists() and (shadow_memmap_dir / "metadata.json").exists():
+                loaded, source = ShadowArrays.from_memmap(shadow_memmap_dir), shadow_memmap_dir
+            else:
+                return None
+            if expected_shape is not None and loaded.spatial_shape != tuple(expected_shape):
+                logger.warning(
+                    f"  Skipping stale shadow matrices in {source}: computed for grid "
+                    f"{loaded.spatial_shape}, expected {tuple(expected_shape)}"
+                )
+                return None
+            logger.info(f"  Loaded shadow matrices from {source}")
+            return loaded
 
         # Load walls if directory provided
         if walls_dir is not None:
@@ -549,6 +581,12 @@ class PrecomputedData:
                         break
 
             if svf_arrays is None:
+                if stale_svf:
+                    # Every cache found was computed for a different raster —
+                    # fail here with the offending path rather than later with
+                    # a bare grid-shape error (issue #13).
+                    path, shape = stale_svf[0]
+                    raise StalePrecomputedData("SVF", str(path), tuple(expected_shape or ()), shape)
                 logger.debug(f"  SVF not found in {svf_path}")
             else:
                 logger.info(f"  Loaded SVF data: {svf_arrays.svf.shape}")

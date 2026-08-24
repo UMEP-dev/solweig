@@ -89,6 +89,38 @@ class MissingPrecomputedData(SolweigError):
         super().__init__(message)
 
 
+class StalePrecomputedData(SolweigError):
+    """Raised when a cached SVF/shadow dataset was computed for a different raster.
+
+    A prepared surface directory can accumulate SVF and shadow-matrix caches
+    from earlier runs (a different extent, resolution, or study area). Loading
+    such a cache against the current DSM would fail later with a confusing
+    grid-shape error, so the mismatch is reported at load time with the
+    offending cache path.
+
+    Attributes:
+        what: Which cached dataset mismatched (e.g., "SVF").
+        cache_dir: Directory the stale cache was loaded from.
+        expected_shape: Grid shape of the current DSM.
+        actual_shape: Grid shape the cache was computed for.
+    """
+
+    def __init__(self, what: str, cache_dir: str, expected_shape: tuple, actual_shape: tuple):
+        self.what = what
+        self.cache_dir = cache_dir
+        self.expected_shape = expected_shape
+        self.actual_shape = actual_shape
+        message = (
+            f"Cached {what} in {cache_dir} was computed for a different raster:\n"
+            f"  Expected: {expected_shape} (matching this surface's DSM)\n"
+            f"  Got: {actual_shape}\n"
+            "The cache is stale (from a different extent, resolution, or study area). "
+            "Delete that cache directory (or the 'svf' folder inside the prepared "
+            "surface directory) and re-run SurfaceData.prepare() to regenerate it."
+        )
+        super().__init__(message)
+
+
 class WeatherDataError(SolweigError):
     """Raised when weather data is invalid.
 

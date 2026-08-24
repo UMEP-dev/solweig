@@ -1100,6 +1100,95 @@ def test_precomputed_prepare_loads_svf_zip(tmp_path):
     assert pc.svf.svf.shape == (8, 8)
 
 
+# ---------------------------------------------------------------------------
+# Stale-cache detection in PrecomputedData.prepare / SurfaceData.load
+# (issue #13: SVF cache from a different raster picked up silently)
+# ---------------------------------------------------------------------------
+from solweig.errors import GridShapeMismatch, StalePrecomputedData  # noqa: E402
+
+
+def test_precomputed_prepare_matching_expected_shape_loads(tmp_path):
+    svf_dir = tmp_path / "svf"
+    svf_dir.mkdir()
+    _make_svfs_zip(svf_dir / "svfs.zip", with_veg=True, shape=(8, 8))
+    pc = PrecomputedData.prepare(svf_dir=svf_dir, expected_shape=(8, 8))
+    assert pc.svf is not None
+
+
+def test_precomputed_prepare_only_stale_cache_raises(tmp_path):
+    """A cache computed for a different grid raises with the offending path."""
+    svf_dir = tmp_path / "svf"
+    svf_dir.mkdir()
+    _make_svfs_zip(svf_dir / "svfs.zip", with_veg=True, shape=(8, 8))
+    with pytest.raises(StalePrecomputedData, match="different raster") as exc_info:
+        PrecomputedData.prepare(svf_dir=svf_dir, expected_shape=(4, 4))
+    assert exc_info.value.expected_shape == (4, 4)
+    assert exc_info.value.actual_shape == (8, 8)
+    assert str(svf_dir) in str(exc_info.value)
+
+
+def test_precomputed_prepare_without_expected_shape_keeps_legacy_behavior(tmp_path):
+    """No expected_shape → no validation (pre-b93 behavior preserved)."""
+    svf_dir = tmp_path / "svf"
+    svf_dir.mkdir()
+    _make_svfs_zip(svf_dir / "svfs.zip", with_veg=True, shape=(8, 8))
+    pc = PrecomputedData.prepare(svf_dir=svf_dir)
+    assert pc.svf is not None
+
+
+def test_precomputed_prepare_picks_matching_candidate_over_stale(tmp_path):
+    """The pixel-size-tag fallback scan must select by shape, not directory order."""
+    root = tmp_path / "prepared"
+    for tag, shape in [("px100", (8, 8)), ("px200", (4, 4))]:
+        tag_dir = root / "svf" / tag
+        tag_dir.mkdir(parents=True)
+        _make_svfs_zip(tag_dir / "svfs.zip", with_veg=True, shape=shape)
+    pc = PrecomputedData.prepare(svf_dir=root, expected_shape=(4, 4))
+    assert pc.svf is not None
+    assert pc.svf.svf.shape == (4, 4)
+
+
+def test_precomputed_prepare_stale_shadow_matrices_dropped(tmp_path):
+    """Mismatched shadow matrices (optional data) are dropped, SVF still loads."""
+    svf_dir = tmp_path / "svf"
+    svf_dir.mkdir()
+    _make_svfs_zip(svf_dir / "svfs.zip", with_veg=True, shape=(8, 8))
+    # Legacy-format shadowmats for a different (4×4) grid
+    shadow = np.full((4, 4, 145), 255, dtype=np.uint8)
+    np.savez(svf_dir / "shadowmats.npz", shadowmat=shadow, vegshadowmat=shadow, vbshmat=shadow)
+    pc = PrecomputedData.prepare(svf_dir=svf_dir, expected_shape=(8, 8))
+    assert pc.svf is not None
+    assert pc.shadow_matrices is None
+
+
+def test_surface_load_raises_stale_on_mismatched_svf_cache(tmp_path):
+    """SurfaceData.load() must reject an SVF cache built for another raster."""
+    from solweig.models.surface import SurfaceData
+
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    _write_svf_geotiff(prepared / "dsm.tif", value=10.0, shape=(4, 4))
+    (prepared / "metadata.json").write_text('{"pixel_size": 1.0}')
+    _make_svfs_zip(prepared / "svfs.zip", with_veg=True, shape=(8, 8))
+    with pytest.raises(StalePrecomputedData, match="different raster"):
+        SurfaceData.load(prepared)
+
+
+def test_validate_inputs_rejects_mismatched_precomputed_svf():
+    """Backstop: user-supplied PrecomputedData with a wrong-grid SVF fails fast."""
+    import dataclasses
+
+    import solweig
+    from solweig.models.surface import SurfaceData
+
+    surface = SurfaceData(dsm=np.full((4, 4), 10.0, dtype=np.float32), pixel_size=1.0)
+    ones8 = np.ones((8, 8), dtype=np.float32)
+    svf8 = SvfArrays(**{f.name: ones8 for f in dataclasses.fields(SvfArrays)})
+    pc = PrecomputedData(svf=svf8)
+    with pytest.raises(GridShapeMismatch, match="precomputed.svf"):
+        solweig.validate_inputs(surface, precomputed=pc)
+
+
 def test_shadow_arrays_diffsh_with_vegetation_combines_arrays():
     """diffsh formula: shmat - (1 - vegshmat) * (1 - psi)."""
     rows, cols, n_patches = 2, 2, 8

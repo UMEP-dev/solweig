@@ -445,7 +445,10 @@ GeoTIFF files organised into subfolders of the output directory:
         if svf_dir:
             feedback.pushInfo(f"Loading SVF override from {svf_dir}")
             try:
-                precomputed = solweig.PrecomputedData.prepare(svf_dir=svf_dir)
+                precomputed = solweig.PrecomputedData.prepare(
+                    svf_dir=svf_dir,
+                    expected_shape=(int(surface.dsm.shape[0]), int(surface.dsm.shape[1])),
+                )
             except Exception as e:
                 feedback.reportError(
                     f"Could not load SVF from {svf_dir}: {e}",
