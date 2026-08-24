@@ -1,5 +1,25 @@
 # Release notes
 
+## 0.1.0b93 — 2026-08-24
+
+Bug-fix release, no numerical change (validation 31/31 pass, numbers identical
+to b92).
+
+- **QGIS plugin failed to load** with "Errors parsing metadata.txt": unescaped
+  `%` signs in the plugin metadata broke QGIS's parser (configparser
+  interpolation). Escaped, and guarded by a test that parses the shipped file
+  the way QGIS does.
+- **Stale SVF caches are caught at load time.** A prepared surface directory
+  holding an SVF cache computed for a different raster (an earlier run on a
+  different extent or resolution) was previously loaded blindly and surfaced
+  much later as a bare grid-shape error. `SurfaceData.load()` and
+  `PrecomputedData.prepare(expected_shape=...)` now skip mismatched caches
+  (logging the offending path) and raise the new
+  `solweig.StalePrecomputedData` — naming the cache path, both grid shapes,
+  and the fix — when only mismatched caches exist. `validate_inputs()` also
+  shape-checks user-supplied precomputed SVF and shadow matrices against the
+  DSM.
+
 Concise user-facing summary of changes. For the full per-version history of every
 commit, see [`qgis_plugin/solweig_qgis/metadata.txt`](https://github.com/UMEP-dev/solweig/blob/main/qgis_plugin/solweig_qgis/metadata.txt)
 and individual git commits.

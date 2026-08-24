@@ -4,8 +4,8 @@ message: >-
   If you use this software, please cite both the original SOLWEIG
   model paper and the UMEP platform paper.
 type: software
-version: 0.1.0b92
-date-released: '2026-07-09'
+version: 0.1.0b93
+date-released: '2026-08-24'
 authors:
   - family-names: Lindberg
     given-names: Fredrik

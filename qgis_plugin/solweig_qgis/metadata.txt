@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta92
+version=0.1.0-beta93
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,9 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta93
+    - Fixes plugin loading: unescaped %% signs in this metadata file broke QGIS's parser, so the plugin failed to load with "Errors parsing metadata.txt".
+    - Stale SVF caches are now caught at load time: a cache computed for a different raster is skipped (or reported with its path and both grid shapes) instead of surfacing later as a bare "Grid shape mismatch" error.
     0.1.0-beta92
     - Fixes an out-of-memory crash at the end of large tiled runs: the summary GeoTIFF export now caps in-flight write buffers at about 1 GB instead of writing all outputs at once.
     - Faster large-raster runs, with output unchanged on valid data: fully-nodata tiles skip computation, tiled GeoTIFF writes and next-tile reads overlap the computation, and the GVF geometry precompute runs on the GPU.
