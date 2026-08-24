@@ -227,6 +227,7 @@ Conventional commits: `<type>: <description> (<version>)`
 - SVF is the #1 bottleneck (calls shadowing 32–248× per pixel)
 - The `surface.py` decomposition (b85) moved loaders/compute/tiled-SVF/views into sibling modules but kept `SurfaceData` public — internal callers may reach into `surface_loading`, `surface_compute`, `surface_svf_tiled`, `surface_views` directly
 - The 2026a ground scheme is toggled by the *presence* of a `GroundSchemeBundle` in `compute_timestep` (not a boolean): `use_ground_scheme`/`use_outgoing_longwave` must be enabled together, require land cover, reject tiling, and disable the valid-bbox crop (per-pixel state + the ~11 m march need the full raster). Baseline stays byte-identical when the bundle is absent.
+- QGIS parses the plugin's `metadata.txt` with configparser **interpolation enabled**: a bare `%` anywhere in a value (changelog percentages included) breaks plugin loading. Write `%%`. Guarded by `TestShippedMetadataIsLoadable` in `tests/test_qgis_plugin_init.py`, which also pins the metadata version to `pyproject.toml` — bump both together
 - `solweig.geospatial` is the canonical home for plugin-style helpers (`extract_bounds`, `intersect_bounds`, `resample_to_grid`, `looks_like_relative`, etc.); the b85→b86 top-level re-exports were removed in b87 (accessing `solweig.extract_bounds` raises `AttributeError`)
 
 ---
