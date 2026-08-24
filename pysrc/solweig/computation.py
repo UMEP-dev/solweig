@@ -115,6 +115,14 @@ def calculate_core_fused(
     Returns:
         SolweigResult with Tmrt, shadow, radiation components, and updated state.
     """
+    # Honour SOLWEIG_NO_GPU before the first Rust dispatch. Without this,
+    # a calculate() run with precomputed SVF never passed through the lazy
+    # GPU gate (it lives in is_gpu_available() and compute_svf()), so the
+    # env var silently left all GPU paths enabled. Idempotent and cheap.
+    import solweig as _solweig
+
+    _solweig._ensure_gpu_initialized()
+
     from .api import SolweigResult
     from .buffers import as_float32
     from .components.gvf import detect_building_mask
