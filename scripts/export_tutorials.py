@@ -72,6 +72,24 @@ def inject_alts(md_path: Path, alts: list[str]) -> int:
     return counter["injected"]
 
 
+RUN_NOTE = (
+    "> This page is the rendered output of a Jupyter notebook that ships in the\n"
+    "> repository, together with all the data it uses. To run it yourself, see\n"
+    "> [Running the tutorials](index.md#running-the-tutorials-yourself).\n"
+)
+
+
+def inject_run_note(md_path: Path) -> None:
+    """Insert the how-to-run note after the page's H1 title."""
+    text = md_path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.startswith("# "):
+            lines.insert(i + 1, "\n" + RUN_NOTE)
+            break
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def main() -> int:
     notebooks = sorted(TUTORIALS.glob("*.ipynb"))
     if not notebooks:
@@ -89,6 +107,7 @@ def main() -> int:
             status = 1
             continue
         md_path = nb_path.with_suffix(".md")
+        inject_run_note(md_path)
         alts = collect_alts(nb_path)
         n_alts = inject_alts(md_path, alts)
         n_imgs = len(IMG_RE.findall(md_path.read_text(encoding="utf-8"))) + n_alts

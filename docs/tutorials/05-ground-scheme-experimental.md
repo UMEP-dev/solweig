@@ -1,5 +1,10 @@
 # UMEP 2026a Ground Scheme (experimental)
 
+> This page is the rendered output of a Jupyter notebook that ships in the
+> repository, together with all the data it uses. To run it yourself, see
+> [Running the tutorials](index.md#running-the-tutorials-yourself).
+
+
 SOLWEIG's baseline ground model parameterises surface temperature with a sinusoidal
 diurnal wave. UMEP's 2026a generation introduces an alternative, prognostic scheme:
 a force-restore surface temperature driven by the Objective Hysteresis Model

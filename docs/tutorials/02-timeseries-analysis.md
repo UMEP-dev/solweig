@@ -1,5 +1,10 @@
 # Multi-Day Timeseries and Summary Grids
 
+> This page is the rendered output of a Jupyter notebook that ships in the
+> repository, together with all the data it uses. To run it yourself, see
+> [Running the tutorials](index.md#running-the-tutorials-yourself).
+
+
 This tutorial runs a 4-day SOLWEIG timeseries over the Athens demo area and explores the
 summary products: aggregated grids, timeseries plots, and the text report.
 

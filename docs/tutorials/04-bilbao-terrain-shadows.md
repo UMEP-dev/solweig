@@ -1,5 +1,10 @@
 # Terrain Shadows: The Bilbao Valley
 
+> This page is the rendered output of a Jupyter notebook that ships in the
+> repository, together with all the data it uses. To run it yourself, see
+> [Running the tutorials](index.md#running-the-tutorials-yourself).
+
+
 Most thermal comfort studies take place on flat or gently sloping urban terrain.
 Bilbao is different: the city sits in a narrow river valley (the Nervión), flanked by
 hills that rise 200–400 m above the valley floor within just a few kilometres.

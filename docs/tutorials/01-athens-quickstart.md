@@ -1,5 +1,10 @@
 # Athens Quick Start: From GeoTIFFs to Tmrt Maps
 
+> This page is the rendered output of a Jupyter notebook that ships in the
+> repository, together with all the data it uses. To run it yourself, see
+> [Running the tutorials](index.md#running-the-tutorials-yourself).
+
+
 This tutorial walks through a complete SOLWEIG workflow using real data from Athens, Greece.
 You'll load a Digital Surface Model, rasterise tree vectors, and compute a Mean Radiant Temperature (Tmrt) map
 for a hot July afternoon — all in a few lines of code.

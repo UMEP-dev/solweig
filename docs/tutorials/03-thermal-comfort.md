@@ -1,5 +1,10 @@
 # UTCI: Mapping Thermal Stress
 
+> This page is the rendered output of a Jupyter notebook that ships in the
+> repository, together with all the data it uses. To run it yourself, see
+> [Running the tutorials](index.md#running-the-tutorials-yourself).
+
+
 Tmrt tells you how much radiation a person absorbs, but thermal comfort also depends on
 air temperature, humidity, and wind. This tutorial computes **UTCI** thermal
 comfort maps for a hot Athens afternoon and visualises them using stress-category colour scales.
