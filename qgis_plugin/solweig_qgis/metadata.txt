@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta94
+version=0.1.0-beta95
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,8 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta95
+    - Fixes a Qt6 compatibility issue flagged by the plugin repository validator (unscoped enum in the EPW download utility). No behaviour change.
     0.1.0-beta94
     - The SOLWEIG_NO_GPU environment variable is now honoured on calculation runs that load precomputed SVF; previously it silently left the GPU enabled on that path.
     - Missing EPW path in EPW weather mode now raises a clear error instead of an assert (which python -O would strip).

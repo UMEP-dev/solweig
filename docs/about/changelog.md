@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.0b95 — 2026-08-25
+
+Plugin-only fix, no numerical or library behaviour change: a Qt6-scoped enum
+in the EPW download utility, flagged by the QGIS plugin repository's Qt6
+compatibility validator on the beta94 upload.
+
 ## 0.1.0b94 — 2026-08-25
 
 Bug-fix release, no numerical change (validation 31/31 pass, numbers identical
