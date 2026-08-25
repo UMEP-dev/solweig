@@ -231,7 +231,7 @@ EU Joint Research Centre. Data derived from ERA5 reanalysis.
         req = QgsBlockingNetworkRequest()
         err = req.get(QNetworkRequest(QUrl(url)))
 
-        if err != QgsBlockingNetworkRequest.NoError:
+        if err != QgsBlockingNetworkRequest.ErrorCode.NoError:
             error_msg = req.errorMessage()
             raise QgsProcessingException(
                 f"PVGIS download failed: {error_msg}\n"
