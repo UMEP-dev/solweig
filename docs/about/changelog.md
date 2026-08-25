@@ -1,5 +1,23 @@
 # Release notes
 
+## 0.1.0b94 — 2026-08-25
+
+Bug-fix release, no numerical change (validation 31/31 pass, numbers identical
+to b93).
+
+- **`SOLWEIG_NO_GPU` is now honoured on runs that load precomputed SVF.**
+  Previously the env var only took effect through `is_gpu_available()` or
+  `compute_svf()`, so a `calculate()` run with a prepared surface silently
+  kept the GPU enabled. A regression test asserts zero GPU dispatches under
+  the env var. Behaviour with the GPU enabled is unchanged.
+- **QGIS plugin**: a missing EPW file in EPW weather mode now raises a clear
+  error instead of an `assert` (which `python -O` strips).
+- **Docs**: a tutorials overview page explains how to run the notebooks
+  locally (the data ships with the repository), every tutorial page links to
+  it, and the home page and README state the package's positioning: an
+  experimental compatibility-focused implementation, with UMEP as the
+  reference.
+
 ## 0.1.0b93 — 2026-08-24
 
 Bug-fix release, no numerical change (validation 31/31 pass, numbers identical
