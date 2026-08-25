@@ -375,7 +375,8 @@ GeoTIFF files organised into subfolders of the output directory:
             weather = create_weather_from_parameters(parameters, feedback)
             weather_series = [weather]
         elif weather_mode == self.WEATHER_EPW:
-            assert epw_path is not None  # guaranteed by weather_mode guard above
+            if epw_path is None:  # guaranteed by the weather_mode guard above; assert would vanish under -O
+                raise QgsProcessingException("EPW weather mode selected but no EPW file was provided")
             weather_series = load_weather_from_epw(
                 epw_path=epw_path,
                 start_dt=start_dt,
