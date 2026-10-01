@@ -1,5 +1,24 @@
 # Release notes
 
+## 0.1.0b96 — 2026-10-01
+
+Validation-harness correction. No library, plugin or model behaviour
+changed; the validation numbers did.
+
+- **Met-file clock corrected at the three Gothenburg validation sites.** The
+  prepared met files are labelled one hour early relative to the hour-ending
+  CET convention that the measurement CSVs and the model's sun position both
+  follow. Every validation timestep was therefore driven by forcing recorded
+  one hour after its sun position, which put the modelled K↓ peak an hour
+  before the measured one. The harness now adds one hour to the met
+  timestamps (`tests/validation/met_clock.py`); the measurement CSVs and the
+  library are untouched. Tmrt RMSE across the seven site-days moves from
+  2.4 to 7.3 °C to 3.3 to 7.0 °C, with Gustav Adolfs torg improving most
+  (5.7 to 7.3 °C before, 3.3 to 4.8 °C after). The K↓ "spike" previously
+  attributed to cloud on 2006-08-01 was this clock error.
+- The opt-in 2026a ground-scheme field comparison was rerun on the corrected
+  clock; see the validation report.
+
 ## 0.1.0b95 — 2026-08-25
 
 Plugin-only fix, no numerical or library behaviour change: a Qt6-scoped enum

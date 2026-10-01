@@ -29,6 +29,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from validation.met_clock import load_site_met
+
 # ---------------------------------------------------------------------------
 # Paths and constants
 # ---------------------------------------------------------------------------
@@ -185,7 +187,7 @@ class TestFullPipelineValidation:
         all_obs = load_gvc_measurements()
         obs = all_obs[day_code]
         met_file = MET_FILES[day_code]
-        weather = solweig.Weather.from_umep_met(met_file, resample_hourly=False)
+        weather = load_site_met(met_file)
 
         results_by_mode: dict[str, dict] = {}
         for mode_name, aniso in [("Isotropic", False), ("Anisotropic", True)]:
@@ -269,7 +271,7 @@ class TestFullPipelineValidation:
         all_obs = load_gvc_measurements()
         obs = all_obs[day_code]
         met_file = MET_FILES[day_code]
-        weather = solweig.Weather.from_umep_met(met_file, resample_hourly=False)
+        weather = load_site_met(met_file)
 
         components = ["Kdown", "Kup", "Ldown", "Lup"]
         model_keys = ["kdown", "kup", "ldown", "lup"]

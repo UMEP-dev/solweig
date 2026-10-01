@@ -383,14 +383,14 @@ SOLWEIG is validated against field radiation measurements from three sites in Go
 
 | Site                                  | Season          | Days |  Tmrt RMSE |   Tmrt R² |
 | ------------------------------------- | --------------- | ---: | ---------: | --------: |
-| Kronenhuset (courtyard, 1 m)          | Autumn          |    1 |     6.6 °C |      0.52 |
-| Gustav Adolfs torg (open square, 2 m) | Autumn + Summer |    3 | 5.7-7.3 °C | 0.80-0.88 |
-| GVC (university campus, 2 m)          | Summer          |    3 | 2.4-6.9 °C | 0.65-0.99 |
+| Kronenhuset (courtyard, 1 m)          | Autumn          |    1 |     6.3 °C |      0.64 |
+| Gustav Adolfs torg (open square, 2 m) | Autumn + Summer |    3 | 3.3-4.8 °C | 0.94-0.97 |
+| GVC (university campus, 2 m)          | Summer          |    3 | 4.1-7.0 °C | 0.58-0.87 |
 
 Anisotropic sky mode, matched daytime observation hours. Full details, radiation budget comparisons, and version history: **[Validation Report](VALIDATION.md)**.
 
 > **Known systematic bias:** modelled downwelling longwave (L↓) sits
-> ~18 to 55 W/m² above observations across all sites. This traces to the
+> ~19 to 45 W/m² above observations across all sites. This traces to the
 > published Ldown formulation (Jonsson et al. 2006: the non-sky hemisphere is
 > filled with wall emissions at air temperature, while real shaded walls are
 > cooler) and is independent of run and sun position. See

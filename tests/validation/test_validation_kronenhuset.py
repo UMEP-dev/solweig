@@ -34,6 +34,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from validation.met_clock import load_site_met
+
 # ---------------------------------------------------------------------------
 # Paths and constants
 # ---------------------------------------------------------------------------
@@ -169,11 +171,9 @@ class TestFullPipelineValidation:
 
     @pytest.fixture
     def weather(self):
-        from solweig import Weather
-
-        # The KR met file has imin=7 for all rows (not on-the-hour),
-        # so we disable the default hourly resampling filter.
-        return Weather.from_umep_met(KR_DIR / "MetFile_Prepared.txt", resample_hourly=False)
+        # Loads with hourly resampling off (imin=7 on every row) and the
+        # one-hour clock correction documented in met_clock.py.
+        return load_site_met(KR_DIR / "MetFile_Prepared.txt")
 
     @pytest.fixture
     def kr_materials(self):

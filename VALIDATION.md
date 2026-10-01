@@ -18,32 +18,33 @@ a glance.
 
 ---
 
-## Summary — v0.1.0b95 (2026-08-25)
+## Summary — v0.1.0b96 (2026-10-01)
 
-Baseline numbers are identical to b89. b90 added the opt-in 2026a ground
-scheme with defaults off. b91 reduced large-raster memory use. b93 to
-b95 are bug-fix releases with no numerical change (b93: QGIS plugin
-metadata parse failure, stale-SVF-cache detection; b94: SOLWEIG_NO_GPU
-honoured on the precomputed-SVF path, plugin EPW assert guard, docs
-positioning; b95: plugin Qt6 enum fix). b92 was performance and GPU-utilisation work: async and overlapped I/O (tiled writes,
-next-tile read-ahead, memory-bounded parallel summary export), a night-shadow
-skip, an empty-tile compute skip, and the GVF geometry precompute moved onto
-the GPU (computed once into resident buffers and reused across a tile's
-timesteps). Validation is unchanged (31/31 pass, Tmrt RMSE 2.4 to 7.3 °C). GPU
-and CPU Tmrt match exactly; the only output change is shadow over fully-nodata
-tiles, now NaN instead of a spurious sunlit 1.0. The opt-in scheme has its own
-field comparison further down.
+b96 corrects the clock on the validation met files. The library, the
+plugin and the model physics are unchanged since b89 (b90 added the opt-in
+2026a ground scheme with defaults off; b91 to b95 were memory, performance
+and bug-fix releases with no numerical change). The prepared met files are
+labelled one hour early relative to the hour-ending CET convention that the
+measurement CSVs and the model's sun position both follow, so until b95
+every validation timestep was driven by forcing recorded one hour after its
+sun position. The harness now adds one hour to the met timestamps; the
+measurement CSVs are untouched. Details and the evidence are in
+[§ Time base of the validation data](#time-base-of-the-validation-data).
+The correction moves the seven-day Tmrt RMSE range from 2.4 to 7.3 °C to
+3.3 to 7.0 °C and the K↓ comparisons at the open sites now line up hour for
+hour. The opt-in scheme has its own field comparison further down, rerun on
+the corrected clock.
 
 | Metric               | Kronenhuset | Gustav Adolfs |          GVC |
 | -------------------- | ----------: | ------------: | -----------: |
-| Tmrt RMSE range (°C) |         6.6 |       5.7–7.3 |      2.4–6.9 |
-| Tmrt R² range        |        0.52 |     0.80–0.88 |    0.65–0.99 |
-| Tmrt bias range (°C) |        +2.6 |  +0.6 to +3.7 | +1.4 to +5.8 |
+| Tmrt RMSE range (°C) |         6.3 |       3.3–4.8 |      4.1–7.0 |
+| Tmrt R² range        |        0.64 |     0.94–0.97 |    0.58–0.87 |
+| Tmrt bias range (°C) |        +2.0 |  +0.5 to +2.3 | +0.7 to +3.8 |
 | Days                 |           1 |             3 |            3 |
 | Total obs hours      |          12 |            43 |           30 |
 
 > **Read this before interpreting the radiation panels.** Modelled L↓ sits
-> 18 to 55 W/m² above the observations at every site. This traces to the
+> 19 to 45 W/m² above the observations at every site. This traces to the
 > published Ldown formulation rather than to calibration; see
 > [§ Ldown positive bias](#ldown-positive-bias) below. K↓ at open sites is
 > shadow-edge-sensitive and can spike on a single mis-aligned hour; see
@@ -65,12 +66,15 @@ field comparison further down.
 
 ![Kronenhuset POI timeseries](tests/validation/kronenhuset/timeseries_plots/timeseries.png)
 
-- The POI is in shade for almost the entire day, with one ~2 h sunlit window
-  (~13–15 UTC+1). The model amplifies Tmrt and K↓ noticeably more than
-  observations during that window, suggesting the modelled shadow boundary
-  exits the POI a touch early. This single transition drives most of the
-  +2.8 °C Tmrt bias.
-- The L↓ panel shows a steady ~+30 W/m² offset across every hour. The
+- The POI is in shade for almost the entire day, with one short sunlit
+  window in the mid-afternoon. The observations show two sunlit hours (15
+  and 16 h); the model shows one (15 h), where it overshoots Tmrt by 16 °C
+  and K↓ by 100 W/m², and is already back in shade at 16 h (−11 °C). The
+  modelled window is therefore about an hour short of the observed one; the
+  shadow boundary leaves the POI early. Outside those two hours the model
+  sits +0.3 to +4.3 °C above the observations. This single transition
+  drives most of the 6.3 °C RMSE.
+- The L↓ panel shows a steady +17 to +26 W/m² offset across every hour. The
   cool-wall bias is systematic and independent of sun position (see Known
   limitations).
 
@@ -88,13 +92,20 @@ field comparison further down.
 
 ![Gustav Adolfs POI timeseries](tests/validation/gustav_adolfs/timeseries_plots/timeseries.png)
 
-- 2005-10-11 (overcast autumn): modelled K↓ greatly exceeds observed (clear-sky
-  assumption vs heavy cloud); Tmrt nonetheless tracks observations well because
-  the POI is in shade most of the day.
-- 2006-07-26 (clear summer): good Tmrt agreement; K↓ tracks closely.
-- 2006-08-01 (clear summer): a sharp afternoon K↓ divergence (~600 W/m²
-  spike), most likely partial cloud or a shadow-edge timing offset that the
-  hourly met data cannot resolve. This event dominates the day's K↓ RMSE.
+- 2005-10-11 (autumn, low sun): K↓ tracks the observations hour for hour
+  (the met file carries measured direct and diffuse components). Tmrt RMSE
+  4.2 °C, R² 0.94. The afternoon shade transition is modelled one hour
+  early: at 16 h the model has the POI in shade (17 °C) while the
+  observation is still sunlit (29 °C).
+- 2006-07-26 (clear summer): K↓ tracks closely; Tmrt runs +2 to +7 °C warm
+  through the middle of the day (bias +2.3 °C, RMSE 4.8 °C) and the evening
+  shade transition at 19 h is again modelled early (−9 °C).
+- 2006-08-01 (clear summer): RMSE 3.3 °C, R² 0.97. The one-hour K↓ dip at
+  13 h (modelled 470 vs 770 W/m² observed) is a modelled shade pass that the
+  observations do not show; it drives the day's K↓ RMSE to 90 W/m² and a
+  −6.5 °C Tmrt difference for that hour. Before b96 this day showed a
+  600 W/m² K↓ "spike" that was attributed to cloud; it was the met-file
+  clock offset.
 
 ---
 
@@ -111,18 +122,57 @@ field comparison further down.
 
 ![GVC POI timeseries](tests/validation/gvc/timeseries_plots/timeseries.png)
 
-- 2010-07-07: clean agreement; the POI transitions into shade after midday and
-  modelled Tmrt follows observations closely.
-- 2010-07-10: only 7 hours, mostly in shade; modelled Tmrt sits a few °C above
-  observed (no abrupt divergence; likely the L↓ cool-wall bias).
-- 2010-07-12: large early-afternoon divergence. The model keeps the POI
-  sunlit longer than reality, raising Tmrt by 15–20 °C at the peak. This is
-  the dominant driver of the day's +5.2 °C bias.
+- 2010-07-07: RMSE 4.1 °C, bias +0.7 °C. The POI goes into shade late in
+  the morning; the model keeps it sunlit one hour longer (11 h: modelled
+  54 °C vs 42 °C observed) and then follows the observations closely.
+- 2010-07-10: only 7 hours, all in shade; modelled Tmrt sits +3.5 to +5 °C
+  above observed throughout (bias +3.8 °C, no abrupt divergence; the L↓
+  cool-wall bias and K↑ both contribute).
+- 2010-07-12: RMSE 7.0 °C, bias +3.7 °C. The model keeps the POI sunlit
+  through 10 and 11 h where the observations show it already shaded,
+  raising Tmrt by 10 to 13 °C in those two hours, and stays +3 to +8 °C
+  warm in the shade that follows. This is the dominant driver of the day's
+  bias.
 - The Site 1 measurement station sits at the edge of a dense tree canopy in
   the CDSM (heights of 7–18 m immediately to the west and south), so the
   modelled shadow state is sensitive to sub-pixel canopy position at 2 m
   resolution. This is the dominant source of day-to-day bias variability at
   this site.
+
+---
+
+## Time base of the validation data
+
+Three clocks have to agree for an hour-by-hour comparison: the labels on
+the measurement CSVs, the labels on the met forcing, and the time at which
+the model places the sun for each row. The model follows the UMEP
+convention: a row labelled `h` is the mean of the hour ending at `h` in
+local standard time, so the sun is evaluated at `h` minus half a timestep
+with `utc_offset = 1` (CET).
+
+Lag fits between the three curves (met K↓, measured K↓ at the POI, and the
+model's sine of solar altitude, at lags of −2 to +2 h) show that the
+measurement CSVs follow that convention and the prepared met files do not:
+
+- Measured K↓ at label `h` matches the model's sun at label `h` (best lag
+  0 at Gustav Adolfs torg and GVC).
+- Met K↓ at label `h` matches the model's sun at label `h + 1` on every
+  clear day (Gustav Adolfs 2005-10-11, Kronenhuset 2005-10-07, GVC
+  2010-07-12), and measured K↓ at label `h` matches met K↓ at label
+  `h − 1` (e.g. Gustav Adolfs 2006-07-26: met 51, 132, 265, 499 W/m² at 5
+  to 8 h; measured 52, 120, 270, 479 W/m² at 6 to 9 h).
+
+The met files are therefore labelled one hour early (hour-starting CET, or
+equivalently hour-ending UTC). Until b95 every timestep was driven by
+forcing recorded one hour after its sun position, which put the modelled
+K↓ peak an hour before the measured one and produced the spurious K↓
+divergences the earlier reports attributed to cloud. Since b96 the harness
+adds one hour to the met timestamps (`tests/validation/met_clock.py`,
+applied by every site test and by the plot and POI-sweep scripts). The
+measurement CSVs and the library are untouched: the convention of
+`Weather.from_umep_met` and `Location.utc_offset` is UMEP's, and the
+correction belongs to these data files. Shifting the observations instead
+would align K↓ but move the shadows an hour off.
 
 ---
 
@@ -132,14 +182,14 @@ field comparison further down.
 
 Point-level downwelling shortwave (Kdown) is sensitive to shadow timing.
 At any single pixel the shadow state is binary, so a small shift in the
-modelled shadow boundary produces ~600–800 W/m² differences between adjacent
-hourly timesteps. The visible spike on Gustav Adolfs 2006-08-01 illustrates
-this: a single misaligned hour drives the day's K↓ RMSE up to 157 W/m².
-Spatially averaged Kdown would show considerably lower error.
+modelled shadow boundary produces several hundred W/m² of difference in a
+single hourly timestep. The 13 h dip on Gustav Adolfs 2006-08-01
+illustrates this: one modelled shade hour drives the day's K↓ RMSE to
+90 W/m². Spatially averaged Kdown would show considerably lower error.
 
 ### Ldown positive bias
 
-Modelled Ldown exceeds the observations at all sites (bias +18 to +55 W/m²).
+Modelled Ldown exceeds the observations at all sites (bias +19 to +45 W/m²).
 The SOLWEIG Ldown formulation (Jonsson et al. 2006) fills the non-sky
 hemisphere with wall emissions at emissivity 0.90 and air temperature. In
 practice, shaded walls are cooler than air temperature, which introduces a
@@ -159,41 +209,75 @@ positive bias.
 
 When the POI sits adjacent to dense canopy or a shadow edge, the modelled
 sun/shade state is sensitive to sub-pixel CDSM position at 2 m resolution.
-This produces day-by-day bias swings of several °C in Tmrt, most visible at
-GVC, where 2010-07-07 has bias +0.9 °C but 2010-07-12 reaches +5.2 °C using
-the same site, POI, and surface model.
+This produces day-by-day swings of several °C in Tmrt, most visible at
+GVC, where 2010-07-07 has RMSE 4.1 °C (bias +0.7 °C) but 2010-07-12 reaches
+7.0 °C (bias +3.7 °C) using the same site, POI, and surface model.
 
 ---
 
 ## UMEP 2026a ground scheme (opt-in): field comparison
 
-Run 2026-07-07 on the same three sites, anisotropic sky, with
-`use_ground_scheme=True` / `use_outgoing_longwave=True` (site parameter
-files extended with the bundled OHM/heat-capacity blocks, which the legacy
-site JSONs predate). POI Tmrt against measurements:
+Rerun 2026-10-01 on the corrected met clock (see
+[§ Time base of the validation data](#time-base-of-the-validation-data)).
+Same three sites, anisotropic sky, `use_ground_scheme=True` /
+`use_outgoing_longwave=True`, site parameter files extended with the
+bundled OHM, Tg_ini and Tm_ini blocks (the legacy site JSONs predate them).
+All four columns use one prepared surface and parameter set per site, the
+suite configuration; the old-clock columns reproduce the July 2026 run,
+and the old-clock baseline column matches the b89 to b95 summary. POI Tmrt
+against measurements, RMSE / bias (°C):
 
-| Site | Day | Baseline RMSE / bias (°C) | Scheme RMSE / bias (°C) |
-| --- | --- | --- | --- |
-| Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 22.0 / +21.4 |
-| Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 13.6 / +12.7 |
-| Gustav Adolfs | 2006-07-26 | 7.1 / +3.7 | 16.4 / +15.8 |
-| Gustav Adolfs | 2006-08-01 | 7.3 / +0.6 | 15.1 / +13.6 |
-| GVC | 2010-07-07 | 4.4 / −1.4 | 12.9 / +12.5 |
-| GVC | 2010-07-10 | 6.0 / +2.9 | 17.3 / +16.3 |
-| GVC | 2010-07-12 | 8.6 / +7.9 | 21.1 / +20.8 |
+| Site | Day | Baseline, old clock | Baseline, corrected | Scheme, old clock | Scheme, corrected | Scheme, corrected, Fcyl patch term only |
+| --- | --- | --- | --- | --- | --- | --- |
+| Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 6.3 / +2.0 | 22.0 / +21.4 | 21.5 / +20.9 | 11.4 / +10.0 |
+| Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 4.2 / +0.5 | 13.6 / +12.7 | 12.3 / +11.7 | 4.5 / +2.5 |
+| Gustav Adolfs | 2006-07-26 | 7.1 / +3.7 | 4.8 / +2.3 | 16.4 / +15.8 | 14.4 / +14.3 | 4.8 / +4.3 |
+| Gustav Adolfs | 2006-08-01 | 7.3 / +0.6 | 3.3 / +1.8 | 15.1 / +13.6 | 15.2 / +14.6 | 6.1 / +4.7 |
+| GVC | 2010-07-07 | 2.4 / +1.4 | 4.1 / +0.7 | 14.9 / +14.7 | 14.6 / +13.9 | 5.6 / +3.8 |
+| GVC | 2010-07-10 | 3.7 / +3.4 | 4.2 / +3.8 | 18.8 / +18.7 | 18.5 / +18.4 | 7.7 / +7.5 |
+| GVC | 2010-07-12 | 6.9 / +5.7 | 7.0 / +3.7 | 18.3 / +18.1 | 17.5 / +16.6 | 8.1 / +6.3 |
 
-The bias is consistently positive. The flux decomposition localises it:
-Kdown, Kup and Ldown are essentially unchanged, and the scheme's Lup at the
-Kronenhuset POI is closer to the observations than the baseline (bias +0.3
-vs +8.3 W/m²), so the force-restore ground temperature itself appears sound.
-The excess enters through the directional and cylinder Lside composition of
-`Solweig_2026a_calc`: the solid-angle march's directional side longwave
-feeds the Fside term, and in anisotropic mode the 2026a code additionally
-adds the mean of those directional terms to the Fcyl term (2025a used only
-the anisotropic-sky Lside there). An isotropic diagnostic at Kronenhuset
-separates the two contributions: RMSE 8.9 / bias +7.2 °C (baseline 5.8 /
-+0.9), so roughly a third of the anisotropic-mode bias remains without the
-Fcyl addition.
+The clock correction moves the scheme numbers by at most 2 °C. The bias is
+consistently positive: RMSE 12.3 to 21.5 °C and bias +11.7 to +20.9 °C,
+against 3.3 to 7.0 °C and +0.5 to +3.8 °C for the baseline on the same
+inputs.
+
+The last column is the proposed change, tested locally and not shipped:
+the Fcyl longwave term carries the anisotropic-sky patch term alone, as in
+2025a (one line in the scheme branch of `pipeline.rs`, the equivalent of
+`Lside = Lside_` in `Solweig_2026a_calc`; the march is untouched). It
+removes most of the excess: RMSE 4.5 to 11.4 °C, bias +2.5 to +10.0 °C.
+What remains is largest in the enclosed courtyard (Kronenhuset +10.0 °C
+against +2.0 °C for the baseline) and smallest on the open square (Gustav
+Adolfs +2.5 to +4.7 °C against +0.5 to +2.3 °C), consistent with the
+march's directional ground terms running higher than the 2022a half-Lup
+where walls are close to the POI. Lup is unaffected by the change. Per
+hour, the scheme with this change sits within about 1 °C of the baseline
+in direct sun and 3 to 8 °C above it in shade and at low sun, so the
+remainder is in the side longwave. Two further local tests bracket it:
+removing the wall emission the march adds to the directional side terms
+(already supplied by the anisotropic wall patches) moves Kronenhuset by
+1 °C and the open sites not at all; weighting the march's directional
+ground solid angles by the cosine of the off-axis angle, instead of
+equally across each half-plane, overshoots to a cold bias (−3 to −9 °C).
+The angular weighting of that ground term is therefore worth about 10 °C
+of Tmrt and is where the remaining shade-hour excess sits; the correct
+weighting is an upstream question. The test diffs are kept outside the
+repository. Kdown, Kup and Ldown are essentially unchanged by the scheme. Lup
+at the POI, bias in W/m² (baseline / scheme): Kronenhuset +6.1 / −1.0;
+Gustav Adolfs +1.8 / +1.3, +4.3 / +11.4, +7.7 / +23.4; GVC −1.5 / +23.2,
++30.5 / +42.2, +20.6 / +33.9. The scheme's Lup is closer to the
+measurements at Kronenhuset (1 m courtyard, October) and on the October day
+at Gustav Adolfs torg, and further from them on the four summer days at the
+two 2 m sites. Where Lup does improve, Tmrt does not, so the ground
+temperature itself is not where the excess enters. It enters through the
+directional and cylinder Lside composition of `Solweig_2026a_calc`: the
+solid-angle march's directional side longwave feeds the Fside term, and in
+anisotropic mode the 2026a code additionally adds the mean of those
+directional terms to the Fcyl term (2025a used only the anisotropic-sky
+Lside there). An isotropic diagnostic at Kronenhuset separates the two
+contributions: RMSE 9.2 / bias +7.5 °C (baseline 5.8 / +1.4), so roughly a
+third of the anisotropic-mode bias remains without the Fcyl addition.
 
 Consequences:
 
@@ -201,7 +285,8 @@ Consequences:
   the composition question is settled upstream, scheme output is best
   treated as qualitative.
 - A question about the composition is open with the upstream developers
-  (raised 2026-07-07 alongside the other findings from this port).
+  (UMEP-dev/umep-solweig issue 3, filed 2026-07-07 as UMEP-processing
+  issue 140 alongside the other findings from this port).
 - The port itself is faithful: every component matches the vendored
   upstream reference (`tests/spec/test_parity_2026a.py`), and an
   end-to-end check running upstream's own `Solweig_2026a_calc` (vendored
@@ -224,7 +309,7 @@ Gothenburg sites (~189 hours):
 | L↓        | 0.73 | 17.5 W/m² |
 | L↑        | 0.94 | 15.6 W/m² |
 
-The Tmrt RMSE range from this implementation (1.5–7.5 °C across the seven
+The Tmrt RMSE range from this implementation (3.3–7.0 °C across the seven
 day-site combinations) brackets the paper's aggregated 4.8 K. The paper
 validates against 1-minute averaged measurements, whereas the met data used
 here are hourly, which limits achievable accuracy at sub-hour timescales such
@@ -285,6 +370,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b93 | 2026-08-24 |     3 |      2.4–7.3 °C | Bug-fix release — **no numerical change**, validation 31/31 pass with numbers identical to b92. (a) **QGIS plugin metadata parse failure**: five unescaped `%` signs in `metadata.txt` changelog entries broke QGIS's configparser (interpolation enabled), so the plugin failed to load; escaped as `%%` and guarded by a test that parses the shipped file the way QGIS does. (b) **Stale SVF cache detection** (issue #13): a prepared surface directory holding an SVF cache computed for a different raster (earlier run, different extent/resolution) was loaded blindly by `SurfaceData.load()` — the pixel-size-tag fallback scan picked the first cache in filesystem order — and surfaced much later as a bare `Grid shape mismatch for 'svf.svf'` in `validate_inputs`. `PrecomputedData.prepare()` now takes `expected_shape`: mismatched candidates are skipped (warning names the path), and if only mismatched SVF caches exist the new `StalePrecomputedData` error reports the cache path, both grid shapes, and the remediation. `validate_inputs()` gains a backstop shape check for user-supplied precomputed SVF and shadow matrices. |
 | 0.1.0b94 | 2026-08-25 |     3 |      2.4–7.3 °C | Bug-fix release — **no numerical change**, validation 31/31 pass with numbers identical to b93. (a) **`SOLWEIG_NO_GPU` honoured on the precomputed-SVF path**: the lazy GPU gate only fired via `is_gpu_available()` or `compute_svf()`, so a `calculate()` run that loaded precomputed SVF silently kept every GPU path enabled under the env var (found while re-verifying performance benchmarks; "CPU" timings were GPU-assisted). The gate now runs at the top of `calculate_core_fused`; regression test asserts zero GPU dispatches. GPU-on behaviour unchanged. (b) **QGIS plugin**: missing EPW path in EPW weather mode raises `QgsProcessingException` instead of an `assert` (stripped under `python -O`). (c) **Docs**: tutorials overview page with run-locally instructions, a run-note injected atop every tutorial export, and the home page/README now state the experimental compatibility-implementation positioning (UMEP as the reference implementation). |
 | 0.1.0b95 | 2026-08-25 |     3 |      2.4–7.3 °C | Plugin-only fix — **no numerical change**, validation 31/31 pass with numbers identical to b94. Qt6-scoped enum (`QgsBlockingNetworkRequest.ErrorCode.NoError`) in the EPW download utility, flagged by the QGIS plugin repository's Qt6 compatibility validator on the beta94 upload. |
+| 0.1.0b96 | 2026-10-01 |     3 |      3.3–7.0 °C | Validation-harness clock correction, **no library, plugin or model change**. Lag fits between met K↓, measured K↓ and the model's own solar altitude show the prepared Gothenburg met files are labelled one hour early relative to the hour-ending CET convention of the measurement CSVs and of the model's sun position, so every validation timestep had been driven by forcing from one hour after its sun position (the modelled K↓ peak sat an hour before the measured one, as Lindberg noted in June). `tests/validation/met_clock.py` now adds one hour to the met timestamps for every site test, the plots and the POI sweep; measurement CSVs untouched. Kronenhuset 6.6 → 6.3 °C (R² 0.52 → 0.64, bias +2.6 → +2.0); Gustav Adolfs 5.7–7.3 → 3.3–4.8 °C (R² 0.80–0.88 → 0.94–0.97); GVC 2.4–6.9 → 4.1–7.0 °C (R² 0.65–0.99 → 0.58–0.87; the one day that worsens, 2010-07-07, now shows the model holding the POI sunlit one hour longer than observed). The 2006-08-01 K↓ "spike" previously attributed to cloud was this offset. 28/28 pass across the four CI validation files. The 2026a scheme field comparison was rerun on the corrected clock and the suite configuration: scheme RMSE 12.3–21.5 °C, bias +11.7 to +20.9 °C (within 2 °C of July); Lup under the scheme beats the baseline at Kronenhuset only and is worse on the four summer days at the 2 m sites. A local test of the proposed composition (Fcyl longwave term carrying the anisotropic-sky patch term alone, as in 2025a; not shipped) brings the scheme to 4.5–11.4 °C RMSE, bias +2.5 to +10.0 °C, with the remainder largest in the enclosed courtyard. Report sections rewritten accordingly. |
 
 ---
 

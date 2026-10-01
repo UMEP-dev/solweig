@@ -28,6 +28,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+from validation.met_clock import load_site_met
+
 VALIDATION_DIR = Path(__file__).parent
 
 SITES: dict[str, dict[str, Any]] = {
@@ -312,7 +314,7 @@ def _run_site(site_name: str, tmp_path):
     for day_code in day_codes:
         obs_rows = all_obs[day_code]
         met_file = cfg["met_files"][day_code]
-        weather = solweig.Weather.from_umep_met(met_file, resample_hourly=False)
+        weather = load_site_met(met_file)
 
         output_dir = tmp_path / f"{site_name}_{day_code}"
         solweig.calculate(

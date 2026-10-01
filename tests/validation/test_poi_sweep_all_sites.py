@@ -22,6 +22,8 @@ import numpy as np
 import pytest
 import rasterio
 
+from validation.met_clock import load_site_met
+
 # ---------------------------------------------------------------------------
 # Site configurations
 # ---------------------------------------------------------------------------
@@ -339,7 +341,7 @@ def _run_sweep(site_name: str, tmp_path):
     for day_code in day_codes:
         obs = all_obs[day_code]
         met_file = cfg["met_files"][day_code]
-        weather = solweig.Weather.from_umep_met(met_file, resample_hourly=False)
+        weather = load_site_met(met_file)
 
         output_dir = tmp_path / f"{site_name}_{day_code}"
         solweig.calculate(
