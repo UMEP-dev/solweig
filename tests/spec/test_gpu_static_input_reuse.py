@@ -92,6 +92,33 @@ def test_new_surface_on_a_reused_dsm_address_gets_its_own_shadows():
     np.testing.assert_allclose(tmrt_gpu, tmrt_cpu, atol=0.05)
 
 
+def test_alternating_between_two_surfaces_keeps_each_ones_ground_view_geometry():
+    """The GPU holds one surface's GVF geometry at a time and must swap it on demand.
+
+    Up to 0.1.0b97 the resident geometry was matched by grid shape only, so
+    after a step on surface B the next step on surface A used B's building
+    geometry (Kup and Lup off by 55 to 70 W/m2 over most of the grid).
+    """
+    from solweig.physics.wallalgorithms import filter1Goodwin_as_aspect_v3, findwalls
+
+    def walled(layout):
+        dsm = _dsm(layout)
+        walls = findwalls(dsm, 1.0)
+        aspect = filter1Goodwin_as_aspect_v3(walls, 1.0, dsm)
+        return SurfaceData(dsm=dsm, pixel_size=1.0, svf=make_mock_svf(SHAPE), wall_height=walls, wall_aspect=aspect)
+
+    surface_a, surface_b = walled("a"), walled("b")
+    _run(surface_a)
+    _run(surface_b)
+    _, tmrt_a_gpu = _run(surface_a)  # B's geometry is resident at this point
+    _, tmrt_b_gpu = _run(surface_b)
+
+    _, tmrt_a_cpu = _cpu(walled("a"))
+    _, tmrt_b_cpu = _cpu(walled("b"))
+    np.testing.assert_allclose(tmrt_a_gpu, tmrt_a_cpu, atol=0.05)
+    np.testing.assert_allclose(tmrt_b_gpu, tmrt_b_cpu, atol=0.05)
+
+
 def test_gpu_svf_for_another_surface_does_not_leak_into_the_next_timestep():
     surface_a = SurfaceData(dsm=_dsm("a"), pixel_size=1.0, svf=make_mock_svf(SHAPE))
     shadow_first, tmrt_first = _run(surface_a)

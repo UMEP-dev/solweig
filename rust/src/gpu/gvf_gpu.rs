@@ -147,6 +147,10 @@ struct CachedBuffers {
 
     // Track whether geometry is resident + ready for per-timestep dispatch
     geometry_uploaded: bool,
+    // Which GvfGeometryCache the resident geometry belongs to. Grid shape
+    // alone does not identify it: two surfaces of the same size have
+    // different building geometry.
+    resident_geometry_id: Option<u64>,
     readback_inflight: bool,
 }
 
@@ -425,8 +429,11 @@ impl GvfGpuContext {
         let facesh: Vec<f32> = bytemuck::cast_slice(&data[b_end..f_end]).to_vec();
 
         // Geometry is now resident on the GPU + the shared meta/shifts are
-        // uploaded, so the per-timestep pipeline is fully prepared.
+        // uploaded, so the per-timestep pipeline is fully prepared. The
+        // caller names its owner with `mark_geometry_resident` once the
+        // cache object exists.
         buffers.geometry_uploaded = true;
+        buffers.resident_geometry_id = None;
 
         Ok(GvfPrecomputeRaw {
             albnosh,
@@ -522,7 +529,33 @@ impl GvfGpuContext {
         );
 
         buffers.geometry_uploaded = true;
+        buffers.resident_geometry_id = Some(cache.id);
         Ok(())
+    }
+
+    /// Record which cache the geometry left resident by `precompute_geometry`
+    /// belongs to.
+    pub fn mark_geometry_resident(&self, cache_id: u64) {
+        let mut guard = self.cached.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(buffers) = guard.as_mut() {
+            buffers.resident_geometry_id = Some(cache_id);
+        }
+    }
+
+    /// Make sure the resident geometry is `cache`'s, uploading it from the
+    /// CPU mirror if another surface's geometry (or none) is on the GPU.
+    pub fn ensure_geometry_resident(&self, cache: &GvfGeometryCache) -> Result<(), String> {
+        let resident = {
+            let guard = self.cached.lock().unwrap_or_else(|e| e.into_inner());
+            guard
+                .as_ref()
+                .filter(|buffers| buffers.geometry_uploaded)
+                .and_then(|buffers| buffers.resident_geometry_id)
+        };
+        if resident == Some(cache.id) {
+            return Ok(());
+        }
+        self.upload_geometry(cache)
     }
 
     /// Begin GPU dispatch for one timestep. Returns a pending token.
@@ -958,6 +991,7 @@ impl GvfGpuContext {
             precompute_bind_group_1,
             precompute_bind_group_2,
             geometry_uploaded: false,
+            resident_geometry_id: None,
             readback_inflight: false,
         });
         Ok(())

@@ -33,8 +33,19 @@ pub(crate) struct AzimuthGeometry {
     pub wall_influence: Array2<f32>,
 }
 
+static NEXT_CACHE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// A process-unique id for a new geometry cache.
+fn next_cache_id() -> u64 {
+    NEXT_CACHE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Full GVF geometry cache for all 18 azimuths.
 pub(crate) struct GvfGeometryCache {
+    /// Identifies this cache to the GPU context, which holds one cache's
+    /// geometry at a time and must not serve it to another surface of the
+    /// same shape.
+    pub id: u64,
     pub azimuths: Vec<AzimuthGeometry>,
     pub first: f32,
     pub second: f32,
@@ -343,6 +354,7 @@ pub(crate) fn precompute_gvf_geometry_cpu(
     albnosh_n.mapv_inplace(|v| v * scale_half);
 
     GvfGeometryCache {
+        id: next_cache_id(),
         azimuths: az_geoms,
         first,
         second,
@@ -474,7 +486,12 @@ pub(crate) fn precompute_gvf_geometry_gpu(
         });
     }
 
+    // The precompute left this cache's geometry resident on the GPU.
+    let id = next_cache_id();
+    ctx.mark_geometry_resident(id);
+
     Ok(GvfGeometryCache {
+        id,
         azimuths: az_geoms,
         first,
         second,

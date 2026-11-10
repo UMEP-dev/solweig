@@ -614,6 +614,9 @@ pub(crate) fn gvf_calc_with_cache_gpu(
     let first = cache.first;
     let second = cache.second;
 
+    // The GPU holds one surface's geometry at a time.
+    gpu_ctx.ensure_geometry_resident(cache)?;
+
     // GPU dispatch
     let pending = gpu_ctx.dispatch_begin(
         lup.view(),
