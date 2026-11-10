@@ -95,7 +95,7 @@ jobs:
         platform:
           - runner: macos-15-intel # Intel x86_64 (GitHub's recommended replacement)
             target: x86_64
-          - runner: macos-14 # Apple Silicon ARM64
+          - runner: macos-15 # Apple Silicon ARM64 (macos-14 image retired)
             target: aarch64
     steps:
       - uses: actions/checkout@v4
