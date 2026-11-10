@@ -68,6 +68,39 @@ def compute_array_hash(arr: np.ndarray, *, sample_size: int = 10000) -> str:
     return hasher.hexdigest()[:16]  # First 16 chars is enough
 
 
+# Rows hashed per chunk by compute_array_content_hash: bounds the transient
+# copy when the array is a non-contiguous view or a memmap.
+_CONTENT_HASH_CHUNK_BYTES = 64 * 1024 * 1024
+
+
+def compute_array_content_hash(arr: np.ndarray) -> str:
+    """
+    Hash every value of a numpy array.
+
+    ``compute_array_hash`` samples 10,000 values, so an edit that touches a
+    small share of a large raster (one building in a city-scale DSM) usually
+    leaves it unchanged. This hash reads the whole array, in row chunks so a
+    memmap is never loaded at once.
+
+    Args:
+        arr: Numpy array to hash.
+
+    Returns:
+        Hex string hash.
+    """
+    hasher = hashlib.blake2b(digest_size=16)
+    hasher.update(str(arr.shape).encode())
+    hasher.update(str(arr.dtype).encode())
+    if arr.ndim == 0 or arr.size == 0:
+        hasher.update(np.ascontiguousarray(arr).tobytes())
+        return hasher.hexdigest()
+    row_bytes = max(1, arr[0].nbytes)
+    step = max(1, _CONTENT_HASH_CHUNK_BYTES // row_bytes)
+    for start in range(0, arr.shape[0], step):
+        hasher.update(np.ascontiguousarray(arr[start : start + step]).data)
+    return hasher.hexdigest()
+
+
 @dataclass
 class CacheMetadata:
     """Metadata for cache validation.
@@ -78,6 +111,11 @@ class CacheMetadata:
     Wall caches don't depend on the trunk layer and leave it ``None``.
     Metadata written before this field existed loads as ``None``: vegetation
     runs then invalidate once (safe recompute) and no-veg runs still match.
+
+    The ``*_content_hash`` fields hash every value (the plain ``*_hash`` fields
+    sample 10,000). They are compared only when the stored metadata carries
+    them, so caches written up to 0.1.0b97 keep validating on the sampled
+    hash alone instead of forcing a recompute.
     """
 
     dsm_hash: str
@@ -86,6 +124,9 @@ class CacheMetadata:
     cdsm_hash: str | None = None
     tdsm_hash: str | None = None
     version: str = "1.0"
+    dsm_content_hash: str | None = None
+    cdsm_content_hash: str | None = None
+    tdsm_content_hash: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -96,6 +137,9 @@ class CacheMetadata:
             "pixel_size": self.pixel_size,
             "cdsm_hash": self.cdsm_hash,
             "tdsm_hash": self.tdsm_hash,
+            "dsm_content_hash": self.dsm_content_hash,
+            "cdsm_content_hash": self.cdsm_content_hash,
+            "tdsm_content_hash": self.tdsm_content_hash,
         }
 
     @classmethod
@@ -108,6 +152,9 @@ class CacheMetadata:
             pixel_size=data["pixel_size"],
             cdsm_hash=data.get("cdsm_hash"),
             tdsm_hash=data.get("tdsm_hash"),
+            dsm_content_hash=data.get("dsm_content_hash"),
+            cdsm_content_hash=data.get("cdsm_content_hash"),
+            tdsm_content_hash=data.get("tdsm_content_hash"),
         )
 
     @classmethod
@@ -125,17 +172,30 @@ class CacheMetadata:
             pixel_size=pixel_size,
             cdsm_hash=compute_array_hash(cdsm) if cdsm is not None else None,
             tdsm_hash=compute_array_hash(tdsm) if tdsm is not None else None,
+            dsm_content_hash=compute_array_content_hash(dsm),
+            cdsm_content_hash=compute_array_content_hash(cdsm) if cdsm is not None else None,
+            tdsm_content_hash=compute_array_content_hash(tdsm) if tdsm is not None else None,
         )
 
     def matches(self, other: CacheMetadata) -> bool:
-        """Check if this metadata matches another."""
-        return (
+        """Check if this metadata matches another.
+
+        Call it on the stored metadata with the current one as ``other``: a
+        content hash is compared only when the stored side has it.
+        """
+        if not (
             self.dsm_hash == other.dsm_hash
             and self.dsm_shape == other.dsm_shape
             and abs(self.pixel_size - other.pixel_size) < 0.001
             and self.cdsm_hash == other.cdsm_hash
             and self.tdsm_hash == other.tdsm_hash
-        )
+        ):
+            return False
+        for name in ("dsm_content_hash", "cdsm_content_hash", "tdsm_content_hash"):
+            stored = getattr(self, name)
+            if stored is not None and stored != getattr(other, name):
+                return False
+        return True
 
     def save(self, directory: Path) -> None:
         """Save metadata to cache directory."""
