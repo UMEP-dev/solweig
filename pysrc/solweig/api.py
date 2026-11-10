@@ -72,6 +72,75 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+_SVF_FIELDS = (
+    "svf",
+    "svf_north",
+    "svf_east",
+    "svf_south",
+    "svf_west",
+    "svf_veg",
+    "svf_veg_north",
+    "svf_veg_east",
+    "svf_veg_south",
+    "svf_veg_west",
+    "svf_aveg",
+    "svf_aveg_north",
+    "svf_aveg_east",
+    "svf_aveg_south",
+    "svf_aveg_west",
+)
+
+
+def _check_grid_shapes(surface: SurfaceData, precomputed: PrecomputedData | None = None) -> None:
+    """Raise ``GridShapeMismatch`` if any per-pixel layer differs in shape from the DSM.
+
+    Shape comparisons only, so it is cheap on any raster size and runs at the
+    top of every ``calculate()``. The Rust pipeline assumes one grid shape for
+    all layers and aborts the interpreter on a mismatch (the extension is
+    built with ``panic = "abort"``), so the check has to happen before the
+    FFI call.
+    """
+    geom = surface.geometry
+    optical = surface.optical
+    aux = surface.auxiliary
+    dsm_shape = geom.shape
+
+    grids_to_check = [
+        ("cdsm", geom.cdsm),
+        ("dem", geom.dem),
+        ("tdsm", geom.tdsm),
+        ("wall_height", aux.wall_height),
+        ("wall_aspect", aux.wall_aspect),
+        ("land_cover", optical.land_cover),
+        ("albedo", optical.albedo),
+        ("emissivity", optical.emissivity),
+    ]
+    for name, grid in grids_to_check:
+        if grid is not None and grid.shape != dsm_shape:
+            raise GridShapeMismatch(name, dsm_shape, grid.shape)
+
+    for prefix, svf in (("svf", aux.svf), ("precomputed.svf", precomputed.svf if precomputed is not None else None)):
+        if svf is None:
+            continue
+        for field in _SVF_FIELDS:
+            grid = getattr(svf, field, None)
+            if grid is not None and grid.shape != dsm_shape:
+                raise GridShapeMismatch(f"{prefix}.{field}", dsm_shape, grid.shape)
+
+    # Catch caches built for a different raster here rather than deep inside
+    # the Rust pipeline. Each of the three matrices is named on its own.
+    for prefix, matrices in (
+        ("shadow_matrices", aux.shadow_matrices),
+        ("precomputed.shadow_matrices", precomputed.shadow_matrices if precomputed is not None else None),
+    ):
+        if matrices is None:
+            continue
+        for name in ("shmat", "vegshmat", "vbshmat"):
+            spatial = getattr(matrices, f"_{name}_u8").shape[:2]
+            if spatial != dsm_shape:
+                raise GridShapeMismatch(f"{prefix}.{name}", dsm_shape, spatial)
+
+
 def validate_inputs(
     surface: SurfaceData,
     location: Location | None = None,
@@ -113,47 +182,9 @@ def validate_inputs(
     """
     warnings = []
     geom = surface.geometry
-    optical = surface.optical
     aux = surface.auxiliary
-    dsm_shape = geom.shape
 
-    # Check grid shapes match DSM
-    grids_to_check = [
-        ("cdsm", geom.cdsm),
-        ("dem", geom.dem),
-        ("tdsm", geom.tdsm),
-        ("wall_height", aux.wall_height),
-        ("wall_aspect", aux.wall_aspect),
-        ("land_cover", optical.land_cover),
-        ("albedo", optical.albedo),
-        ("emissivity", optical.emissivity),
-    ]
-    for name, grid in grids_to_check:
-        if grid is not None and grid.shape != dsm_shape:
-            raise GridShapeMismatch(name, dsm_shape, grid.shape)
-
-    # Check SVF arrays if present
-    if aux.svf is not None:
-        svf_grids = [
-            ("svf.svf", aux.svf.svf),
-            ("svf.svf_north", aux.svf.svf_north),
-            ("svf.svf_east", aux.svf.svf_east),
-            ("svf.svf_south", aux.svf.svf_south),
-            ("svf.svf_west", aux.svf.svf_west),
-        ]
-        for name, grid in svf_grids:
-            if grid is not None and grid.shape != dsm_shape:
-                raise GridShapeMismatch(name, dsm_shape, grid.shape)
-
-    # Backstop for user-supplied precomputed data: catch caches built for a
-    # different raster here rather than deep inside the Rust pipeline.
-    if precomputed is not None:
-        if precomputed.svf is not None and precomputed.svf.svf.shape != dsm_shape:
-            raise GridShapeMismatch("precomputed.svf", dsm_shape, precomputed.svf.svf.shape)
-        if precomputed.shadow_matrices is not None and precomputed.shadow_matrices.spatial_shape != dsm_shape:
-            raise GridShapeMismatch("precomputed.shadow_matrices", dsm_shape, precomputed.shadow_matrices.spatial_shape)
-    if aux.shadow_matrices is not None and aux.shadow_matrices.spatial_shape != dsm_shape:
-        raise GridShapeMismatch("shadow_matrices", dsm_shape, aux.shadow_matrices.spatial_shape)
+    _check_grid_shapes(surface, precomputed)
 
     # Check SVF is available (required for all calculations)
     if not aux.has_svf and (precomputed is None or precomputed.svf is None):
@@ -443,6 +474,9 @@ def calculate(
 
     # Accept a single Weather or a list
     weather_series = [weather] if isinstance(weather, Weather) else weather
+
+    # Every per-pixel layer must share the DSM grid before anything reaches Rust.
+    _check_grid_shapes(surface, precomputed)
 
     # Validate chronological order and positive timestep
     if len(weather_series) >= 2:

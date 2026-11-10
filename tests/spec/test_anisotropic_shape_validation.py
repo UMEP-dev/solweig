@@ -15,6 +15,7 @@ from datetime import datetime
 import numpy as np
 import pytest
 from solweig.api import Location, SurfaceData, Weather, calculate
+from solweig.errors import GridShapeMismatch
 from solweig.models.precomputed import ShadowArrays
 
 pytestmark = pytest.mark.slow
@@ -66,7 +67,10 @@ def test_each_anisotropic_matrix_individually_validated(bad_array, shapes, tmp_p
     weather = Weather(datetime=datetime(2024, 7, 15, 12, 0), ta=25.0, rh=50.0, global_rad=800.0)
     surface = _surface_with_shadow_shapes(*shapes)
 
-    with pytest.raises((ValueError, RuntimeError)) as excinfo:
+    # calculate() now checks every layer's shape before the FFI call and raises
+    # GridShapeMismatch; the Rust pipeline's own ValueError stays as a backstop
+    # for callers that reach it another way.
+    with pytest.raises((GridShapeMismatch, ValueError, RuntimeError)) as excinfo:
         calculate(
             surface,
             [weather],
