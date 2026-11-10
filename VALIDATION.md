@@ -18,22 +18,23 @@ a glance.
 
 ---
 
-## Summary — v0.1.0b96 (2026-10-01)
+## Summary — v0.1.0b97 (2026-11-10)
 
-b96 corrects the clock on the validation met files. The library, the
-plugin and the model physics are unchanged since b89 (b90 added the opt-in
-2026a ground scheme with defaults off; b91 to b95 were memory, performance
-and bug-fix releases with no numerical change). The prepared met files are
-labelled one hour early relative to the hour-ending CET convention that the
-measurement CSVs and the model's sun position both follow, so until b95
-every validation timestep was driven by forcing recorded one hour after its
-sun position. The harness now adds one hour to the met timestamps; the
-measurement CSVs are untouched. Details and the evidence are in
+b97 makes two model changes, and neither moves the numbers in the table
+below. The first corrects the anisotropic sky on surfaces without a canopy
+layer, where building-blocked sky patches had emitted at air temperature
+instead of wall temperature (issue 15). All three validation sites have a
+canopy layer, so their results are identical to b96. The second aligns the
+opt-in 2026a ground scheme with the current reference implementation,
+UMEP-dev/umep-solweig; the scheme has its own field comparison further
+down, rerun for this release.
+
+The table reflects the met-file clock correction made in b96. The prepared
+met files are labelled one hour early relative to the hour-ending CET
+convention that the measurement CSVs and the model's sun position both
+follow, so the harness adds one hour to the met timestamps; the measurement
+CSVs are untouched. Details and the evidence are in
 [§ Time base of the validation data](#time-base-of-the-validation-data).
-The correction moves the seven-day Tmrt RMSE range from 2.4 to 7.3 °C to
-3.3 to 7.0 °C and the K↓ comparisons at the open sites now line up hour for
-hour. The opt-in scheme has its own field comparison further down, rerun on
-the corrected clock.
 
 | Metric               | Kronenhuset | Gustav Adolfs |          GVC |
 | -------------------- | ----------: | ------------: | -----------: |
@@ -217,17 +218,19 @@ GVC, where 2010-07-07 has RMSE 4.1 °C (bias +0.7 °C) but 2010-07-12 reaches
 
 ## UMEP 2026a ground scheme (opt-in): field comparison
 
-Rerun 2026-10-01 on the corrected met clock (see
+Rerun 2026-11-10 for b97 with `scripts/validate_ground_scheme.py`, on the
+corrected met clock (see
 [§ Time base of the validation data](#time-base-of-the-validation-data)).
 Same three sites, anisotropic sky, `use_ground_scheme=True` /
 `use_outgoing_longwave=True`, site parameter files extended with the
 bundled OHM, Tg_ini and Tm_ini blocks (the legacy site JSONs predate them).
-All four columns use one prepared surface and parameter set per site, the
-suite configuration; the old-clock columns reproduce the July 2026 run,
-and the old-clock baseline column matches the b89 to b95 summary. POI Tmrt
-against measurements, RMSE / bias (°C):
+All columns use one prepared surface and parameter set per site, the suite
+configuration; the old-clock columns reproduce the July 2026 run, and the
+old-clock baseline column matches the b89 to b95 summary. The b90 to b96
+scheme columns are from the 2026-10-01 run. POI Tmrt against measurements,
+RMSE / bias (°C):
 
-| Site | Day | Baseline, old clock | Baseline, corrected | Scheme, old clock | Scheme, corrected | Scheme, corrected, Fcyl patch term only |
+| Site | Day | Baseline, old clock | Baseline, corrected | Scheme b90 to b96, old clock | Scheme b90 to b96, corrected | Scheme b97, corrected |
 | --- | --- | --- | --- | --- | --- | --- |
 | Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 6.3 / +2.0 | 22.0 / +21.4 | 21.5 / +20.9 | 11.4 / +10.0 |
 | Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 4.2 / +0.5 | 13.6 / +12.7 | 12.3 / +11.7 | 4.5 / +2.5 |
@@ -237,24 +240,25 @@ against measurements, RMSE / bias (°C):
 | GVC | 2010-07-10 | 3.7 / +3.4 | 4.2 / +3.8 | 18.8 / +18.7 | 18.5 / +18.4 | 7.7 / +7.5 |
 | GVC | 2010-07-12 | 6.9 / +5.7 | 7.0 / +3.7 | 18.3 / +18.1 | 17.5 / +16.6 | 8.1 / +6.3 |
 
-The clock correction moves the scheme numbers by at most 2 °C. The bias is
-consistently positive: RMSE 12.3 to 21.5 °C and bias +11.7 to +20.9 °C,
-against 3.3 to 7.0 °C and +0.5 to +3.8 °C for the baseline on the same
-inputs.
+The clock correction moved the b90 to b96 scheme numbers by at most 2 °C.
+Their bias was consistently positive: RMSE 12.3 to 21.5 °C and bias +11.7
+to +20.9 °C, against 3.3 to 7.0 °C and +0.5 to +3.8 °C for the baseline on
+the same inputs.
 
-The last column is the proposed change, tested locally and not shipped:
-the Fcyl longwave term carries the anisotropic-sky patch term alone, as in
-2025a (one line in the scheme branch of `pipeline.rs`, the equivalent of
-`Lside = Lside_` in `Solweig_2026a_calc`; the march is untouched). It
-removes most of the excess: RMSE 4.5 to 11.4 °C, bias +2.5 to +10.0 °C.
-What remains is largest in the enclosed courtyard (Kronenhuset +10.0 °C
+The last column is the scheme as shipped from b97. The Fcyl longwave term
+carries the anisotropic-sky patch term alone, as in 2025a (one line in the
+scheme branch of `pipeline.rs`; the march is untouched). The reference
+implementation made the same change in umep-solweig commit 866b137
+(2026-09-01), and the column reproduces the local test of that composition
+reported with b96. It removes most of the excess: RMSE 4.5 to 11.4 °C, bias
++2.5 to +10.0 °C. What remains is largest in the enclosed courtyard (Kronenhuset +10.0 °C
 against +2.0 °C for the baseline) and smallest on the open square (Gustav
 Adolfs +2.5 to +4.7 °C against +0.5 to +2.3 °C), consistent with the
 march's directional ground terms running higher than the 2022a half-Lup
 where walls are close to the POI. Lup is unaffected by the change. Per
-hour, the scheme with this change sits within about 1 °C of the baseline
-in direct sun and 3 to 8 °C above it in shade and at low sun, so the
-remainder is in the side longwave. Two further local tests bracket it:
+hour, the b97 scheme sits within about 1 °C of the baseline in direct sun
+and 3 to 8 °C above it in shade and at low sun, so the remainder is in the
+side longwave. Two local tests made on 2026-10-01 bracket it:
 removing the wall emission the march adds to the directional side terms
 (already supplied by the anisotropic wall patches) moves Kronenhuset by
 1 °C and the open sites not at all; weighting the march's directional
@@ -272,25 +276,28 @@ at Gustav Adolfs torg, and further from them on the four summer days at the
 two 2 m sites. Where Lup does improve, Tmrt does not, so the ground
 temperature itself is not where the excess enters. It enters through the
 directional and cylinder Lside composition of `Solweig_2026a_calc`: the
-solid-angle march's directional side longwave feeds the Fside term, and in
-anisotropic mode the 2026a code additionally adds the mean of those
+solid-angle march's directional side longwave feeds the Fside term, and up
+to b96 the anisotropic mode additionally added the mean of those
 directional terms to the Fcyl term (2025a used only the anisotropic-sky
-Lside there). An isotropic diagnostic at Kronenhuset separates the two
-contributions: RMSE 9.2 / bias +7.5 °C (baseline 5.8 / +1.4), so roughly a
-third of the anisotropic-mode bias remains without the Fcyl addition.
+Lside there). An isotropic diagnostic at Kronenhuset on 2026-10-01
+separated the two contributions: RMSE 9.2 / bias +7.5 °C (baseline 5.8 /
++1.4), so roughly a third of the anisotropic-mode bias remained without
+the Fcyl addition.
 
 Consequences:
 
-- `use_ground_scheme` / `use_outgoing_longwave` stay off by default. Until
-  the composition question is settled upstream, scheme output is best
-  treated as qualitative.
-- A question about the composition is open with the upstream developers
+- `use_ground_scheme` / `use_outgoing_longwave` stay off by default. The
+  scheme still runs 2.5 to 10.0 °C warm against the measurements, so its
+  output is best treated as qualitative.
+- The Fcyl question raised with the upstream developers
   (UMEP-dev/umep-solweig issue 3, filed 2026-07-07 as UMEP-processing
-  issue 140 alongside the other findings from this port).
+  issue 140) is resolved by the upstream change above. The angular
+  weighting of the march's directional ground term remains open there.
 - The port itself is faithful: every component matches the vendored
-  upstream reference (`tests/spec/test_parity_2026a.py`), and an
-  end-to-end check running upstream's own `Solweig_2026a_calc` (vendored
-  Python) against the fused Rust path on identical inputs agrees to
+  upstream reference (`tests/spec/test_parity_2026a.py`, re-vendored from
+  umep-solweig ff5bc5c for b97), and an end-to-end check made in July 2026,
+  running the then-vendored `Solweig_2026a_calc` (Python) against the fused
+  Rust path on identical inputs, agreed to
   within 0.08 °C Tmrt for 22 of 24 hours of a full diurnal cycle (the
   two exceptions are sunrise/sunset transition hours where the drivers'
   clearness-index handling legitimately differs). These numbers therefore
@@ -371,6 +378,8 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b94 | 2026-08-25 |     3 |      2.4–7.3 °C | Bug-fix release — **no numerical change**, validation 31/31 pass with numbers identical to b93. (a) **`SOLWEIG_NO_GPU` honoured on the precomputed-SVF path**: the lazy GPU gate only fired via `is_gpu_available()` or `compute_svf()`, so a `calculate()` run that loaded precomputed SVF silently kept every GPU path enabled under the env var (found while re-verifying performance benchmarks; "CPU" timings were GPU-assisted). The gate now runs at the top of `calculate_core_fused`; regression test asserts zero GPU dispatches. GPU-on behaviour unchanged. (b) **QGIS plugin**: missing EPW path in EPW weather mode raises `QgsProcessingException` instead of an `assert` (stripped under `python -O`). (c) **Docs**: tutorials overview page with run-locally instructions, a run-note injected atop every tutorial export, and the home page/README now state the experimental compatibility-implementation positioning (UMEP as the reference implementation). |
 | 0.1.0b95 | 2026-08-25 |     3 |      2.4–7.3 °C | Plugin-only fix — **no numerical change**, validation 31/31 pass with numbers identical to b94. Qt6-scoped enum (`QgsBlockingNetworkRequest.ErrorCode.NoError`) in the EPW download utility, flagged by the QGIS plugin repository's Qt6 compatibility validator on the beta94 upload. |
 | 0.1.0b96 | 2026-10-01 |     3 |      3.3–7.0 °C | Validation-harness clock correction, **no library, plugin or model change**. Lag fits between met K↓, measured K↓ and the model's own solar altitude show the prepared Gothenburg met files are labelled one hour early relative to the hour-ending CET convention of the measurement CSVs and of the model's sun position, so every validation timestep had been driven by forcing from one hour after its sun position (the modelled K↓ peak sat an hour before the measured one, as Lindberg noted in June). `tests/validation/met_clock.py` now adds one hour to the met timestamps for every site test, the plots and the POI sweep; measurement CSVs untouched. Kronenhuset 6.6 → 6.3 °C (R² 0.52 → 0.64, bias +2.6 → +2.0); Gustav Adolfs 5.7–7.3 → 3.3–4.8 °C (R² 0.80–0.88 → 0.94–0.97); GVC 2.4–6.9 → 4.1–7.0 °C (R² 0.65–0.99 → 0.58–0.87; the one day that worsens, 2010-07-07, now shows the model holding the POI sunlit one hour longer than observed). The 2006-08-01 K↓ "spike" previously attributed to cloud was this offset. 28/28 pass across the four CI validation files. The 2026a scheme field comparison was rerun on the corrected clock and the suite configuration: scheme RMSE 12.3–21.5 °C, bias +11.7 to +20.9 °C (within 2 °C of July); Lup under the scheme beats the baseline at Kronenhuset only and is worse on the four summer days at the 2 m sites. A local test of the proposed composition (Fcyl longwave term carrying the anisotropic-sky patch term alone, as in 2025a; not shipped) brings the scheme to 4.5–11.4 °C RMSE, bias +2.5 to +10.0 °C, with the remainder largest in the enclosed courtyard. Report sections rewritten accordingly. |
+| 0.1.0b97 | 2026-11-10 |     3 |      3.3–7.0 °C | (a) **Opt-in 2026a ground scheme aligned with umep-solweig ff5bc5c**, now the reference implementation; baseline physics unchanged. In anisotropic mode the Fcyl longwave term carries the anisotropic-sky Lside alone (upstream 866b137), and the water slab increment is added to the previous-step temperature (upstream 62c8a71, where `Tg_stored` became a copy). Vendored reference re-fetched; `tests/spec/test_parity_2026a.py` 52/52. The isotropic scheme golden was regenerated: Tg moves only on water pixels (+3.9 to +6.4 °C), Lup and Tmrt only within 12 m of water. A new anisotropic scheme golden gates the Fcyl composition (the previous composition is 10–13 °C warmer on it). Scheme field comparison rerun with the new `scripts/validate_ground_scheme.py`: RMSE 4.5–11.4 °C, bias +2.5 to +10.0 °C (12.3–21.5 °C and +11.7 to +20.9 °C in b96), Lup biases unchanged. |
+| 0.1.0b97 | 2026-11-10 |     3 |      3.3–7.0 °C | (b) **Anisotropic sky without vegetation** (issue 15). With no canopy layer the SVF step wrote a copy of the building shadow matrix into the veg-blocks-building matrix, so every building-blocked sky patch was routed to the vegetation emitter and emitted at air temperature; the sunlit wall temperature was unused. Both vegetation matrices are now all-visible in that case, as in the wall-scheme branch of umep-solweig's `svfForProcessing153`. The tiled SVF path, which left both matrices at zero and so treated every patch as vegetation, is corrected the same way, and the per-timestep calculation applies the convention whenever the surface has no CDSM, so existing caches and UMEP exports need no recomputation. In the reporter's synthetic scene Tmrt 4 m from a sunlit wall rises by 2.05 K at 13 h and 4.30 K at 17 h and now equals the result with a distant tree present. Runs with a CDSM are unchanged: all three validation sites have one, and their numbers are identical to b96 (full suite 1193 passed). New gate `tests/spec/test_aniso_no_vegetation_routing.py`. |
 
 ---
 

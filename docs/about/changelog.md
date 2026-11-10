@@ -1,5 +1,33 @@
 # Release notes
 
+## 0.1.0b97 — 2026-11-10
+
+Two model changes. Results change for anisotropic runs without a canopy
+layer and for the opt-in 2026a ground scheme; all other runs are unchanged.
+
+- **Anisotropic sky without vegetation** (issue 15). On a surface with no
+  CDSM, sky patches blocked by buildings were treated as vegetation and
+  emitted longwave at air temperature, so the sunlit wall temperature was
+  not used. Adding any canopy pixel, however distant, restored the correct
+  behaviour. Building patches now use wall emission in both cases. Tmrt
+  beside a sunlit wall rises by about 2 to 4 K in runs without vegetation.
+  SVF computed in tiles had a related fault (every patch, open sky
+  included, was treated as vegetation) and is corrected too.
+  Existing SVF caches and shadow matrices exported from UMEP do not need
+  recomputing: the calculation no longer reads the stored vegetation
+  matrices when the surface has no CDSM.
+- **2026a ground scheme aligned with umep-solweig.** The reference
+  implementation is now
+  [UMEP-dev/umep-solweig](https://github.com/UMEP-dev/umep-solweig). Two of
+  its changes are carried over: the cylinder longwave term in anisotropic
+  mode uses the anisotropic-sky side longwave alone, and the water slab
+  temperature is stepped from the previous-step value. Against the
+  Gothenburg measurements the scheme's Tmrt RMSE falls from 12.3 to
+  21.5 °C to 4.5 to 11.4 °C. The scheme stays off by default; see the
+  validation report.
+- `scripts/validate_ground_scheme.py` reproduces the scheme field
+  comparison.
+
 ## 0.1.0b96 — 2026-10-01
 
 Validation-harness correction. No library, plugin or model behaviour
