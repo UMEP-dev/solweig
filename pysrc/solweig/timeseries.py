@@ -28,6 +28,36 @@ from .summary import GridAccumulator, TimeseriesSummary
 logger = get_logger(__name__)
 
 
+def _warn_if_summary_hours_overcount(weather_series: list, timestep_hours: float) -> None:
+    """Warn when the hour totals in the summary will not mean what they say.
+
+    Sun hours, shade hours and UTCI exceedance hours add ``timestep_hours``
+    per timestep, taken from the gap between the first two records. That is
+    right for a contiguous series. It over-counts when records were dropped
+    (one hour kept per day counts 24 h per step) and is undefined when the
+    gaps vary. The calculation is left as it is; Tmrt and the per-timestep
+    outputs do not depend on it.
+    """
+    data_hours = float(weather_series[0].timestep_minutes) / 60.0
+    gaps = {
+        round((b.datetime - a.datetime).total_seconds() / 3600.0, 6)
+        for a, b in zip(weather_series, weather_series[1:], strict=False)
+    }
+    if len(gaps) > 1:
+        logger.warning(
+            f"Weather records are not evenly spaced (gaps from {min(gaps):g} h to {max(gaps):g} h). "
+            f"Summary hour totals (sun, shade, UTCI exceedance) count {timestep_hours:g} h per timestep, "
+            "the gap between the first two records, so they will not match the time actually covered."
+        )
+    elif timestep_hours > data_hours + 1e-6:
+        logger.warning(
+            f"Weather records are {timestep_hours:g} h apart but each represents {data_hours:g} h "
+            "(Weather.timestep_minutes). Summary hour totals (sun, shade, UTCI exceedance) count "
+            f"{timestep_hours:g} h per timestep and will be too high by a factor of "
+            f"{timestep_hours / data_hours:g} if records were filtered out of a finer series."
+        )
+
+
 def _precompute_weather(weather_series: list, location: Location) -> None:
     """
     Pre-compute derived weather values for all timesteps efficiently.
@@ -408,6 +438,7 @@ def _calculate_timeseries(
         dt1 = weather_series[1].datetime
         timestep_dec = (dt1 - dt0).total_seconds() / 86400.0
         _timestep_hours = (dt1 - dt0).total_seconds() / 3600.0
+        _warn_if_summary_hours_overcount(weather_series, _timestep_hours)
     else:
         timestep_dec = 1.0 / 24.0
         _timestep_hours = 1.0
