@@ -39,7 +39,7 @@ pub(crate) struct LsideVegPureResult {
 /// Lside model variant.
 ///
 /// `V2022a` is UMEP's default (and this port's validated baseline).
-/// `V2026` is the variant introduced with UMEP-processing's opt-in 2026a
+/// `V2026` is the variant introduced with UMEP's opt-in 2026a
 /// ground-surface scheme (Bridoux, University of Gothenburg, merged
 /// 2026-05): the ground term leaves Lside entirely (the scheme's
 /// `outgoing_longwave_calc` solid-angle march supplies directional
@@ -608,7 +608,7 @@ pub fn lside_veg(
     )
 }
 
-/// Vectorized Rust port of Python `Lside_veg_v2026` (UMEP-processing 2026a
+/// Vectorized Rust port of Python `Lside_veg_v2026` (umep-solweig 2026a
 /// ground-surface scheme). Mirrors the upstream signature: no `Lup*`
 /// parameters — the ground term is supplied by `outgoing_longwave_calc`
 /// upstream, and the anisotropic branch returns zeros.

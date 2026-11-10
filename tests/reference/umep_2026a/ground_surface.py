@@ -1,17 +1,14 @@
 # VENDORED UPSTREAM REFERENCE — do not import from library code.
 #
-# Source:  https://github.com/UMEP-dev/UMEP-processing
-# Path:    functions/SOLWEIGpython/ground_surface.py
-# Branch:  main, fetched 2026-07-06 (post commits 6c1f868 "Reimplement Lside
-#          from v2015a" 2026-05-27 and 4c60f7f "Change name Lside_veg"
-#          2026-05-29; ground_surface.py last touched df6f2d3 2026-06-04)
+# Source:  https://github.com/UMEP-dev/umep-solweig
+# Path:    src/umep_solweig/functions/SOLWEIGpython/ground_surface.py
+# Commit:  ff5bc5c (main, fetched 2026-11-10)
 # License: GPL-3.0 (same as this repository and upstream UMEP)
 #
 # Kept verbatim (below this comment block) as the parity reference for the
 # 2026a ground-surface-scheme port (see tests/spec/test_parity_2026a.py).
-# The pip `umep` package (our other parity reference) ships only the 2025a
-# generation; delete this copy and switch the tests to the pip package once
-# upstream publishes a release containing the 2026a code.
+# Re-vendor all four files together from one upstream commit; never edit
+# them by hand.
 
 """
 @author: Eliott Bridoux, University of Gothenburg
@@ -19,7 +16,6 @@
 
 import numpy as np
 import math
-import matplotlib.pyplot as plt
 
 # Stefan-Boltzmann s constant
 SBC = 5.67e-8
@@ -274,7 +270,7 @@ def surfaceTemperature_calc(
     :diff: thermal diffusivity grid of the material
     :lc_grid: landcover grid to identify the water bodies
     :a: coefficient grids related to the OHM
-    :timestep: the timestep between 2 iteration of the simulation in min
+    :timestep: the timestep between 2 iteration of the simulation in s
 
     :Return:
     :Tg: Surface temperature
@@ -284,7 +280,7 @@ def surfaceTemperature_calc(
     """
 
     # Store the past ground surface temperature
-    Tg_stored = Tg
+    Tg_stored = Tg.copy()
 
     # Damping depths of the daily surface temperature wave
     D = np.sqrt((2 * diff) / (2 * math.pi / 86400))
@@ -410,12 +406,11 @@ def outgoingLongwave_calc(
     alb_wall = 0.2
 
     # Copy of the sunlit wall grid and replacement of the wall height with 1 if sunlit
-    sunlitwall = sunwall
+    sunlitwall = sunwall.copy()
     sunlitwall[sunlitwall > 0] = 1
 
     # Boolean array 1 if the pixel is a wall, 0 if not
     wallbol = walls > 0
-    
     # The alb grids only take into account the sunlit surfaces in the alb calculation albnosh calculate it for all the surfaces
     albsunlit = alb * shadow
 
@@ -427,7 +422,6 @@ def outgoingLongwave_calc(
 
     # Grid of the outgoing longwave radiation coming from the ground
     Lup = (SBC * emis * (Tg + 273.15) ** 4 + Ldown * (1 - emis)) * buildings
-    
     ### Initialize the ground view factor grids as np.zeros()
     # Upwelling longwave radiation
     gvfLup = np.zeros((rows, cols))
@@ -474,10 +468,10 @@ def outgoingLongwave_calc(
 
         # Boolean array 1 if the pixel is (or was) a wall, 0 if not
         pastwalls = np.copy(wallbol)
-        
+
         # Grid of the longwave radiation emitted by the walls
         Lwall = SBC * emis_wall * (Tgwall + Ta + 273.15) ** 4 * wallbol
-        
+
         # Initialisation of the tables
         # First the ones containing the translated rasters (temporary)
         building_temp = np.copy(buildings)
@@ -601,7 +595,6 @@ def outgoingLongwave_calc(
                 int(x_select_start) : math.ceil(x_select_end),
                 int(y_select_start) : math.ceil(y_select_end),
             ]
-            
             # Change the boolean building grid, if the px was already a building it remains one (px value = 0)
             building_copy = np.min([building_copy, building_temp], axis=0)
 
@@ -612,7 +605,6 @@ def outgoingLongwave_calc(
             Lup_sum += Lup_temp * view_factor * building_copy / 20
             albsun_sum += albsun_temp * view_factor * building_copy / 20
             albtot_sum += albtot_temp * view_factor * building_copy / 20
-            
             # Create a boolean grid to assert that the sunlit walls are not inside a building
             onlywall_temp = np.logical_and(
                 walls_temp, np.logical_not(pastwalls)
@@ -638,7 +630,6 @@ def outgoingLongwave_calc(
                 / zs
                 * np.sqrt((r + sizepx / 2) ** 2 + zs**2)
             )
-            
             # Then add the radiation incoming from those walls
             Lup_sum += (
                 onlywall_temp
@@ -657,7 +648,6 @@ def outgoingLongwave_calc(
             albtot_sum += (
                 onlywall_temp * alb_wall * viewfactor_wall * building_copy / 20
             )
-            
             # Finally add the radiation in Lside
             dphi = np.arctan((r + step) / zs) - np.arctan(r / zs)
             dtrigo = zs / np.sqrt(r**2 + zs**2) * r / np.sqrt(
@@ -665,7 +655,6 @@ def outgoingLongwave_calc(
             ) - zs / np.sqrt((r + step) ** 2 + zs**2) * (r + step) / np.sqrt(
                 (r + step) ** 2 + zs**2
             )
-            
             # Calculation of the solid angle for each of the cardinal points
             # plus add the radiation from a potential wall
             steradiansW, steradiansS, steradiansE, steradiansN = 0, 0, 0, 0

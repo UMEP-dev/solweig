@@ -4,19 +4,16 @@
 //! with a 2nd-order Runge-Kutta step, plus a slab model for water bodies.
 //!
 //! Ported from `ground_surface.py::surfaceTemperature_calc` in
-//! UMEP-dev/UMEP-processing (vendored verbatim at
+//! UMEP-dev/umep-solweig (vendored verbatim at
 //! `tests/reference/umep_2026a/ground_surface.py`); parity is gated by
 //! `tests/spec/test_parity_2026a.py`.
 //!
 //! Faithfulness notes (deliberate reproductions of upstream semantics):
-//! - `timestep` is in SECONDS (the upstream docstring says minutes, but the
-//!   force-restore constant 2π/86400 s⁻¹ and the calc-level caller both use
-//!   seconds).
-//! - Upstream's `Tg_stored = Tg` is an alias, not a copy, and `Tg` is updated
-//!   in place; the water branch therefore adds its slab increment on top of
-//!   the already-RK2-updated temperature, and computes the increment from
-//!   the updated temperature. Reproduced exactly; flagged for upstream
-//!   review in the 2026a port notes.
+//! - `timestep` is in SECONDS.
+//! - Upstream's `Tg_stored` is a copy of the previous-step temperature
+//!   (umep-solweig 62c8a71; it was an alias before). The water branch
+//!   computes its slab increment from the RK2-updated temperature and adds
+//!   it to the previous-step temperature.
 //! - `np.sign` returns 0 at 0 (Rust `signum` returns ±1); ported explicitly.
 
 use ndarray::{Array2, ArrayView2};
@@ -161,8 +158,8 @@ pub(crate) fn surface_temperature_calc_pure(
             }
 
             // Water bodies: slab energy balance replaces the OHM step.
-            // Upstream computes the increment from (and adds it to) the
-            // RK2-updated temperature via the Tg_stored alias — reproduced.
+            // Upstream computes the increment from the RK2-updated
+            // temperature and adds it to the stored previous-step value.
             if lc_v == 7.0 {
                 const BETA: f32 = 0.45; // shortwave absorbed in the top layer
                 const THICKNESS: f32 = 1.0; // slab depth (m)
@@ -177,7 +174,7 @@ pub(crate) fn surface_temperature_calc_pure(
                     * LAMB;
                 let delta_tg = timestep_s / cap_v / THICKNESS
                     * (rn_water - e - diff_v * cap_v / THICKNESS * (tg_new - tm_v));
-                tg_new += delta_tg;
+                tg_new = tg_v + delta_tg;
             }
 
             *tg_cell = tg_new;

@@ -1,8 +1,8 @@
-"""Parity gates against the vendored UMEP-processing 2026a reference.
+"""Parity gates against the vendored umep-solweig 2026a reference.
 
 The pip ``umep`` package (the usual parity reference) ships only the 2025a
-generation; the 2026a Lside variant lives in UMEP-dev/UMEP-processing and is
-vendored verbatim under ``tests/reference/umep_2026a/`` with provenance.
+generation; the 2026a code lives in UMEP-dev/umep-solweig and is vendored
+verbatim under ``tests/reference/umep_2026a/`` with provenance.
 
 Gates here pin the Rust ``lside_veg_v2026`` port to upstream's
 ``Lside_veg_v2026`` across a sweep of sun positions, clearness indices, and
@@ -185,8 +185,6 @@ def test_v2026_iso_differs_from_v2022a_by_ground_and_lup_reflection():
 
 
 # ── Ground-surface scheme: surface temperature (force-restore/OHM/RK2) ──────
-
-matplotlib = pytest.importorskip("matplotlib")  # vendored module imports it
 
 from solweig.rustalgos import ground as rust_ground  # noqa: E402
 from umep_2026a.ground_surface import surfaceTemperature_calc  # noqa: E402

@@ -88,7 +88,26 @@ def _weather_series():
     return series
 
 
-def _run_scheme_series():
+def _attach_open_sky_shadow_matrices(surface, n_patches=153):
+    """Attach bitpacked shadow matrices with every patch visible.
+
+    Enough to route the run through the anisotropic branch; the matrices do
+    not depend on the scene, so this fixture stays independent of the SVF and
+    shadow-matrix code.
+    """
+    from solweig.models.shadow_arrays import ShadowArrays
+
+    rows, cols = surface.shape
+    n_pack = (n_patches + 7) // 8
+    surface.shadow_matrices = ShadowArrays(
+        _shmat_u8=np.full((rows, cols, n_pack), 0xFF, dtype=np.uint8),
+        _vegshmat_u8=np.full((rows, cols, n_pack), 0xFF, dtype=np.uint8),
+        _vbshmat_u8=np.full((rows, cols, n_pack), 0xFF, dtype=np.uint8),
+        _n_patches=n_patches,
+    )
+
+
+def _run_scheme_series(use_anisotropic_sky=False):
     """Run the 19-step series through the fused scheme path; return captures."""
     from solweig import Location
     from solweig.api import _calculate_single
@@ -98,6 +117,8 @@ def _run_scheme_series():
     from solweig.timeseries import _precompute_weather
 
     surface, lc = _build_scene()
+    if use_anisotropic_sky:
+        _attach_open_sky_shadow_matrices(surface)
     location = Location(latitude=57.7, longitude=12.0, utc_offset=1)
     series = _weather_series()
     _precompute_weather(series, location)
@@ -119,7 +140,7 @@ def _run_scheme_series():
             surface=surface,
             location=location,
             weather=weather,
-            use_anisotropic_sky=False,
+            use_anisotropic_sky=use_anisotropic_sky,
             state=state,
             ground_scheme_state=gss,
             return_state_copy=False,
@@ -151,6 +172,39 @@ def golden():
         pytest.skip(f"Golden fixture missing: {path} (regenerate with --regenerate)")
     with np.load(path) as data:
         return {k: data[k] for k in data.files}
+
+
+@pytest.fixture(scope="module")
+def scheme_run_aniso():
+    captures, _ = _run_scheme_series(use_anisotropic_sky=True)
+    return captures
+
+
+@pytest.fixture(scope="module")
+def golden_aniso():
+    path = FIXTURE_DIR / "scheme_aniso_baseline.npz"
+    if not path.exists():
+        pytest.skip(f"Golden fixture missing: {path} (regenerate with --regenerate)")
+    with np.load(path) as data:
+        return {k: data[k] for k in data.files}
+
+
+class TestGroundSchemeAnisotropicGoldenRegression:
+    """Pins the anisotropic Tmrt composition of the scheme path.
+
+    The Fcyl longwave term is the anisotropic-sky Lside alone (umep-solweig
+    866b137). The isotropic fixture cannot see that term.
+    """
+
+    @pytest.mark.parametrize("hour", CAPTURE_HOURS)
+    def test_tmrt_matches_golden(self, scheme_run_aniso, golden_aniso, hour):
+        key = f"tmrt_h{hour:02d}"
+        np.testing.assert_allclose(scheme_run_aniso[key], golden_aniso[key], rtol=1e-4, atol=0.01)
+
+    def test_anisotropic_differs_from_isotropic(self, scheme_run_aniso, scheme_run):
+        """Guard against the anisotropic flag silently falling back to isotropic."""
+        captures_iso, _ = scheme_run
+        assert not np.allclose(scheme_run_aniso["tmrt_h13"], captures_iso["tmrt_h13"], atol=0.05)
 
 
 class TestGroundSchemeGoldenRegression:
@@ -247,6 +301,12 @@ def _regenerate():
     out = FIXTURE_DIR / "scheme_iso_baseline.npz"
     np.savez_compressed(out, **captures)
     print(f"Wrote {out} ({len(captures)} arrays)")
+
+    captures_aniso, _ = _run_scheme_series(use_anisotropic_sky=True)
+    tmrt_aniso = {k: v for k, v in captures_aniso.items() if k.startswith("tmrt_")}
+    out_aniso = FIXTURE_DIR / "scheme_aniso_baseline.npz"
+    np.savez_compressed(out_aniso, **tmrt_aniso)
+    print(f"Wrote {out_aniso} ({len(tmrt_aniso)} arrays)")
 
 
 if __name__ == "__main__":

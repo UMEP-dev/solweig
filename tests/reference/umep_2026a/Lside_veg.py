@@ -1,17 +1,14 @@
 # VENDORED UPSTREAM REFERENCE — do not import from library code.
 #
-# Source:  https://github.com/UMEP-dev/UMEP-processing
-# Path:    functions/SOLWEIGpython/Lside_veg.py
-# Branch:  main, fetched 2026-07-06 (post commits 6c1f868 "Reimplement Lside
-#          from v2015a" 2026-05-27 and 4c60f7f "Change name Lside_veg"
-#          2026-05-29; ground_surface.py last touched df6f2d3 2026-06-04)
+# Source:  https://github.com/UMEP-dev/umep-solweig
+# Path:    src/umep_solweig/functions/SOLWEIGpython/Lside_veg.py
+# Commit:  ff5bc5c (main, fetched 2026-11-10)
 # License: GPL-3.0 (same as this repository and upstream UMEP)
 #
 # Kept verbatim (below this comment block) as the parity reference for the
 # 2026a ground-surface-scheme port (see tests/spec/test_parity_2026a.py).
-# The pip `umep` package (our other parity reference) ships only the 2025a
-# generation; delete this copy and switch the tests to the pip package once
-# upstream publishes a release containing the 2026a code.
+# Re-vendor all four files together from one upstream commit; never edit
+# them by hand.
 
 from __future__ import absolute_import
 import numpy as np
@@ -102,8 +99,8 @@ def Lside_veg_v2022a(
 
     # Longwave from ground (see Lcyl_v2022a for remaining fluxes)
     if anisotropic_longwave == 1:
-        Lground = LupE * 0.5
-        Least = Lground
+        Least = LupE * 0.5
+        # Least = Lground
     else:
         Lsky = ((svfE + svfEveg - 1) * Lsky_allsky) * viktsky * 0.5
         Lveg = SBC * ewall * ((Ta + 273.15) ** 4) * viktveg * 0.5
@@ -145,8 +142,8 @@ def Lside_veg_v2022a(
 
     # Longwave from ground (see Lcyl_v2022a for remaining fluxes)
     if anisotropic_longwave == 1:
-        Lground = LupS * 0.5
-        Lsouth = Lground
+        Lsouth = LupS * 0.5
+        # Lsouth = Lground
     else:
         Lsky = ((svfS + svfSveg - 1) * Lsky_allsky) * viktsky * 0.5
         Lveg = SBC * ewall * ((Ta + 273.15) ** 4) * viktveg * 0.5
@@ -188,8 +185,8 @@ def Lside_veg_v2022a(
 
     # Longwave from ground (see Lcyl_v2022a for remaining fluxes)
     if anisotropic_longwave == 1:
-        Lground = LupW * 0.5
-        Lwest = Lground
+        Lwest = LupW * 0.5
+        # Lwest = Lground
     else:
         Lsky = ((svfW + svfWveg - 1) * Lsky_allsky) * viktsky * 0.5
         Lveg = SBC * ewall * ((Ta + 273.15) ** 4) * viktveg * 0.5
@@ -231,8 +228,8 @@ def Lside_veg_v2022a(
 
     # Longwave from ground (see Lcyl_v2022a for remaining fluxes)
     if anisotropic_longwave == 1:
-        Lground = LupN * 0.5
-        Lnorth = Lground
+        Lnorth = LupN * 0.5
+        # Lnorth = Lground
     else:
         Lsky = ((svfN + svfNveg - 1) * Lsky_allsky) * viktsky * 0.5
         Lveg = SBC * ewall * ((Ta + 273.15) ** 4) * viktveg * 0.5

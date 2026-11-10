@@ -4,7 +4,7 @@ Builds the per-landcover parameter grids and initial state for the
 force-restore/OHM surface temperature model
 (:func:`solweig.rustalgos.ground.surface_temperature_calc`) and the
 solid-angle outgoing longwave march. Ported from
-``initiate_groundScheme`` in UMEP-processing's ``ground_surface.py``
+``initiate_groundScheme`` in umep-solweig's ``ground_surface.py``
 (vendored at ``tests/reference/umep_2026a/``); parity gated by
 ``tests/spec/test_parity_2026a.py``.
 

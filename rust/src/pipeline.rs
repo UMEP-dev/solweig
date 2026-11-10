@@ -1059,17 +1059,17 @@ pub fn compute_timestep(
                             march.gvf_lside_w.view(),
                             valid_v,
                         );
-                        // 2026a Tmrt composition: the Fcyl longwave term is
-                        // Lside = mean(directional) + anisotropic-sky Lside
-                        // (Solweig_2026a_calc L790 + L882).
-                        let lside_total = &ani.lside + &lside_dirs_sum.mapv(|v| v * 0.25);
+                        // 2026a Tmrt composition: the Fcyl longwave term is the
+                        // anisotropic-sky Lside alone, as in 2025a. Upstream
+                        // dropped the mean-of-directions addend in umep-solweig
+                        // 866b137 (Solweig_2026a_calc).
                         (
                             kdown,
                             ani.ldown,
                             ani_kside_dirs_sum,
                             lside_dirs_sum,
                             ani.kside,
-                            lside_total,
+                            ani.lside,
                         )
                     } else {
                         let kside = kside_veg_isotropic_pure(

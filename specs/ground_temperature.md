@@ -192,9 +192,10 @@ Pre-sunrise (dectime <= sunrise_frac):
 
 ## UMEP 2026a Ground-Surface Scheme (opt-in)
 
-An alternative ground-surface formulation from UMEP-processing's 2026a
-generation (Bridoux, University of Gothenburg; merged upstream 2026-05) is
-available behind two flags, both default **off**:
+An alternative ground-surface formulation from the UMEP 2026a generation
+(Bridoux, University of Gothenburg; merged upstream 2026-05; reference code
+in UMEP-dev/umep-solweig) is available behind two flags, both default
+**off**:
 
 - `use_ground_scheme` — replace the sinusoidal Tg parameterization with a
   prognostic force-restore surface temperature model.
@@ -230,6 +231,8 @@ latitude-signed sinusoid). Integration is a 2nd-order Runge-Kutta step;
 at shadow transitions (|shadow − shadow_past| > 0.5) the change in `G` is
 clamped to `|a1·ΔRn|` to damp flux spikes. Water pixels (class 7) replace
 the OHM step with a 1 m slab energy balance including a latent heat term.
+The slab increment is evaluated at the RK2-updated temperature and added to
+the previous-step temperature.
 The scheme runs day and night (no night zeroing of Tg).
 
 Initial state comes from `initiate_ground_scheme`: per-class seasonal
@@ -256,8 +259,9 @@ the classic sinusoidal wall model.
 Ordering per timestep (matching upstream `Solweig_2026a_calc`): shadows →
 Kdown + isotropic Ldown → force-restore Tg step → outgoing-longwave march
 → Kup → Lside → Tmrt. In anisotropic mode the Tmrt cylinder longwave term
-is composed as mean(directional Lside) + anisotropic-sky Lside, following
-the 2026a reference.
+is the anisotropic-sky Lside alone, as in the baseline model. The reference
+added the mean of the directional Lside to this term until umep-solweig
+866b137 (2026-09-01), and this port followed it up to 0.1.0b96.
 
 ### Constraints and status
 
