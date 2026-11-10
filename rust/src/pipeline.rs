@@ -93,6 +93,18 @@ pub fn is_aniso_gpu_enabled() -> bool {
     ANISO_GPU_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+#[cfg(feature = "gpu")]
+#[pyfunction]
+/// Force the next anisotropic GPU dispatch to upload its static inputs again.
+/// Call when switching to another surface (see
+/// `AnisoGpuContext::invalidate_static_inputs`). No-op before the context
+/// exists.
+pub fn invalidate_aniso_gpu_static_inputs() {
+    if let Some(Some(ctx)) = ANISO_GPU_CONTEXT.get() {
+        ctx.invalidate_static_inputs();
+    }
+}
+
 // ── GPU GVF context (lazy-initialized, shares device with shadows) ──────
 
 #[cfg(feature = "gpu")]

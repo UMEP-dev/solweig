@@ -232,6 +232,10 @@ fn register_pipeline_module(py_module: &Bound<'_, PyModule>) -> PyResult<()> {
             pipeline::is_aniso_gpu_enabled,
             &submodule
         )?)?;
+        submodule.add_function(wrap_pyfunction!(
+            pipeline::invalidate_aniso_gpu_static_inputs,
+            &submodule
+        )?)?;
         submodule.add_function(wrap_pyfunction!(pipeline::enable_gvf_gpu, &submodule)?)?;
         submodule.add_function(wrap_pyfunction!(pipeline::disable_gvf_gpu, &submodule)?)?;
         submodule.add_function(wrap_pyfunction!(

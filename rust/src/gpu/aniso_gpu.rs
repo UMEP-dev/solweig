@@ -210,6 +210,21 @@ impl AnisoGpuContext {
         }
     }
 
+    /// Forget which static inputs are on the GPU, so the next dispatch uploads
+    /// them all again.
+    ///
+    /// The per-array records compare an address and a few sampled values,
+    /// which is sound only while the same arrays stay alive. The caller
+    /// invokes this whenever it switches to another surface: a new surface's
+    /// arrays can land on the addresses a freed surface used.
+    pub fn invalidate_static_inputs(&self) {
+        if let Ok(mut cache) = self.cached.lock() {
+            if let Some(buffers) = cache.as_mut() {
+                buffers.last_static_input_sig = None;
+            }
+        }
+    }
+
     fn checked_workgroups_2d(
         &self,
         rows: usize,

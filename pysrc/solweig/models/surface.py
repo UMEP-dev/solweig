@@ -9,6 +9,7 @@ walls and sky view factors automatically.
 
 from __future__ import annotations
 
+import itertools
 import json
 import shutil
 from collections.abc import Callable
@@ -61,6 +62,9 @@ def _backing_memmap(arr) -> np.memmap | None:
     return None
 
 
+_CACHE_TOKENS = itertools.count(1)
+
+
 class _ComputationCache:
     """Per-timestep computation caches for ``calculate_core_fused``.
 
@@ -81,9 +85,13 @@ class _ComputationCache:
         "gvf_geometry_cache_crop",
         "aniso_shadow_crop_cache",
         "aniso_no_veg_ones_cache",
+        "token",
     )
 
     def __init__(self) -> None:
+        # Identity of the owning surface for GPU upload bookkeeping. Unlike an
+        # address or id(), it is never reused after the surface is freed.
+        self.token: int = next(_CACHE_TOKENS)
         self.valid_mask_u8_cache: tuple[Any, Any] | None = None
         self.valid_bbox_cache: tuple[Any, Any] | None = None
         self.land_cover_props_cache: tuple[Any, Any] | None = None
@@ -97,7 +105,9 @@ class _ComputationCache:
     def clear(self) -> None:
         """Reset all cached values."""
         for attr in self.__slots__:
-            setattr(self, attr, None)
+            if attr != "token":
+                setattr(self, attr, None)
+        self.token = next(_CACHE_TOKENS)
 
     def get_or_compute(self, slot: str, key: Any, compute: Callable[[], Any]) -> Any:
         """Return the cached value for ``slot`` when its key matches, else

@@ -94,10 +94,24 @@ def test_arr_key_is_hashable():
 # ── _ComputationCache lifecycle ─────────────────────────────────────────────
 
 
+def _value_slots(cache):
+    """Every slot that holds a cached value (``token`` is the cache's identity)."""
+    return [slot for slot in cache.__slots__ if slot != "token"]
+
+
 def test_cache_starts_empty():
     cache = _ComputationCache()
-    for slot in cache.__slots__:
+    for slot in _value_slots(cache):
         assert getattr(cache, slot) is None
+
+
+def test_cache_tokens_are_never_reused():
+    """The token identifies a surface for GPU upload bookkeeping: unique per cache, renewed on clear."""
+    first, second = _ComputationCache(), _ComputationCache()
+    assert first.token != second.token
+    before = first.token
+    first.clear()
+    assert first.token not in (before, second.token)
 
 
 def test_cache_get_or_compute_caches_on_first_call():
@@ -134,7 +148,7 @@ def test_cache_clear_resets_all_slots():
     cache.get_or_compute("valid_mask_u8_cache", key=1, compute=lambda: "x")
     cache.get_or_compute("buildings_mask_cache", key=2, compute=lambda: "y")
     cache.clear()
-    for slot in cache.__slots__:
+    for slot in _value_slots(cache):
         assert getattr(cache, slot) is None
 
 

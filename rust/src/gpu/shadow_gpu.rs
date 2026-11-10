@@ -1,3 +1,4 @@
+use super::content_hash;
 use ndarray::{Array2, Array3, ArrayView2};
 use std::sync::Arc;
 
@@ -442,14 +443,19 @@ struct CachedBuffers {
     last_static_input_sig: Option<StaticShadowInputSig>,
 }
 
+/// Identifies the static inputs currently on the GPU by their content.
+///
+/// Addresses are deliberately not part of it: a new surface's arrays often
+/// land on the address a freed surface used, and an address match with
+/// different heights would cast the old surface's shadows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct StaticShadowInputSig {
-    dsm_ptr: usize,
-    veg_canopy_ptr: usize,
-    veg_trunk_ptr: usize,
-    bush_ptr: usize,
-    walls_ptr: usize,
-    aspect_ptr: usize,
+    dsm_hash: u64,
+    veg_canopy_hash: u64,
+    veg_trunk_hash: u64,
+    bush_hash: u64,
+    walls_hash: u64,
+    aspect_hash: u64,
     rows: usize,
     cols: usize,
     has_veg: bool,
@@ -1223,14 +1229,14 @@ impl ShadowGpuContext {
             .write_buffer(&buffers.params_buffer, 0, bytemuck::cast_slice(&[params]));
 
         // Static inputs are invariant across timesteps for a tile; avoid
-        // re-uploading when backing arrays are unchanged.
+        // re-uploading when their content is unchanged.
         let static_sig = StaticShadowInputSig {
-            dsm_ptr: dsm.as_ptr() as usize,
-            veg_canopy_ptr: veg_canopy_dsm_opt.map_or(0, |a| a.as_ptr() as usize),
-            veg_trunk_ptr: veg_trunk_dsm_opt.map_or(0, |a| a.as_ptr() as usize),
-            bush_ptr: bush_opt.map_or(0, |a| a.as_ptr() as usize),
-            walls_ptr: walls_opt.map_or(0, |a| a.as_ptr() as usize),
-            aspect_ptr: aspect_opt.map_or(0, |a| a.as_ptr() as usize),
+            dsm_hash: content_hash::hash_2d_f32(&dsm),
+            veg_canopy_hash: veg_canopy_dsm_opt.map_or(0, |a| content_hash::hash_2d_f32(&a)),
+            veg_trunk_hash: veg_trunk_dsm_opt.map_or(0, |a| content_hash::hash_2d_f32(&a)),
+            bush_hash: bush_opt.map_or(0, |a| content_hash::hash_2d_f32(&a)),
+            walls_hash: walls_opt.map_or(0, |a| content_hash::hash_2d_f32(&a)),
+            aspect_hash: aspect_opt.map_or(0, |a| content_hash::hash_2d_f32(&a)),
             rows,
             cols,
             has_veg,
@@ -1663,8 +1669,13 @@ impl ShadowGpuContext {
         }
 
         let buffers = cache_guard
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| "Buffer cache unexpectedly empty".to_string())?;
+
+        // The writes below replace the DSM and vegetation buffers that the
+        // per-timestep shadow path shares, so its record of what is uploaded
+        // no longer holds.
+        buffers.last_static_input_sig = None;
 
         let buffer_size = (total_pixels * std::mem::size_of::<f32>()) as u64;
 
@@ -1868,6 +1879,9 @@ impl ShadowGpuContext {
                 view.iter().copied().collect()
             }
         };
+
+        // These writes replace buffers the per-timestep shadow path shares.
+        buffers.last_static_input_sig = None;
 
         let dsm_data = get_slice(dsm);
         self.queue

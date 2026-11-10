@@ -59,6 +59,10 @@ def _arr_key(arr):
     return (arr.ctypes.data, arr.shape, arr.dtype.str, witness)
 
 
+# (surface token, shadow-matrix token) of the inputs last sent to the
+# anisotropic GPU path; see the invalidation in calculate_core_fused.
+_last_aniso_static_key: list[tuple[int, int] | None] = [None]
+
 if TYPE_CHECKING:
     from .api import HumanParams, Location, PrecomputedData, SolweigResult, SurfaceData, ThermalState, Weather
     from .components.ground_scheme import GroundSchemeState
@@ -461,6 +465,17 @@ def calculate_core_fused(
             shadow_mats = aux.shadow_matrices
 
         if shadow_mats is not None:
+            # The anisotropic GPU path recognises already-uploaded inputs by
+            # address plus a few sampled values, which holds only while the
+            # same arrays stay alive. On a change of surface or of shadow
+            # matrices, tell it to upload again: a new object's arrays can
+            # land on the addresses a freed one used.
+            static_key = (cache.token, shadow_mats._token)
+            if static_key != _last_aniso_static_key[0]:
+                invalidate = getattr(pipeline, "invalidate_aniso_gpu_static_inputs", None)
+                if invalidate is not None:
+                    invalidate()
+                _last_aniso_static_key[0] = static_key
             ws.patch_option = shadow_mats.patch_option
             if use_crop:
                 aniso_crop_key = (

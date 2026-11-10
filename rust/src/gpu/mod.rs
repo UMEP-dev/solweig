@@ -2,6 +2,8 @@
 #[cfg(feature = "gpu")]
 pub mod aniso_gpu;
 #[cfg(feature = "gpu")]
+mod content_hash;
+#[cfg(feature = "gpu")]
 pub mod gvf_gpu;
 #[cfg(feature = "gpu")]
 pub mod shadow_gpu;

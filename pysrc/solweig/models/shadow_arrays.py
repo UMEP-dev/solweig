@@ -10,6 +10,7 @@ backwards compatibility.
 
 from __future__ import annotations
 
+import itertools
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,6 +62,9 @@ def _pack_u8_to_bitpacked(
     return packed
 
 
+_SHADOW_ARRAY_TOKENS = itertools.count(1)
+
+
 @dataclass
 class ShadowArrays:
     """
@@ -86,8 +90,12 @@ class ShadowArrays:
     _vegshmat_f32: NDArray[np.floating] | None = field(init=False, default=None, repr=False)
     _vbshmat_f32: NDArray[np.floating] | None = field(init=False, default=None, repr=False)
     _steradians: NDArray[np.float32] | None = field(init=False, default=None, repr=False)
+    # Identity for GPU upload bookkeeping: unlike an address or id(), it is
+    # never reused after the object is freed.
+    _token: int = field(init=False, default=0, repr=False, compare=False)
 
     def __post_init__(self):
+        self._token = next(_SHADOW_ARRAY_TOKENS)
         # Ensure uint8 dtype
         if self._shmat_u8.dtype != np.uint8:
             self._shmat_u8 = self._shmat_u8.astype(np.uint8)
