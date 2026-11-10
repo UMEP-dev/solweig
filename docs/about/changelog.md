@@ -1,5 +1,37 @@
 # Release notes
 
+## 0.1.0b98 — 2026-11-10
+
+Robustness release. The model is unchanged and the validation numbers are
+identical to b97.
+
+- **GPU reuse of a previous surface's inputs.** When more than one surface
+  of the same grid size was calculated in one Python process, the GPU could
+  reuse data uploaded for an earlier surface. Three paths were affected:
+    - *Shadows.* A new surface whose DSM array landed on the memory address
+      of a freed one was shadowed from the old heights. In a loop over three
+      layouts, 3 of 9 runs had about a sixth of the pixels mis-shadowed and
+      Tmrt off by up to 25.6 °C.
+    - *Anisotropic sky.* Shadow matrices were recognised by address and a
+      few sampled values.
+    - *Ground view factors.* Alternating between two surfaces of the same
+      size gave Tmrt off by up to 7 °C.
+
+  All three now follow the content or identity of the inputs. A single
+  `calculate()` run on one surface in a fresh process was not affected. No
+  data was ever shared with other programs. Per-timestep speed is unchanged.
+- **Shape errors instead of crashes.** `calculate()` checks every layer's
+  shape against the DSM first and raises `GridShapeMismatch` naming the
+  layer. A mis-shaped albedo, emissivity or SVF array previously aborted
+  the interpreter.
+- **Stale cache detection.** SVF and wall caches are validated on every
+  value of the DSM, CDSM and trunk layer. A small edit to a large raster
+  was usually missed before. Existing caches stay valid.
+- **Hour totals.** A warning is logged when the summary's sun, shade and
+  UTCI exceedance hours will over-count because weather records are further
+  apart than their timestep or unevenly spaced. The totals are unchanged.
+- CI now runs the slow-marked SVF, GVF and wall-geometry golden tests.
+
 ## 0.1.0b97 — 2026-11-10
 
 Two model changes. Results change for anisotropic runs without a canopy

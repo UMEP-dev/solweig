@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta97
+version=0.1.0-beta98
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,11 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta98
+    - GPU: results could be wrong when more than one surface of the same grid size was calculated in a single QGIS session, because inputs uploaded for an earlier surface were reused. Fixed for shadows, the anisotropic sky and ground view factors. A single run in a fresh session was not affected.
+    - A layer whose grid differs from the DSM now gives a clear error naming the layer; some cases previously crashed QGIS.
+    - A small edit to a large DSM or CDSM is now detected, so the SVF is recomputed instead of reusing a stale cache. Existing caches stay valid.
+    - A warning is logged when the hour totals in the summary (sun, shade, heat-stress hours) will over-count because weather records were filtered or are unevenly spaced.
     0.1.0-beta97
     - Anisotropic sky on surfaces without a vegetation layer: building-blocked sky patches now emit at wall temperature instead of air temperature. Mean radiant temperature next to sunlit walls rises by about 2 to 4 K in such runs. Runs with a vegetation layer are unchanged, and existing SVF caches do not need recomputing.
     - The optional 2026a ground scheme follows the current UMEP reference code (umep-solweig): its warm bias against field measurements is reduced, and water surface temperature is corrected. The scheme remains off by default.
