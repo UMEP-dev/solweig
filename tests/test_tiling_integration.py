@@ -791,6 +791,15 @@ class TestTiledMemoryRegression:
         # With the fix, both should be similar (proportional to tile size).
         # Allow a generous 2.5x ratio to account for accumulator resizing —
         # the key assertion is that it's NOT ~4x.
+        #
+        # The ratio only means something above a noise floor. When neither run
+        # retains anything in these modules the counts are a few dozen bytes of
+        # interpreter bookkeeping, and their ratio is arbitrary (32 B against
+        # 1 B reads as 32x). One retained full-raster float32 array at 400x400
+        # is 640 KB, so anything under a quarter of that cannot be one.
+        noise_floor_bytes = 400 * 400 * 4 // 4
+        if large_bytes < noise_floor_bytes:
+            return
         ratio = large_bytes / max(small_bytes, 1)
         assert ratio < 2.5, (
             f"Memory scaled {ratio:.1f}x when raster size quadrupled. "
