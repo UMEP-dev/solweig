@@ -278,7 +278,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
 
   test-slow:
-    name: Slow integration tests (top-level)
+    name: Slow integration and golden tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -308,20 +308,18 @@ jobs:
       - name: Build Rust extension
         run: uv run maturin develop --release
 
-      - name: Run slow top-level tests
-        # The fast `test` job runs `-m 'not slow'`. This job picks up the
-        # slow ones outside tests/spec, tests/golden, tests/validation and
-        # tests/benchmarks (which have their own jobs) — that's `test_api`,
-        # `test_cache_lifecycle`, `test_svf_bundle`, `test_timeseries`,
-        # `test_tiling_integration`, `test_qgis_surface_preprocessing_e2e`.
+      - name: Run slow tests outside spec, validation and benchmarks
+        # The fast `test` job runs `-m 'not slow'`. This job runs every
+        # slow-marked test that no other job collects: the top-level files
+        # and tests/golden (the SVF, GVF and wall-geometry goldens are
+        # slow-marked). tests/spec, tests/validation and tests/benchmarks
+        # have their own jobs. Selecting by directory rather than by file
+        # list means a new slow test file cannot be left out by omission.
         run: |
-          uv run python -m pytest \
-            tests/test_api.py \
-            tests/test_cache_lifecycle.py \
-            tests/test_svf_bundle.py \
-            tests/test_timeseries.py \
-            tests/test_tiling_integration.py \
-            tests/test_qgis_surface_preprocessing_e2e.py \
+          uv run python -m pytest tests \
+            --ignore=tests/spec \
+            --ignore=tests/validation \
+            --ignore=tests/benchmarks \
             -m slow -v --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}
