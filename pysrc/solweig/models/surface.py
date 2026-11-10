@@ -80,6 +80,7 @@ class _ComputationCache:
         "gvf_geometry_cache",
         "gvf_geometry_cache_crop",
         "aniso_shadow_crop_cache",
+        "aniso_no_veg_ones_cache",
     )
 
     def __init__(self) -> None:
@@ -91,6 +92,7 @@ class _ComputationCache:
         self.gvf_geometry_cache: tuple[Any, Any] | None = None
         self.gvf_geometry_cache_crop: tuple[Any, Any] | None = None
         self.aniso_shadow_crop_cache: tuple[Any, Any] | None = None
+        self.aniso_no_veg_ones_cache: tuple[Any, Any] | None = None
 
     def clear(self) -> None:
         """Reset all cached values."""

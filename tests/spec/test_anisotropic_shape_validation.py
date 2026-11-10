@@ -33,7 +33,11 @@ def _surface_with_shadow_shapes(shmat_shape, vegshmat_shape, vbshmat_shape):
     from conftest import make_mock_svf
 
     dsm = np.ones(_DSM_SHAPE, dtype=np.float32) * 2.0
-    surface = SurfaceData(dsm=dsm, pixel_size=1.0, svf=make_mock_svf(_DSM_SHAPE))
+    # A canopy layer is present so the stored veg matrices are consumed:
+    # without one the pipeline substitutes the all-visible convention and
+    # never reads them.
+    cdsm = np.zeros(_DSM_SHAPE, dtype=np.float32)
+    surface = SurfaceData(dsm=dsm, cdsm=cdsm, pixel_size=1.0, svf=make_mock_svf(_DSM_SHAPE))
     surface.shadow_matrices = ShadowArrays(
         _shmat_u8=_packed(shmat_shape),
         _vegshmat_u8=_packed(vegshmat_shape),

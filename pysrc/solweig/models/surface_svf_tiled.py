@@ -172,9 +172,6 @@ def _compute_svf_tiled(
         mode="w+",
         shape=sh_shape,
     )
-    if not use_veg:
-        vegshmat_mm[:] = 0
-        vbshmat_mm[:] = 0
 
     # Progress: one bar per tile (matching timeseries progress style).
     # For QGIS feedback, a single reporter spans the full progress_range.
@@ -251,14 +248,16 @@ def _compute_svf_tiled(
             veg_arrays = {name: np.asarray(getattr(tile_result, name)) for name in veg_fields}
             for name in veg_fields:
                 outputs[name][ws] = veg_arrays[name] if core_only else veg_arrays[name][cs]
-        # Shadow matrices are already bitpacked uint8 from Rust
+        # Shadow matrices are already bitpacked uint8 from Rust. The veg
+        # matrices are copied without vegetation too: Rust then fills them
+        # with the "no blocking" convention (all bits set), which the
+        # anisotropic sky needs to tell building patches from vegetation.
         bldg = np.asarray(tile_result.bldg_sh_matrix)
         shmat_mm[ws] = bldg if core_only else bldg[cs]
-        if use_veg:
-            veg = np.asarray(tile_result.veg_sh_matrix)
-            vb = np.asarray(tile_result.veg_blocks_bldg_sh_matrix)
-            vegshmat_mm[ws] = veg if core_only else veg[cs]
-            vbshmat_mm[ws] = vb if core_only else vb[cs]
+        veg = np.asarray(tile_result.veg_sh_matrix)
+        vb = np.asarray(tile_result.veg_blocks_bldg_sh_matrix)
+        vegshmat_mm[ws] = veg if core_only else veg[cs]
+        vbshmat_mm[ws] = vb if core_only else vb[cs]
 
         # Flush this tile's freshly written pages so the OS can write them back
         # and reclaim them: resident memory then tracks a few tiles instead of
@@ -269,9 +268,8 @@ def _compute_svf_tiled(
             for name in veg_fields:
                 outputs[name].flush()
         shmat_mm.flush()
-        if use_veg:
-            vegshmat_mm.flush()
-            vbshmat_mm.flush()
+        vegshmat_mm.flush()
+        vbshmat_mm.flush()
 
     # Kick off first tile
     thread, box, runner, core_only = _submit_tile(tiles[0])

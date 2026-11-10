@@ -487,6 +487,21 @@ def calculate_core_fused(
                 aniso_vegshmat = shadow_mats._vegshmat_u8
                 aniso_vbshmat = shadow_mats._vbshmat_u8
 
+            if not use_veg:
+                # Without a canopy layer no patch is blocked by vegetation, so
+                # both veg matrices are all-visible by definition. Stored ones
+                # are not trusted: caches written up to 0.1.0b96 and UMEP
+                # exports made without the wall scheme hold other values,
+                # which send building or sky patches to the vegetation
+                # emitter (issue #15).
+                no_veg_ones = cache.get_or_compute(
+                    "aniso_no_veg_ones_cache",
+                    aniso_shmat.shape,
+                    lambda: np.full(aniso_shmat.shape, 0xFF, dtype=np.uint8),
+                )
+                aniso_vegshmat = no_veg_ones
+                aniso_vbshmat = no_veg_ones
+
     # Thermal state (create initial if None)
     if state is None:
         state = ThermalState.initial((rows, cols))

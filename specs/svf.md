@@ -124,6 +124,10 @@ SVF_west  = Σ (weight_aniso × visibility) for azimuth ∈ [180°, 360°)
 
 The shadow matrices (3D, uint8 bitpacked) store per-patch shadow results for use by anisotropic sky radiation. The third dimension indexes over patches.
 
+A set bit means the patch is visible through that layer. The anisotropic sky assigns each patch to one emitter from the three bits: sky when the building and vegetation bits are both set, vegetation when either vegetation bit is clear, and buildings when the building bit is clear and the veg-blocks-bldg bit is set.
+
+Without a canopy layer both vegetation matrices have every bit set ("no blocking"), matching the wall-scheme branch of umep-solweig's `svfForProcessing153`. The per-timestep calculation applies the same convention itself whenever the surface has no CDSM, so matrices from older caches or from UMEP exports are not relied on in that case.
+
 ## Properties
 
 ### Range Properties

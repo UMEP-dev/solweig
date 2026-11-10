@@ -780,15 +780,16 @@ fn calculate_svf_inner(
         }
     }
 
-    // When no vegetation, veg shadow matrices must indicate "no blocking":
-    //   veg_sh_matrix: all bits = 1 (sky visible through vegetation at every patch)
-    //   veg_blocks_bldg_sh_matrix: copy of bldg_sh_matrix (only buildings matter)
+    // When no vegetation, both veg shadow matrices must indicate "no blocking"
+    // (all bits = 1), as umep-solweig's svfForProcessing153 does in its
+    // wall-scheme branch. The anisotropic sky routes a patch to the building
+    // emitter on `!sh && vbsh` and to the vegetation emitter on
+    // `!vsh || !vbsh`, so a zero vbsh bit on a building-blocked patch would
+    // make that wall emit at air temperature (issue #15).
     let n_pack = pack_bytes(total_patches);
     if !usevegdem {
         inter.veg_sh_matrix.fill(0xFF);
-        inter
-            .veg_blocks_bldg_sh_matrix
-            .assign(&inter.bldg_sh_matrix);
+        inter.veg_blocks_bldg_sh_matrix.fill(0xFF);
     }
 
     // Zero out bitpacked shadow matrices for NaN pixels only when needed.
