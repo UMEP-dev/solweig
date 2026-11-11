@@ -20,8 +20,8 @@ from typing import Any
 
 import numpy as np
 import pytest
-import rasterio
 
+from tests.raster_helpers import read_band
 from validation.met_clock import load_site_met
 
 # ---------------------------------------------------------------------------
@@ -123,10 +123,8 @@ def _load_measurements(cfg: dict) -> dict[str, list[dict]]:
 
 def _candidate_pixels(dsm_path: str, dem_path: str, step: int = 3) -> list[tuple[int, int]]:
     """Return ground-level pixels (height < 1m) sampled every `step` pixels."""
-    with rasterio.open(dsm_path) as src:
-        dsm = src.read(1)
-    with rasterio.open(dem_path) as src:
-        dem = src.read(1)
+    dsm = read_band(dsm_path)
+    dem = read_band(dem_path)
 
     height = dsm - dem
     rows, cols = dsm.shape
@@ -170,10 +168,8 @@ def _save_rasters(dsm_path: str, dem_path: str, agg: dict, out_dir: Path, curren
     import matplotlib.pyplot as plt
     from matplotlib.colors import TwoSlopeNorm
 
-    with rasterio.open(dsm_path) as src:
-        dsm = src.read(1)
-    with rasterio.open(dem_path) as src:
-        dem = src.read(1)
+    dsm = read_band(dsm_path)
+    dem = read_band(dem_path)
 
     height = dsm - dem
     rows, cols = dsm.shape

@@ -119,6 +119,9 @@ test_benchmarks = { shell = "pytest tests/benchmarks/ -x -q" }
 test_gpu_gates = { shell = "pytest tests/spec/test_svf.py tests/spec/test_svf_core_api.py tests/spec/test_aniso_gpu_parity.py -q && pytest tests/test_tiling_integration.py -k 'multitile_vs_nontiled_comparison or anisotropic_tiled_vs_nontiled' -q" }
 test_gpu_perf_gate = { shell = "pytest tests/benchmarks/ -m gpu_perf_gate -q && pytest tests/benchmarks/test_tiling_benchmark.py -q" }
 audit = { shell = "python scripts/audit.py" }
+# After running scripts/qgis_release_check.py inside QGIS (see its docstring and
+# the release checklist in CLAUDE.md): compare that run with the rasterio backend.
+qgis_check = { shell = "python scripts/qgis_release_check.py --compare" }
 docs = { shell = "mkdocs serve" }
 docs_build = { shell = "mkdocs build --strict" }
 notebooks = { shell = "jupyter nbconvert --to notebook --execute docs/tutorials/*.ipynb --inplace && python scripts/export_tutorials.py" }

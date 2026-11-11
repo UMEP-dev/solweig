@@ -9,12 +9,11 @@ This test drives the algorithm against a synthetic GeoTIFF, mocking
 only the QGIS parameter-reading layer. It exercises the plugin glue
 (parameter dispatching, output directory layout, progress reporting)
 and solweig's ``SurfaceData.prepare()``, wall computation, and SVF
-computation. Because ``UMEP_USE_GDAL`` is not set in the test
-environment, solweig takes the **rasterio backend**, not the GDAL
-backend QGIS users actually run under. The backend abstraction itself
-is covered by ``test_qgis_base.py`` and ``test_io.py`` (with
-``UMEP_USE_GDAL=1`` and mocked osgeo), so this test intentionally
-skips that plumbing and focuses on the algorithm-level contract.
+computation. In the standard test environment solweig takes the
+rasterio backend; in the CI job ``test-qgis-compat`` (``UMEP_USE_GDAL=1``,
+real GDAL, rasterio fenced off) the same test runs on the GDAL backend
+that QGIS users have. Rasters are read and written through
+``tests.raster_helpers`` so the test is the same on both.
 """
 
 from __future__ import annotations
@@ -24,10 +23,9 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-import rasterio
-from rasterio.transform import from_origin
 
 from tests.qgis_mocks import install, install_osgeo, preserve_solweig_modules, uninstall_osgeo
+from tests.raster_helpers import read_band, write_geotiff
 
 install()
 install_osgeo()
@@ -46,20 +44,14 @@ def _write_synthetic_dsm(path: Path, rows: int = 32, cols: int = 32, pixel_size:
     dsm = terrain.astype(np.float32)
     dsm[6:14, 6:14] += 15.0  # block A
     dsm[18:25, 18:26] += 8.0  # block B
-    transform = from_origin(100000.0, 200000.0 + rows * pixel_size, pixel_size, pixel_size)
-    with rasterio.open(
+    write_geotiff(
         path,
-        "w",
-        driver="GTiff",
-        height=rows,
-        width=cols,
-        count=1,
-        dtype="float32",
-        transform=transform,
-        crs="EPSG:3006",  # SWEREF99 TM (projected metres — required for solweig)
-        nodata=-9999.0,
-    ) as dst:
-        dst.write(dsm, 1)
+        dsm,
+        origin_x=100000.0,
+        origin_y_top=200000.0 + rows * pixel_size,
+        pixel_size=pixel_size,
+        epsg=3006,  # SWEREF99 TM (projected metres — required for solweig)
+    )
 
 
 class _MockExtent:
@@ -284,8 +276,7 @@ def _run_with_wall_limit(output_dir: Path, dsm_path: Path, wall_limit: float) ->
     algo.parameterAsMatrix = lambda p, name, ctx: p.get(name, [])
     algo.processAlgorithm(params, MagicMock(), fb)
     (wall_file,) = (output_dir / "walls").glob("px*/wall_hts.tif")
-    with rasterio.open(wall_file) as src:
-        return src.read(1)
+    return read_band(wall_file)
 
 
 @pytest.mark.slow

@@ -33,7 +33,7 @@ def _weather():
 
 
 def _kup_with(surface, materials, out_dir):
-    import rasterio
+    from tests.raster_helpers import read_band
 
     location = Location(latitude=57.7, longitude=12.0, utc_offset=1)
     calculate(
@@ -41,8 +41,7 @@ def _kup_with(surface, materials, out_dir):
         use_anisotropic_sky=False,
     )  # fmt: skip
     (tif,) = (out_dir / "kup").glob("*.tif")
-    with rasterio.open(tif) as src:
-        return src.read(1)
+    return read_band(tif)
 
 
 def test_materials_edited_in_place_are_picked_up_on_the_same_surface(tmp_path):

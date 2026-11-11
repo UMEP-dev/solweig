@@ -12,6 +12,11 @@ _project_root = str(Path(__file__).resolve().parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+# Backend fence. Must run before anything imports solweig.
+from tests.backend_fence import install_backend_fence  # noqa: E402
+
+install_backend_fence()
+
 
 def pytest_configure(config: pytest.Config) -> None:
     """Fail early if the Rust extension was built in debug mode.

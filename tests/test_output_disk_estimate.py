@@ -7,11 +7,12 @@ from datetime import datetime
 
 import numpy as np
 import pytest
-import rasterio
 from conftest import make_mock_svf
 from solweig import Location, SurfaceData, Weather, calculate, io
 from solweig import timeseries as ts
 from solweig.errors import ConfigurationError
+
+from tests.raster_helpers import read_band, tiff_structure
 
 Usage = namedtuple("Usage", "total used free")
 LOCATION = Location(latitude=57.7, longitude=12.0, utc_offset=1)
@@ -107,11 +108,13 @@ def test_per_timestep_outputs_are_compressed_and_lossless(tmp_path):
             io.write_raster_window(path, data[window], window=window)
         paths[compress] = path
 
-    with rasterio.open(paths[True]) as packed, rasterio.open(paths[False]) as plain:
-        assert packed.profile["compress"] == "deflate"
-        assert packed.profile["tiled"] is True
-        np.testing.assert_array_equal(packed.read(1), plain.read(1))
-        np.testing.assert_array_equal(packed.read(1), data)
+    structure = tiff_structure(paths[True])
+    assert structure["compress"] == "deflate"
+    assert structure["tiled"] is True
+    assert structure["block"] == (256, 256)
+    assert tiff_structure(paths[False])["compress"] is None
+    np.testing.assert_array_equal(read_band(paths[True]), read_band(paths[False]))
+    np.testing.assert_array_equal(read_band(paths[True]), data)
     assert paths[True].stat().st_size < 0.9 * paths[False].stat().st_size
 
 
@@ -152,8 +155,7 @@ def test_tiled_run_output_is_no_larger_than_uncompressed(tmp_path, tile_size):
             window = (slice(r, min(r + tile_size, rows)), slice(c, min(c + tile_size, cols)))
             io.write_raster_window(path, data[window], window=window)
 
-    with rasterio.open(path) as src:
-        np.testing.assert_array_equal(src.read(1), data)
+    np.testing.assert_array_equal(read_band(path), data)
     assert path.stat().st_size <= 4.05 * data.size
     if block is not None:
         assert path.stat().st_size < 0.5 * 4 * data.size  # aligned blocks: no dead space
@@ -164,12 +166,10 @@ def test_unwritten_part_of_a_compressed_output_reads_as_nodata(tmp_path):
     rows, cols = 600, 600
     path = tmp_path / "partial.tif"
     io.create_empty_raster(path, rows, cols, [0.0, 1.0, 0.0, 600.0, 0.0, -1.0], "", nodata=np.nan)
-    with rasterio.open(path) as src:
-        assert np.isnan(src.read(1)).all()
+    assert np.isnan(read_band(path)).all()
 
     io.write_raster_window(path, np.full((100, 100), 7.0, dtype=np.float32), window=(slice(50, 150), slice(300, 400)))
-    with rasterio.open(path) as src:
-        got = src.read(1)
+    got = read_band(path)
     assert np.all(got[50:150, 300:400] == 7.0)
     got[50:150, 300:400] = np.nan
     assert np.isnan(got).all()

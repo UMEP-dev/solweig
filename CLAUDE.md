@@ -307,6 +307,25 @@ sessions should know about.
 4. `docs/about/changelog.md` if it carries an entry for the release.
 5. `poe docs_build` (strict) and `poe verify_project` before the release
    commit; tag `v<version>` after pushing.
+6. **Real-QGIS check, by hand, before the tag** when the release touches the
+   QGIS plugin (`qgis_plugin/`), raster I/O (`io.py`, `output_async.py`,
+   `_compat.py`, `surface_loading.py`, `utils.py`) or anything branching on
+   `GDAL_ENV`. The test suite mocks QGIS, so this is the only check against
+   the real application. Gareth runs it from his own Terminal (it cannot be
+   started from an agent session: on macOS the QGIS app crashes at startup
+   there, and its command-line Python refuses to load a locally built
+   extension):
+
+   ```bash
+   maturin develop --release
+   /Applications/QGIS-final-4_2_0.app/Contents/MacOS/QGIS-final-4_2_0 --noplugins --code scripts/qgis_release_check.py
+   poe qgis_check        # compares with the rasterio backend, prints every step
+   ```
+
+   QGIS opens, works for about a minute and quits. `poe qgis_check` must end
+   with `ALL OK` and report the version being released. Ask Gareth to run it;
+   do not tag a release in scope without it. For releases out of scope, say so
+   in the hand-over ("QGIS check not needed: no plugin or raster I/O change").
 
 Added 2026-07-07 after a b90 release went out with the VALIDATION.md
 summary header still reading b89 and an "(Unreleased.)" marker in the
