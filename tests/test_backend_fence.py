@@ -66,7 +66,7 @@ def test_no_test_module_imports_rasterio_directly():
     for path in (REPO / "tests").rglob("*.py"):
         if path.name in allowed:
             continue
-        for number, line in enumerate(path.read_text().splitlines(), start=1):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             stripped = line.strip()
             if stripped.startswith(("import rasterio", "from rasterio")):
                 offenders.append(f"{path.relative_to(REPO)}:{number}")

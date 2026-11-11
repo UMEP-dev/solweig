@@ -39,7 +39,9 @@ class TestSvfMemmap:
         """Test saving and loading SVF arrays as memmap."""
         svf = SvfArrays(**sample_svf_data)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # ignore_cleanup_errors: the loaded arrays are still mapped when the
+        # block ends, and Windows will not delete a mapped file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cache_dir = Path(tmpdir) / "svf_cache"
 
             # Save to memmap
@@ -62,7 +64,9 @@ class TestSvfMemmap:
         """Verify memmap arrays maintain float32 dtype."""
         svf = SvfArrays(**sample_svf_data)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # ignore_cleanup_errors: the loaded arrays are still mapped when the
+        # block ends, and Windows will not delete a mapped file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cache_dir = Path(tmpdir) / "svf_cache"
             svf.to_memmap(cache_dir)
             svf_loaded = SvfArrays.from_memmap(cache_dir)
@@ -75,7 +79,9 @@ class TestSvfMemmap:
         """Verify loaded arrays are actually memory-mapped."""
         svf = SvfArrays(**sample_svf_data)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # ignore_cleanup_errors: the loaded arrays are still mapped when the
+        # block ends, and Windows will not delete a mapped file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cache_dir = Path(tmpdir) / "svf_cache"
             svf.to_memmap(cache_dir)
             svf_loaded = SvfArrays.from_memmap(cache_dir)
@@ -88,7 +94,9 @@ class TestSvfMemmap:
         """Test that slicing memmap arrays works correctly."""
         svf = SvfArrays(**sample_svf_data)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # ignore_cleanup_errors: the loaded arrays are still mapped when the
+        # block ends, and Windows will not delete a mapped file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cache_dir = Path(tmpdir) / "svf_cache"
             svf.to_memmap(cache_dir)
             svf_loaded = SvfArrays.from_memmap(cache_dir)
@@ -102,7 +110,9 @@ class TestSvfMemmap:
         """Test that computed properties (svfalfa, svfbuveg) work with memmap."""
         svf = SvfArrays(**sample_svf_data)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # ignore_cleanup_errors: the loaded arrays are still mapped when the
+        # block ends, and Windows will not delete a mapped file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cache_dir = Path(tmpdir) / "svf_cache"
             svf.to_memmap(cache_dir)
             svf_loaded = SvfArrays.from_memmap(cache_dir)
@@ -127,7 +137,9 @@ class TestSvfMemmap:
         """Test that missing files raise error."""
         svf = SvfArrays(**sample_svf_data)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # ignore_cleanup_errors: the loaded arrays are still mapped when the
+        # block ends, and Windows will not delete a mapped file.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cache_dir = Path(tmpdir) / "svf_cache"
             svf.to_memmap(cache_dir)
 

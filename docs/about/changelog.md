@@ -25,6 +25,13 @@ No change to the model: validation numbers are identical to b100.
   inputs rebuilt everything unless `pixel_size` was passed: the saved
   fingerprint recorded the resolved pixel size and the check compared the
   requested one. It now takes the fast path.
+- **Windows: cancelled SVF computation.** Cancelling a tiled SVF
+  computation left its partial `svf_memmaps/` and `shadow_memmaps/` folders
+  on disk, because Windows does not delete files that are still
+  memory-mapped and the failure was not reported. The mappings are now
+  released before the folders are removed, and a warning is logged if they
+  cannot be. Found by the first Windows test run; the fix has not yet been
+  confirmed on Windows.
 - **Backend separation.** On the GDAL backend the test session blocks
   imports of rasterio, pyproj and shapely, and a new test runs the same
   raster I/O, surface preparation and model runs on both backends and

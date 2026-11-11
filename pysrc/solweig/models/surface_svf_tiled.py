@@ -44,6 +44,63 @@ def _compute_svf_tiled(
     feedback: Any = None,
     progress_range: tuple[float, float] | None = None,
 ) -> tuple[SvfArrays, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Compute SVF tile by tile; on failure or cancellation leave no partial files.
+
+    See :func:`_compute_svf_tiled_impl` for the computation. This wrapper
+    exists for the cleanup. The partial results live in memory-mapped files,
+    and Windows refuses to delete a file that is still mapped, so the cleanup
+    inside the implementation (which still holds the arrays) fails there
+    without a word and a cancelled run used to leave ``svf_memmaps/`` and
+    ``shadow_memmaps/`` behind (found by the first Windows CI run, 2026-11).
+    Here the implementation's frame is finished: its locals are released,
+    which unmaps the files, and the directories are then removed.
+    """
+    try:
+        return _compute_svf_tiled_impl(
+            dsm_f32,
+            cdsm_f32,
+            tdsm_f32,
+            pixel_size,
+            use_veg,
+            max_height,
+            working_path,
+            on_tile_complete=on_tile_complete,
+            tile_size=tile_size,
+            feedback=feedback,
+            progress_range=progress_range,
+        )
+    except BaseException as exc:
+        import gc
+        import shutil
+        import traceback
+
+        traceback.clear_frames(exc.__traceback__)  # drops the implementation's references to the memmaps
+        gc.collect()
+        for name in ("svf_memmaps", "shadow_memmaps"):
+            leftover = Path(working_path) / name
+            if leftover.exists():
+                shutil.rmtree(leftover, ignore_errors=True)
+            if leftover.exists():
+                logger.warning(
+                    f"Could not remove the partial SVF files in {leftover} (still in use). "
+                    "Delete that folder before preparing this surface again."
+                )
+        raise
+
+
+def _compute_svf_tiled_impl(
+    dsm_f32: np.ndarray,
+    cdsm_f32: np.ndarray,
+    tdsm_f32: np.ndarray,
+    pixel_size: float,
+    use_veg: bool,
+    max_height: float,
+    working_path: Path,
+    on_tile_complete: Callable | None = None,
+    tile_size: int | None = None,
+    feedback: Any = None,
+    progress_range: tuple[float, float] | None = None,
+) -> tuple[SvfArrays, tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """
     Compute SVF using tiled processing for large grids.
 
@@ -344,7 +401,9 @@ def _compute_svf_tiled(
             if on_tile_complete is not None:
                 on_tile_complete(tile_idx, n_tiles)
     except BaseException:
-        # Clean up partial memmap files so stale data doesn't persist
+        # Clean up partial memmap files so stale data doesn't persist. On
+        # Windows this cannot succeed while the arrays above are still
+        # mapped; _compute_svf_tiled() repeats it once this frame is gone.
         import shutil
 
         for d in (svf_memmap_dir, memmap_dir):
