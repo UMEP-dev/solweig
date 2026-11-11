@@ -48,6 +48,7 @@ pub struct GvfGeometryCache {
     /// Identifies this cache to the GPU context, which holds one cache's
     /// geometry at a time and must not serve it to another surface of the
     /// same shape.
+    #[cfg_attr(not(feature = "gpu"), allow(dead_code))] // read by the GPU context only
     pub(crate) id: u64,
     pub(crate) azimuths: Vec<AzimuthGeometry>,
     pub(crate) first: f32,

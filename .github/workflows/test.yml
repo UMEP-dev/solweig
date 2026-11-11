@@ -167,6 +167,12 @@ jobs:
       - name: Run cargo test
         run: cargo test --manifest-path rust/Cargo.toml --lib
 
+      - name: Check the CPU-only build without warnings
+        # Other Rust projects depend on the crate with default-features = false.
+        run: cargo check --manifest-path rust/Cargo.toml --no-default-features
+        env:
+          RUSTFLAGS: "-D warnings"
+
   test-qgis-compat:
     name: Test QGIS compatibility (NumPy 1.26)
     runs-on: ubuntu-latest

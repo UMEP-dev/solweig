@@ -288,6 +288,7 @@ pub(crate) fn lside_dirs_sum_aniso_from_lup(
 }
 
 /// Directional shortwave side sum for anisotropic mode (kup_dir * 0.5).
+#[cfg_attr(not(feature = "gpu"), allow(dead_code))] // called from the GPU branch only
 pub(crate) fn kside_dirs_sum_aniso_from_kup(
     kup_e: ArrayView2<f32>,
     kup_s: ArrayView2<f32>,

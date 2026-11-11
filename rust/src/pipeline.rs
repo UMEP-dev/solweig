@@ -8,6 +8,7 @@
 use ndarray::{s, Array1, Array2, Array3, ArrayView1, ArrayView2, Zip};
 use numpy::{IntoPyArray, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3};
 use pyo3::prelude::*;
+#[cfg(feature = "gpu")]
 use std::sync::OnceLock;
 
 use crate::ground::{compute_ground_temperature_pure, ts_wave_delay_batch_pure, GroundTempResult};
@@ -296,10 +297,12 @@ unsafe fn allow_threads_unchecked<T: Send, F: FnOnce() -> T>(py: Python, f: F) -
 
 // Radiation helpers extracted to pipeline_radiation.rs. Re-import only
 // the symbols used inside compute_timestep below.
+#[cfg(feature = "gpu")]
+use crate::pipeline_radiation::kside_dirs_sum_aniso_from_kup;
 use crate::pipeline_radiation::{
     asvf_for_svf_cached, compute_ani_lum_from_packed, compute_esky, compute_kdown, compute_kup,
-    compute_ldown, kside_dirs_sum_aniso_from_kup, lside_dirs_sum_aniso_from_lup,
-    patch_lut_for_option_cached, side_sum_from_directional,
+    compute_ldown, lside_dirs_sum_aniso_from_lup, patch_lut_for_option_cached,
+    side_sum_from_directional,
 };
 
 
@@ -1414,7 +1417,9 @@ fn timestep_physics(inputs: &TimestepInputs) -> TimestepResultRaw {
                 weather.patch_option,
             );
             let patch_lut = patch_lut_for_option_cached(weather.patch_option);
+            #[allow(unused_variables)] // GPU branch only
             let patch_altitude_arr = ArrayView1::from(patch_lut.altitudes.as_slice());
+            #[allow(unused_variables)] // GPU branch only
             let patch_azimuth_arr = ArrayView1::from(patch_lut.azimuths.as_slice());
             let steradians_arr = ArrayView1::from(patch_lut.steradians.as_slice());
             let patch_altitude_sin_arr =
@@ -1447,6 +1452,7 @@ fn timestep_physics(inputs: &TimestepInputs) -> TimestepResultRaw {
 
             // Full anisotropic sky calculation (ldown, kside, lside totals)
             // Try GPU path first; fall back to CPU if unavailable.
+            #[allow(unused_variables)] // GPU branch only
             let deg2rad = PI / 180.0;
             #[allow(unused_variables)]
             let (lum_chi, rad_tot) = if weather.sun_altitude > 0.0 {
@@ -1549,6 +1555,7 @@ fn timestep_physics(inputs: &TimestepInputs) -> TimestepResultRaw {
             };
 
             // Compute anisotropic sky: GPU path + CPU fallback
+            #[allow(unused_mut)]
             let mut used_gpu = false;
             #[allow(unused_mut)]
             let mut ani_ldown = Array2::<f32>::zeros(shape);
