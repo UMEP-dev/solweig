@@ -266,20 +266,19 @@ old-clock baseline column matches the b89 to b95 summary. The b90 to b96
 scheme columns are from the 2026-10-01 run. POI Tmrt against measurements,
 RMSE / bias (°C):
 
-| Site | Day | Baseline, old clock | Baseline b96 to b99, corrected | Scheme b90 to b96, old clock | Scheme b90 to b96, corrected | Scheme b97, corrected |
-| --- | --- | --- | --- | --- | --- | --- |
-| Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 6.3 / +2.0 | 22.0 / +21.4 | 21.5 / +20.9 | 11.4 / +10.0 |
-| Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 4.2 / +0.5 | 13.6 / +12.7 | 12.3 / +11.7 | 4.5 / +2.5 |
-| Gustav Adolfs | 2006-07-26 | 7.1 / +3.7 | 4.8 / +2.3 | 16.4 / +15.8 | 14.4 / +14.3 | 4.8 / +4.3 |
-| Gustav Adolfs | 2006-08-01 | 7.3 / +0.6 | 3.3 / +1.8 | 15.1 / +13.6 | 15.2 / +14.6 | 6.1 / +4.7 |
-| GVC | 2010-07-07 | 2.4 / +1.4 | 4.1 / +0.7 | 14.9 / +14.7 | 14.6 / +13.9 | 5.6 / +3.8 |
-| GVC | 2010-07-10 | 3.7 / +3.4 | 4.2 / +3.8 | 18.8 / +18.7 | 18.5 / +18.4 | 7.7 / +7.5 |
-| GVC | 2010-07-12 | 6.9 / +5.7 | 7.0 / +3.7 | 18.3 / +18.1 | 17.5 / +16.6 | 8.1 / +6.3 |
+| Site | Day | Baseline, old clock | Baseline b96 to b99, corrected | Baseline b100 | Scheme b90 to b96, old clock | Scheme b90 to b96, corrected | Scheme b97 to b100, corrected |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 6.3 / +2.0 | 6.4 / +2.0 | 22.0 / +21.4 | 21.5 / +20.9 | 11.4 / +10.0 |
+| Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 4.2 / +0.5 | 4.2 / +0.6 | 13.6 / +12.7 | 12.3 / +11.7 | 4.5 / +2.5 |
+| Gustav Adolfs | 2006-07-26 | 7.1 / +3.7 | 4.8 / +2.3 | 4.9 / +2.3 | 16.4 / +15.8 | 14.4 / +14.3 | 4.8 / +4.3 |
+| Gustav Adolfs | 2006-08-01 | 7.3 / +0.6 | 3.3 / +1.8 | 3.3 / +1.9 | 15.1 / +13.6 | 15.2 / +14.6 | 6.1 / +4.7 |
+| GVC | 2010-07-07 | 2.4 / +1.4 | 4.1 / +0.7 | 4.0 / +0.5 | 14.9 / +14.7 | 14.6 / +13.9 | 5.6 / +3.8 |
+| GVC | 2010-07-10 | 3.7 / +3.4 | 4.2 / +3.8 | 3.6 / +3.3 | 18.8 / +18.7 | 18.5 / +18.4 | 7.7 / +7.5 |
+| GVC | 2010-07-12 | 6.9 / +5.7 | 7.0 / +3.7 | 6.9 / +3.6 | 18.3 / +18.1 | 17.5 / +16.6 | 8.1 / +6.3 |
 
-The baseline columns predate the b100 change to the ground view factor
-height, which moves the baseline by at most 0.5 °C RMSE (current values are
-in the summary table). The scheme does not use the ground view factor step,
-so its columns are unaffected.
+The b100 baseline column follows the change to the ground view factor
+height. The scheme does not use the ground view factor step, and a rerun on
+b100 reproduced its b97 column.
 
 The clock correction moved the b90 to b96 scheme numbers by at most 2 °C.
 Their bias was consistently positive: RMSE 12.3 to 21.5 °C and bias +11.7
