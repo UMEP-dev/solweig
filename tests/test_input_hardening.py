@@ -29,6 +29,51 @@ def _weather():
     return Weather(datetime=datetime(2024, 7, 15, 9, 0), ta=25.0, rh=50.0, global_rad=500.0)
 
 
+# ── materials ──────────────────────────────────────────────────────────────
+
+
+def _kup_with(surface, materials, out_dir):
+    import rasterio
+
+    location = Location(latitude=57.7, longitude=12.0, utc_offset=1)
+    calculate(
+        surface, [_weather()], location, output_dir=out_dir, outputs=["kup"], materials=materials,
+        use_anisotropic_sky=False,
+    )  # fmt: skip
+    (tif,) = (out_dir / "kup").glob("*.tif")
+    with rasterio.open(tif) as src:
+        return src.read(1)
+
+
+def test_materials_edited_in_place_are_picked_up_on_the_same_surface(tmp_path):
+    """A changed material value must reach the cached land-cover property grids.
+
+    The cache is keyed on the content of the materials (it was keyed on
+    ``id(materials)``, which can be reused after a free). This test passed
+    before that change as well; it guards the behaviour, not that bug.
+    """
+    from solweig import load_params
+
+    def grass_surface():
+        return SurfaceData(
+            dsm=np.zeros(SHAPE, dtype=np.float32),
+            pixel_size=1.0,
+            svf=make_mock_svf(SHAPE),
+            land_cover=np.full(SHAPE, 5, dtype=np.uint8),
+        )
+
+    surface = grass_surface()
+    materials = load_params()
+    before = _kup_with(surface, materials, tmp_path / "a")
+
+    materials.Albedo.Effective.Value.Grass_unmanaged = 0.5
+    after = _kup_with(surface, materials, tmp_path / "b")
+    fresh = _kup_with(grass_surface(), materials, tmp_path / "c")
+
+    assert after.mean() > before.mean() * 2.0
+    np.testing.assert_array_equal(after, fresh)
+
+
 # ── outputs ────────────────────────────────────────────────────────────────
 
 

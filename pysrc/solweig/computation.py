@@ -25,6 +25,16 @@ _OUT_LUP = 1 << 4
 _OUT_ALL = _OUT_SHADOW | _OUT_KDOWN | _OUT_KUP | _OUT_LDOWN | _OUT_LUP
 
 
+def _materials_key(materials):
+    """Cache key for a materials namespace: its content, not its address.
+
+    ``id(materials)`` can be reused once the object is freed, so a second
+    materials object could match the first one's key. The repr of a
+    ``SimpleNamespace`` is recursive and lists every value.
+    """
+    return None if materials is None else repr(materials)
+
+
 def _gvf_full_grid_key(buildings, wall_asp, wall_ht, alb_grid, pixel_size, posture_height, albedo_wall):
     """Key of the full-grid GVF geometry cache: every input of ``precompute_gvf_cache``."""
     return (
@@ -254,7 +264,12 @@ def calculate_core_fused(
         )
 
     # Land cover properties
-    lc_props_key = (_arr_key(optical.land_cover), _arr_key(optical.albedo), _arr_key(optical.emissivity), id(materials))
+    lc_props_key = (
+        _arr_key(optical.land_cover),
+        _arr_key(optical.albedo),
+        _arr_key(optical.emissivity),
+        _materials_key(materials),
+    )
     alb_grid, emis_grid, tgk_grid, tstart_grid, tmaxlst_grid = cache.get_or_compute(
         "land_cover_props_cache",
         lc_props_key,
@@ -807,7 +822,7 @@ def warm_gvf_geometry(surface, human, materials, pixel_size: float) -> None:
             _arr_key(optical.land_cover),
             _arr_key(optical.albedo),
             _arr_key(optical.emissivity),
-            id(materials),
+            _materials_key(materials),
         )
         alb_grid = cache.get_or_compute(
             "land_cover_props_cache",
