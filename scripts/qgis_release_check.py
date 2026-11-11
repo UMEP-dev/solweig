@@ -274,19 +274,22 @@ def run_inside_qgis() -> dict:
 
     def prepare_again_with_wall_limit():
         import processing
-        from osgeo import gdal as _gdal
+        import solweig
 
-        (before_path,) = surface_dir.glob("walls/px*/wall_hts.tif")
-        before = _gdal.Open(str(before_path)).ReadAsArray()
+        def loaded_walls():
+            # What the calculation gets: SurfaceData.load() reads cleaned/wall_height.
+            return np.array(solweig.SurfaceData.load(surface_dir).wall_height, dtype=np.float32)
+
+        before = loaded_walls()
         processing.run(
             "solweig:surface_preprocessing",
             {"DSM": str(dsm_path), "OUTPUT_DIR": str(surface_dir), "WALL_LIMIT": 10.0},
         )
-        after = _gdal.Open(str(before_path)).ReadAsArray()
+        after = loaded_walls()
         if not (after[60:80, 70:100].max() == 0.0 and before[60:80, 70:100].max() > 0.0 and after.max() > 10.0):
-            raise RuntimeError("a 10 m wall limit did not remove the 9 m block's walls from the saved raster")
+            raise RuntimeError("a 10 m wall limit did not remove the 9 m block's walls from the loaded surface")
         processing.run("solweig:surface_preprocessing", {"DSM": str(dsm_path), "OUTPUT_DIR": str(surface_dir)})
-        restored = _gdal.Open(str(before_path)).ReadAsArray()
+        restored = loaded_walls()
         if not np.array_equal(restored, before):
             raise RuntimeError("the default wall limit did not restore the walls")
         return "custom limit applied and restored"

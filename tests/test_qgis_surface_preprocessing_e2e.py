@@ -275,8 +275,20 @@ def _run_with_wall_limit(output_dir: Path, dsm_path: Path, wall_limit: float) ->
     algo.parameterAsFile = lambda p, name, ctx: p.get(name, "") or ""
     algo.parameterAsMatrix = lambda p, name, ctx: p.get(name, [])
     algo.processAlgorithm(params, MagicMock(), fb)
-    (wall_file,) = (output_dir / "walls").glob("px*/wall_hts.tif")
-    return read_band(wall_file)
+
+    # What the calculation step gets: it loads the directory with
+    # SurfaceData.load(), which reads cleaned/wall_height (the .npy when
+    # present), not the wall cache under walls/. The first version of this
+    # test read walls/ and passed while the calculation still had 1 m walls.
+    import solweig
+
+    loaded = solweig.SurfaceData.load(output_dir)
+    walls = np.array(loaded.wall_height, dtype=np.float32)
+    (cache_file,) = (output_dir / "walls").glob("px*/wall_hts.tif")
+    np.testing.assert_array_equal(read_band(cache_file), walls)
+    np.testing.assert_array_equal(read_band(output_dir / "cleaned" / "wall_height.tif"), walls)
+    assert loaded.wall_aspect is not None and loaded.wall_aspect.shape == walls.shape
+    return walls
 
 
 @pytest.mark.slow

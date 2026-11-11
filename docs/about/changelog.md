@@ -32,7 +32,9 @@ the model: validation numbers are identical to b100.
   preparation step had no effect. Walls for a custom limit were computed
   and then dropped, and the calculation read the walls found with the
   default 1 m limit. The saved wall rasters are now replaced. Runs that left
-  the option at 1 m are unchanged.
+  the option at 1 m are unchanged. *Correction: this fix was incomplete.
+  b101 and b102 replaced the wall cache but not the copy the calculation
+  loads, so the option still had no effect. It works from b103.*
 - **Plugin: sub-hourly UMEP met files.** Every record is now a timestep, as
   in UMEP. The plugin previously kept only the on-the-hour records of, for
   example, a 10-minute file. A new advanced option, "run only the

@@ -788,6 +788,14 @@ class SurfaceData:
         # truth prevents check/save drift if new kwargs are added later.
         from ..cache import compare_prepare_fingerprints, compute_prepare_fingerprint
 
+        # The pixel size as the caller gave it (None = take the DSM's). The
+        # local ``pixel_size`` is replaced by the resolved value further down,
+        # and the fingerprint saved at the end must match the one checked here
+        # on the next call. Reading the local at save time stored 1.0 against
+        # a request of None, so the fast path never hit for callers that left
+        # pixel_size unset (every run up to 0.1.0b102).
+        requested_pixel_size = None if pixel_size is None else float(pixel_size)
+
         def _build_prepare_fingerprint() -> dict:
             return compute_prepare_fingerprint(
                 sources={
@@ -800,7 +808,7 @@ class SurfaceData:
                     "wall_aspect": cast("str | Path | None", wall_aspect),
                 },
                 kwargs={
-                    "pixel_size": pixel_size,
+                    "pixel_size": requested_pixel_size,
                     "bbox": list(bbox) if bbox is not None else None,
                     "trunk_ratio": float(trunk_ratio),
                     "dsm_relative": bool(dsm_relative),

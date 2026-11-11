@@ -49,7 +49,7 @@ changelog=
     - Large rasters: saving results used far more memory than needed, because each preview image was built at the raster's full resolution. Fixed; the memory used at the end of a run no longer grows with raster size.
     - GPU: automatic tile sizes were based on an estimate of GPU memory use that was too low. Tiles are now somewhat smaller on machines where GPU memory is the limit, which avoids running out of GPU memory.
     0.1.0-beta101
-    - "Minimum wall height" (advanced option of the surface preparation step) had no effect: the calculation still used walls found with the default 1 m limit. It now changes the walls that are saved and used. Runs that left the option at 1 m are unchanged.
+    - "Minimum wall height" (advanced option of the surface preparation step) had no effect: the calculation still used walls found with the default 1 m limit. It now changes the walls that are saved and used. Runs that left the option at 1 m are unchanged. (Correction: incomplete in beta101 and beta102, where the option still had no effect on the calculation; fixed in beta103.)
     - UMEP/SUEWS met files with sub-hourly records (for example every 10 minutes): every record is now a timestep, as in UMEP. Earlier versions kept only the on-the-hour records. The new advanced option "run only the on-the-hour records" restores that behaviour for faster runs. Hourly files are unchanged.
     - Hourly met files whose records are stamped off the hour (for example at minute 30) are now read; they previously gave "no valid timesteps".
     0.1.0-beta100
