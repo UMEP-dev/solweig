@@ -60,6 +60,16 @@ def _generate_preview_png(data_arr: np.ndarray, out_path: Path, max_size: int = 
     try:
         from PIL import Image
 
+        # Thin a large raster before anything else. The colour mapping below
+        # makes float64 RGBA copies (about 83 bytes per pixel in all, measured),
+        # which for the full array was 40 GB on a 500 Mpx raster, for a 512 px
+        # thumbnail. Taking every n-th pixel leaves at least twice the
+        # thumbnail size for the final resize. Rasters under 4 x max_size on
+        # the long side are not thinned and give the same preview as before.
+        step = max(data_arr.shape) // (2 * max_size)
+        if step > 1:
+            data_arr = data_arr[::step, ::step]
+
         # Handle NaN values
         valid_mask = ~np.isnan(data_arr)
         if not np.any(valid_mask):
