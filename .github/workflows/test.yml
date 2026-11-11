@@ -174,11 +174,14 @@ jobs:
           RUSTFLAGS: "-D warnings"
 
   test-qgis-compat:
-    name: Test QGIS compatibility (NumPy 1.26)
-    # Pinned to 24.04: its system Python is 3.12 and its python3-gdal is built
-    # against NumPy 1.26, the combination this job stands for. The newer image
-    # that ubuntu-latest will move to has neither.
-    runs-on: ubuntu-24.04
+    name: Test QGIS compatibility (GDAL backend, QGIS 4 series)
+    # Ubuntu 26.04 carries GDAL 3.12 and NumPy 2.3 as system packages, the
+    # same series as QGIS 4.2 (its macOS bundle has GDAL 3.12.4 and NumPy
+    # 2.5). The plugin requires QGIS 4, so this is the combination to test.
+    # Up to 2026-11 the job tested NumPy 1.26 with an older GDAL, from the
+    # QGIS 3 days. Pinned by name so that a later change of ubuntu-latest
+    # does not move the versions without anyone deciding it.
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -222,11 +225,21 @@ jobs:
           source .venv/bin/activate
           maturin develop --release
 
-      - name: Verify NumPy version
-        run: .venv/bin/python -c "import numpy; assert numpy.__version__.startswith('1.26'), f'Expected NumPy 1.26.x, got {numpy.__version__}'"
-
-      - name: Verify GDAL backend is used
-        run: .venv/bin/python -c "from osgeo import gdal; from solweig import io; assert io.GDAL_ENV, 'Expected GDAL backend'; print('GDAL', gdal.__version__)"
+      - name: Verify the versions under test and the GDAL backend
+        # Fails if the image stops providing the QGIS 4 series, so the job
+        # cannot drift to other versions unnoticed.
+        run: |
+          .venv/bin/python - <<'EOF'
+          import sys
+          import numpy
+          from osgeo import gdal
+          from solweig import io
+          print("Python", sys.version.split()[0], "| NumPy", numpy.__version__, "| GDAL", gdal.__version__)
+          assert io.GDAL_ENV, "expected the GDAL backend"
+          assert int(numpy.__version__.split(".")[0]) >= 2, f"expected NumPy 2.x, got {numpy.__version__}"
+          major, minor = (int(part) for part in gdal.__version__.split(".")[:2])
+          assert (major, minor) >= (3, 12), f"expected GDAL 3.12 or newer, got {gdal.__version__}"
+          EOF
         env:
           UMEP_USE_GDAL: "1"
 

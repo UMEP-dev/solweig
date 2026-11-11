@@ -188,7 +188,7 @@ Plus: **benchmark tests** (`tests/benchmarks/`) for performance and memory regre
 | **test** | Matrix: Python 3.11, 3.12, 3.13 — excludes slow tests |
 | **test-other-os** | Fast suite on macOS and Windows with `SOLWEIG_NO_GPU=1`. Informational (`continue-on-error`) since 2026-11; make it required once it has stayed green |
 | **rust-tests** | `cargo test --lib` on macOS (pyo3 `extension-module` test binaries do not link on Linux) |
-| **test-qgis-compat** | GDAL backend, NumPy 1.26, `UMEP_USE_GDAL=1`. Pinned to `ubuntu-24.04` and built on the system Python with the distribution's prebuilt `python3-gdal` (a venv with `--system-site-packages`, NumPy pinned to the system version). Runs the backend import fence and `tests/test_backend_parity.py`. Do not move it to `ubuntu-latest`: that image is Ubuntu 26.04 with NumPy 2.3 |
+| **test-qgis-compat** | GDAL backend on the QGIS 4 series, `UMEP_USE_GDAL=1`. Pinned to `ubuntu-26.04` (system GDAL 3.12, NumPy 2.3; QGIS 4.2's macOS bundle has GDAL 3.12.4, NumPy 2.5). Built on the system Python with the distribution's prebuilt `python3-gdal` (a venv with `--system-site-packages`, NumPy pinned to the system version). A step asserts NumPy 2.x and GDAL 3.12 or newer. Runs the backend import fence and `tests/test_backend_parity.py`. When QGIS moves to a new GDAL series, move the image with it |
 | **validation** | 3 real-world sites (Kronenhuset, Gustav Adolfs, GVC) |
 | **benchmarks** | Memory regression gates only (`-m "not gpu_perf_gate"`, bytes-per-pixel ceiling). Timing-based perf gates are local-only via `poe test_gpu_perf_gate` (moved off CI in 6457f32). |
 | **test-spec** | Scientific parity gates (vs reference UMEP implementation) |
