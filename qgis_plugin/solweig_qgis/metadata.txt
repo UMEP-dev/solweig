@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta99
+version=0.1.0-beta100
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,9 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta100
+    - Small change to results near walls: ground-reflected and ground-emitted radiation is now evaluated at the height of the body's centre of gravity (1.1 m standing, 0.75 m sitting), as in UMEP, instead of at the person's full height. Mean radiant temperature changes by about 0.1 degrees C on average and by up to 2 degrees C at single pixels.
+    - Clearer messages: unknown output names are rejected, gaps in EPW weather files are reported, and a run that falls back from the anisotropic to the isotropic sky says so.
     0.1.0-beta99
     - Internal release with no change for plugin users: the calculation core can now be called directly from other Rust programs. Results are identical to beta98.
     0.1.0-beta98

@@ -18,11 +18,18 @@ a glance.
 
 ---
 
-## Summary — v0.1.0b99 (2026-11-11)
+## Summary — v0.1.0b100 (2026-11-11)
 
-b99 restructures the Rust timestep code so that other Rust projects can
-call it, with no change to the model and validation numbers identical to
-b98.
+b100 changes the height at which the ground view factor is evaluated. Up to
+b99 it was the person's stature (`HumanParams.height`, 1.75 m by default);
+the reference implementation uses the height of the posture's centre of
+gravity (1.1 m standing, 0.75 m sitting), and b100 does the same. Across the
+three sites the grid-mean Tmrt moves by 0.02 to 0.13 °C, single pixels by up
+to 1.9 °C, and the seven-day RMSE range moves from 3.3–7.0 °C to 3.3–6.9 °C.
+The table below is the b100 result.
+
+b99 restructured the Rust timestep code so that other Rust projects can
+call it, with no change to the model.
 
 b98 was a robustness release with no change to the model: it fixed three
 cases in which the GPU reused inputs uploaded for a previous surface, and
@@ -47,9 +54,9 @@ CSVs are untouched. Details and the evidence are in
 
 | Metric               | Kronenhuset | Gustav Adolfs |          GVC |
 | -------------------- | ----------: | ------------: | -----------: |
-| Tmrt RMSE range (°C) |         6.3 |       3.3–4.8 |      4.1–7.0 |
-| Tmrt R² range        |        0.64 |     0.94–0.97 |    0.58–0.87 |
-| Tmrt bias range (°C) |        +2.0 |  +0.5 to +2.3 | +0.7 to +3.8 |
+| Tmrt RMSE range (°C) |         6.5 |       3.3–4.9 |      3.6–6.9 |
+| Tmrt R² range        |        0.62 |     0.94–0.97 |    0.61–0.88 |
+| Tmrt bias range (°C) |        +2.0 |  +0.6 to +2.4 | +0.5 to +3.6 |
 | Days                 |           1 |             3 |            3 |
 | Total obs hours      |          12 |            43 |           30 |
 
@@ -83,7 +90,7 @@ CSVs are untouched. Details and the evidence are in
   modelled window is therefore about an hour short of the observed one; the
   shadow boundary leaves the POI early. Outside those two hours the model
   sits +0.3 to +4.3 °C above the observations. This single transition
-  drives most of the 6.3 °C RMSE.
+  drives most of the 6.5 °C RMSE.
 - The L↓ panel shows a steady +17 to +26 W/m² offset across every hour. The
   cool-wall bias is systematic and independent of sun position (see Known
   limitations).
@@ -108,7 +115,7 @@ CSVs are untouched. Details and the evidence are in
   early: at 16 h the model has the POI in shade (17 °C) while the
   observation is still sunlit (29 °C).
 - 2006-07-26 (clear summer): K↓ tracks closely; Tmrt runs +2 to +7 °C warm
-  through the middle of the day (bias +2.3 °C, RMSE 4.8 °C) and the evening
+  through the middle of the day (bias +2.4 °C, RMSE 4.9 °C) and the evening
   shade transition at 19 h is again modelled early (−9 °C).
 - 2006-08-01 (clear summer): RMSE 3.3 °C, R² 0.97. The one-hour K↓ dip at
   13 h (modelled 470 vs 770 W/m² observed) is a modelled shade pass that the
@@ -132,13 +139,13 @@ CSVs are untouched. Details and the evidence are in
 
 ![GVC POI timeseries](tests/validation/gvc/timeseries_plots/timeseries.png)
 
-- 2010-07-07: RMSE 4.1 °C, bias +0.7 °C. The POI goes into shade late in
+- 2010-07-07: RMSE 4.0 °C, bias +0.5 °C. The POI goes into shade late in
   the morning; the model keeps it sunlit one hour longer (11 h: modelled
   54 °C vs 42 °C observed) and then follows the observations closely.
-- 2010-07-10: only 7 hours, all in shade; modelled Tmrt sits +3.5 to +5 °C
-  above observed throughout (bias +3.8 °C, no abrupt divergence; the L↓
+- 2010-07-10: only 7 hours, all in shade; modelled Tmrt sits about 3 to
+  4.5 °C above observed throughout (bias +3.3 °C, no abrupt divergence; the L↓
   cool-wall bias and K↑ both contribute).
-- 2010-07-12: RMSE 7.0 °C, bias +3.7 °C. The model keeps the POI sunlit
+- 2010-07-12: RMSE 6.9 °C, bias +3.6 °C. The model keeps the POI sunlit
   through 10 and 11 h where the observations show it already shaded,
   raising Tmrt by 10 to 13 °C in those two hours, and stays +3 to +8 °C
   warm in the shade that follows. This is the dominant driver of the day's
@@ -220,8 +227,8 @@ positive bias.
 When the POI sits adjacent to dense canopy or a shadow edge, the modelled
 sun/shade state is sensitive to sub-pixel CDSM position at 2 m resolution.
 This produces day-by-day swings of several °C in Tmrt, most visible at
-GVC, where 2010-07-07 has RMSE 4.1 °C (bias +0.7 °C) but 2010-07-12 reaches
-7.0 °C (bias +3.7 °C) using the same site, POI, and surface model.
+GVC, where 2010-07-07 has RMSE 4.0 °C (bias +0.5 °C) but 2010-07-12 reaches
+6.9 °C (bias +3.6 °C) using the same site, POI, and surface model.
 
 ---
 
@@ -239,7 +246,7 @@ old-clock baseline column matches the b89 to b95 summary. The b90 to b96
 scheme columns are from the 2026-10-01 run. POI Tmrt against measurements,
 RMSE / bias (°C):
 
-| Site | Day | Baseline, old clock | Baseline, corrected | Scheme b90 to b96, old clock | Scheme b90 to b96, corrected | Scheme b97, corrected |
+| Site | Day | Baseline, old clock | Baseline b96 to b99, corrected | Scheme b90 to b96, old clock | Scheme b90 to b96, corrected | Scheme b97, corrected |
 | --- | --- | --- | --- | --- | --- | --- |
 | Kronenhuset | 2005-10-07 | 6.6 / +2.6 | 6.3 / +2.0 | 22.0 / +21.4 | 21.5 / +20.9 | 11.4 / +10.0 |
 | Gustav Adolfs | 2005-10-11 | 5.7 / +1.5 | 4.2 / +0.5 | 13.6 / +12.7 | 12.3 / +11.7 | 4.5 / +2.5 |
@@ -248,6 +255,11 @@ RMSE / bias (°C):
 | GVC | 2010-07-07 | 2.4 / +1.4 | 4.1 / +0.7 | 14.9 / +14.7 | 14.6 / +13.9 | 5.6 / +3.8 |
 | GVC | 2010-07-10 | 3.7 / +3.4 | 4.2 / +3.8 | 18.8 / +18.7 | 18.5 / +18.4 | 7.7 / +7.5 |
 | GVC | 2010-07-12 | 6.9 / +5.7 | 7.0 / +3.7 | 18.3 / +18.1 | 17.5 / +16.6 | 8.1 / +6.3 |
+
+The baseline columns predate the b100 change to the ground view factor
+height, which moves the baseline by at most 0.5 °C RMSE (current values are
+in the summary table). The scheme does not use the ground view factor step,
+so its columns are unaffected.
 
 The clock correction moved the b90 to b96 scheme numbers by at most 2 °C.
 Their bias was consistently positive: RMSE 12.3 to 21.5 °C and bias +11.7
@@ -325,7 +337,7 @@ Gothenburg sites (~189 hours):
 | L↓        | 0.73 | 17.5 W/m² |
 | L↑        | 0.94 | 15.6 W/m² |
 
-The Tmrt RMSE range from this implementation (3.3–7.0 °C across the seven
+The Tmrt RMSE range from this implementation (3.3–6.9 °C across the seven
 day-site combinations) brackets the paper's aggregated 4.8 K. The paper
 validates against 1-minute averaged measurements, whereas the met data used
 here are hourly, which limits achievable accuracy at sub-hour timescales such
@@ -391,6 +403,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b97 | 2026-11-10 |     3 |      3.3–7.0 °C | (b) **Anisotropic sky without vegetation** (issue 15). With no canopy layer the SVF step wrote a copy of the building shadow matrix into the veg-blocks-building matrix, so every building-blocked sky patch was routed to the vegetation emitter and emitted at air temperature; the sunlit wall temperature was unused. Both vegetation matrices are now all-visible in that case, as in the wall-scheme branch of umep-solweig's `svfForProcessing153`. The tiled SVF path, which left both matrices at zero and so treated every patch as vegetation, is corrected the same way, and the per-timestep calculation applies the convention whenever the surface has no CDSM, so existing caches and UMEP exports need no recomputation. In the reporter's synthetic scene Tmrt 4 m from a sunlit wall rises by 2.05 K at 13 h and 4.30 K at 17 h and now equals the result with a distant tree present. Runs with a CDSM are unchanged: all three validation sites have one, and their numbers are identical to b96 (full suite 1193 passed). New gate `tests/spec/test_aniso_no_vegetation_routing.py`. |
 | 0.1.0b98 | 2026-11-10 |     3 |      3.3–7.0 °C | Robustness release, **no model change**; validation numbers identical to b97 (full suite 1217 passed). (a) **GPU reuse of a previous surface's inputs**, three paths, all within one process. Shadows: static rasters were matched by address and shape, so a new surface whose DSM landed on a freed surface's address was cast from the old heights (in a loop over three 120 × 120 layouts, 3 of 9 runs had about 2,400 of 14,400 pixels mis-shadowed and Tmrt off by up to 25.6 °C); a GPU SVF run for another surface also overwrote the shared DSM buffer. Now matched by a full-content hash, and the SVF paths invalidate the record. Anisotropic sky: matched by address plus a few sampled values; now re-uploaded whenever the surface or its shadow matrices change. Ground view factors: the resident building geometry was matched by grid shape, so alternating between two same-size surfaces gave Tmrt off by up to 7 °C and K↑/L↑ off by 55 to 70 W/m²; each geometry cache now has an identity and is re-uploaded on demand. A single `calculate()` run on one surface, which is what the validation suite does, was not affected by any of the three. Per-timestep cost at 2000 × 2000 unchanged (79 ms against 82 ms anisotropic, 109 ms against 109 ms isotropic). Gate `tests/spec/test_gpu_static_input_reuse.py`. (b) `calculate()` checks every layer's shape against the DSM before the Rust call; a mis-shaped albedo, emissivity or SVF array had aborted the interpreter. (c) SVF and wall caches are validated on a hash of every value as well as the 10,000-value sample, so a small edit to a large raster no longer reuses a stale cache; existing caches stay valid. (d) A warning is logged when the summary's hour totals will over-count (weather records further apart than their timestep, or unevenly spaced). (e) CI now runs the slow-marked SVF, GVF and wall-geometry goldens, which no job had collected. |
 | 0.1.0b99 | 2026-11-11 |     3 |      3.3–7.0 °C | Rust interface for other Rust projects (issue 14), **no model change**; validation numbers identical to b98. The body of the per-timestep closure in `compute_timestep` (1,243 lines) was moved without modification into `compute_timestep_rust`, which takes plain `ndarray` views (`rust/src/pipeline_inputs.rs`); the Python binding now calls it. A new public module `rustalgos::api` re-exports the callable entry points and their types, and the crate is also built as an `rlib`. Full suite 1217 passed with no golden fixture regenerated. |
+| 0.1.0b100 | 2026-11-11 |     3 |      3.3–6.9 °C | (a) **Ground view factor height follows the posture, as in the reference.** The GVF step was given `HumanParams.height` (stature, 1.75 m by default); umep-solweig uses `Posture.*.height`, the centre of gravity (1.1 m standing, 0.75 m sitting), to set the `first` and `second` search heights. At 1 m pixels the search range drops from 35 to 22 pixels. `HumanParams.posture_height` now supplies it, and stature affects PET only. Effect at the validation sites: grid-mean Tmrt 0.02–0.13 °C, single pixels up to 1.9 °C. Kronenhuset 6.3 → 6.5 °C (R² 0.64 → 0.62, bias +2.0); Gustav Adolfs 3.3–4.8 → 3.3–4.9 °C (R² 0.94–0.97, bias +0.6 to +2.4); GVC 4.1–7.0 → 3.6–6.9 °C (R² 0.58–0.87 → 0.61–0.88, bias +0.5 to +3.6; 2010-07-10 improves most, 4.2 → 3.6 °C). No golden fixture changed (they call the Rust GVF with explicit heights); new gate in `tests/test_input_hardening.py`. Validation plots regenerated. (b) Input hardening with no numerical change: unknown names in `outputs` raise before anything is written; a weather series reused with a different `Location` has its sun positions recomputed; `Weather.from_epw` reports how many missing values it filled; the default anisotropic sky logs when it falls back to isotropic for lack of shadow matrices, and the run metadata records what ran. |
 
 ---
 

@@ -1,5 +1,28 @@
 # Release notes
 
+## 0.1.0b100 — 2026-11-11
+
+One small change to results, and four input checks.
+
+- **Ground view factor height.** Ground-reflected shortwave and
+  ground-emitted longwave are now evaluated at the height of the body's
+  centre of gravity for the posture (1.1 m standing, 0.75 m sitting), as in
+  the reference implementation. Up to b99 the stature
+  (`HumanParams.height`, 1.75 m by default) was used. Stature now affects
+  PET only. At the validation sites the grid-mean Tmrt changes by 0.02 to
+  0.13 °C and single pixels by up to 1.9 °C; the Tmrt RMSE range moves from
+  3.3–7.0 °C to 3.3–6.9 °C.
+- **Unknown output names** in `outputs` raise `ConfigurationError` before
+  anything is written. They previously produced folders of empty rasters.
+- **Changed location.** A weather series reused with a different `Location`
+  has its sun positions recomputed. They were previously kept from the
+  first run.
+- **EPW gaps.** `Weather.from_epw` logs how many missing values it replaced
+  with defaults, per variable.
+- **Isotropic fallback.** The anisotropic sky is the default but needs
+  shadow matrices. A run without them logs that it used the isotropic sky,
+  and `run_metadata.json` records what ran.
+
 ## 0.1.0b99 — 2026-11-11
 
 No change for Python or QGIS users, and no numerical change. The Rust core
