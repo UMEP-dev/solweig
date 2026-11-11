@@ -317,12 +317,14 @@ sessions should know about.
    extension):
 
    ```bash
-   maturin develop --release
+   uv run maturin develop --release     # only if Rust changed since the last build
    /Applications/QGIS-final-4_2_0.app/Contents/MacOS/QGIS-final-4_2_0 --noplugins --code scripts/qgis_release_check.py
-   poe qgis_check        # compares with the rasterio backend, prints every step
+   uv run poe qgis_check                # compares with the rasterio backend, prints every step
    ```
 
-   QGIS opens, works for about a minute and quits. `poe qgis_check` must end
+   Give him the commands with `uv run` in front: `maturin` and `poe` are not
+   on his shell's PATH. QGIS opens, works for about a minute and quits.
+   `poe qgis_check` must end
    with `ALL OK` and report the version being released. Ask Gareth to run it;
    do not tag a release in scope without it. For releases out of scope, say so
    in the hand-over ("QGIS check not needed: no plugin or raster I/O change").
