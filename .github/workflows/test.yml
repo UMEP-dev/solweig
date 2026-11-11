@@ -175,7 +175,10 @@ jobs:
 
   test-qgis-compat:
     name: Test QGIS compatibility (NumPy 1.26)
-    runs-on: ubuntu-latest
+    # Pinned to 24.04: its system Python is 3.12 and its python3-gdal is built
+    # against NumPy 1.26, the combination this job stands for. The newer image
+    # that ubuntu-latest will move to has neither.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -185,11 +188,15 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python 3.12
-        run: uv python install 3.12
-
-      - name: Install GDAL system libraries
-        run: sudo apt-get update && sudo apt-get install -y libgdal-dev gdal-bin python3-gdal
+      - name: Install GDAL with its Python bindings (prebuilt)
+        # The distribution's ready-built bindings, as QGIS on Linux uses them.
+        # Up to 2026-11 this job installed libgdal-dev (several hundred
+        # packages) and compiled the bindings from source on every run.
+        # The old install also failed outright when the Ubuntu mirrors were
+        # slow (26 minutes, then exit 100, on 2026-11-11), hence the retries.
+        run: |
+          sudo apt-get -o Acquire::Retries=5 update
+          sudo apt-get -o Acquire::Retries=5 install -y --no-install-recommends python3-gdal python3-numpy
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -201,25 +208,30 @@ jobs:
           shared-key: maturin-develop
           workspaces: rust
 
-      - name: Install dependencies (QGIS compat - NumPy 1.26)
-        run: uv sync --group qgis-compat
-
-      - name: Install GDAL Python bindings matching system
-        run: uv pip install --no-build-isolation "gdal==$(gdal-config --version)"
+      - name: Create an environment on the system Python that sees the system GDAL
+        # NumPy is pinned to the system's version: a newer NumPy inside the
+        # environment would shadow it and break the system GDAL bindings.
+        run: |
+          uv venv --python /usr/bin/python3 --system-site-packages .venv
+          NUMPY_VERSION=$(/usr/bin/python3 -c "import numpy; print(numpy.__version__)")
+          uv pip install --python .venv/bin/python "numpy==${NUMPY_VERSION}" pytest maturin \
+            "pyproj>=3.7.0" "shapely>=2.0.4" "rasterio>=1.3.0" "tqdm>=4.67.1" "pillow>=9.0.0"
 
       - name: Build Rust extension
-        run: uv run maturin develop --release
+        run: |
+          source .venv/bin/activate
+          maturin develop --release
 
       - name: Verify NumPy version
-        run: uv run python -c "import numpy; assert numpy.__version__.startswith('1.26'), f'Expected NumPy 1.26.x, got {numpy.__version__}'"
+        run: .venv/bin/python -c "import numpy; assert numpy.__version__.startswith('1.26'), f'Expected NumPy 1.26.x, got {numpy.__version__}'"
 
       - name: Verify GDAL backend is used
-        run: uv run python -c "from solweig import io; assert io.GDAL_ENV, 'Expected GDAL backend'"
+        run: .venv/bin/python -c "from osgeo import gdal; from solweig import io; assert io.GDAL_ENV, 'Expected GDAL backend'; print('GDAL', gdal.__version__)"
         env:
           UMEP_USE_GDAL: "1"
 
       - name: Run tests (excluding slow) with GDAL backend
-        run: uv run python -m pytest tests/ -m 'not slow' -v --tb=short
+        run: .venv/bin/python -m pytest tests/ -m 'not slow' -v --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}
           UMEP_USE_GDAL: "1"
