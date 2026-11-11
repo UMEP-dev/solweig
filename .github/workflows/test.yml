@@ -248,6 +248,8 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
           UMEP_USE_GDAL: "1"
+          # The backend parity test must run here, not skip.
+          SOLWEIG_REQUIRE_BACKEND_PARITY: "1"
 
   validation:
     name: Validation suite (3 sites)

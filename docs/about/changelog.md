@@ -32,6 +32,10 @@ No change to the model: validation numbers are identical to b100.
   released before the folders are removed, and a warning is logged if they
   cannot be. Found by the first Windows test run; the fix has not yet been
   confirmed on Windows.
+- **CRS mismatch warning on the GDAL backend.** The same coordinate system
+  written in two WKT flavours is no longer at risk of being reported as a
+  different one: the GDAL branch now applies the rule the rasterio branch
+  already had (different only when both resolve to EPSG codes that differ).
 - **Backend separation.** On the GDAL backend the test session blocks
   imports of rasterio, pyproj and shapely, and a new test runs the same
   raster I/O, surface preparation and model runs on both backends and

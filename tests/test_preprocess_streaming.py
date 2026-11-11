@@ -59,14 +59,15 @@ def _file_prepare_cleaned(tmp_path, dem, ndsm, cdsm):
     """File-mode prepare of a relative-height scene (DEM at half resolution so
     the resample path is exercised); returns the cleaned layers from the .npy
     sidecars."""
-    import pyproj
     from solweig import io
+
+    from tests.raster_helpers import crs_wkt
 
     src = tmp_path / "src"
     src.mkdir(parents=True)
     rows = ndsm.shape[0]
     gt = [300000.0, 1.0, 0.0, 6_400_000.0 + rows, 0.0, -1.0]
-    crs = pyproj.CRS.from_epsg(3006).to_wkt()  # projected, metres
+    crs = crs_wkt(3006)  # projected, metres
     io.save_raster(str(src / "dsm.tif"), ndsm, gt, crs)
     io.save_raster(str(src / "cdsm.tif"), cdsm, gt, crs)
     # DEM at 2 m so prepare must resample it to the 1 m target grid

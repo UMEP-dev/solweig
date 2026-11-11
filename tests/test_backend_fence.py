@@ -45,9 +45,12 @@ def test_fence_blocks_rasterio_and_names_the_importer_on_the_gdal_backend():
 
 
 def test_fence_is_absent_on_the_standard_backend():
-    pytest.importorskip("rasterio")
+    # Runs in a child process without UMEP_USE_GDAL, so it is valid in a GDAL
+    # session too. (pytest.importorskip here would trip the fence itself.)
     out = _probe(None)
     assert "installed False" in out
+    if "No module named" in out:
+        pytest.skip("rasterio is not installed")
     assert "rasterio imported" in out
 
 
@@ -68,6 +71,10 @@ def test_no_test_module_imports_rasterio_directly():
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             stripped = line.strip()
-            if stripped.startswith(("import rasterio", "from rasterio")):
-                offenders.append(f"{path.relative_to(REPO)}:{number}")
-    assert not offenders, f"direct rasterio imports in tests: {offenders}"
+            for name in BLOCKED_ON_GDAL_BACKEND:
+                direct = stripped.startswith((f"import {name}", f"from {name}"))
+                # importorskip does not skip here: the fence raises, it does not report "not installed".
+                skipping = f'importorskip("{name}' in stripped
+                if direct or skipping:
+                    offenders.append(f"{path.relative_to(REPO)}:{number} ({name})")
+    assert not offenders, f"tests that use a fenced package directly: {offenders}"

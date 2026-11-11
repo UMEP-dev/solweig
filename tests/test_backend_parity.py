@@ -51,10 +51,16 @@ def _run_probe(scratch: Path, *, gdal: bool) -> dict:
 
 
 def test_backends_give_identical_results(tmp_path):
-    if not _available("rasterio", gdal=False):
-        pytest.skip("rasterio is not installed")
-    if not _available("osgeo.gdal", gdal=True):
-        pytest.skip("GDAL Python bindings are not installed (runs in the CI job test-qgis-compat)")
+    # The CI job that exists for this comparison sets the variable below, so a
+    # missing backend there is a failure and cannot pass as a skip.
+    required = os.environ.get("SOLWEIG_REQUIRE_BACKEND_PARITY", "").strip() == "1"
+    for module, gdal, why in (
+        ("rasterio", False, "rasterio is not installed"),
+        ("osgeo.gdal", True, "GDAL Python bindings are not installed (runs in the CI job test-qgis-compat)"),
+    ):
+        if not _available(module, gdal=gdal):
+            assert not required, f"SOLWEIG_REQUIRE_BACKEND_PARITY=1 but {why}"
+            pytest.skip(why)
 
     standard = _run_probe(tmp_path / "rasterio", gdal=False)
     gdal = _run_probe(tmp_path / "gdal", gdal=True)

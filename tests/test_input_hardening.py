@@ -157,17 +157,22 @@ def test_complete_epw_is_silent(tmp_path, warnings):
 
 
 def test_layer_in_a_different_crs_is_reported(monkeypatch):
-    """Layers are aligned by coordinates without reprojection, so a CRS mismatch misplaces them."""
-    pyproj = pytest.importorskip("pyproj")
+    """Layers are aligned by coordinates without reprojection, so a CRS mismatch misplaces them.
+
+    Runs on the session's own backend (pyproj or GDAL): the same CRS written
+    as WKT1 and as WKT2 must not be reported on either.
+    """
     from solweig.models import surface_loading
 
-    monkeypatch.setattr(surface_loading, "GDAL_ENV", False)
+    from tests.raster_helpers import crs_wkt
+
     messages: list[str] = []
     monkeypatch.setattr(surface_loading.logger, "warning", messages.append)
 
-    sweref99_tm = pyproj.CRS.from_epsg(3006).to_wkt()
-    sweref99_1200 = pyproj.CRS.from_epsg(3007).to_wkt()
-    same_crs_other_text = pyproj.CRS.from_epsg(3006).to_wkt(version="WKT1_GDAL")
+    sweref99_tm = crs_wkt(3006)
+    sweref99_1200 = crs_wkt(3007)
+    same_crs_other_text = crs_wkt(3006, wkt1=True)
+    assert same_crs_other_text != sweref99_tm
 
     surface_loading.warn_if_crs_differs("cdsm", sweref99_tm, sweref99_tm)
     surface_loading.warn_if_crs_differs("cdsm", same_crs_other_text, sweref99_tm)

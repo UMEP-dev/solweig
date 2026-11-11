@@ -61,6 +61,20 @@ def tiff_structure(path: str | Path) -> dict:
         }
 
 
+def crs_wkt(epsg: int, *, wkt1: bool = False) -> str:
+    """WKT of an EPSG code, as WKT2 (default) or as the older WKT1 text of the same CRS."""
+    if gdal_backend_requested():
+        from osgeo import osr
+
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(epsg)
+        return srs.ExportToWkt(["FORMAT=WKT1_GDAL" if wkt1 else "FORMAT=WKT2_2019"])
+    import pyproj
+
+    crs = pyproj.CRS.from_epsg(epsg)
+    return crs.to_wkt(version="WKT1_GDAL") if wkt1 else crs.to_wkt()
+
+
 def write_geotiff(
     path: str | Path,
     array: np.ndarray,

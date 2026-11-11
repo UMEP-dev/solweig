@@ -27,6 +27,7 @@ dependency on ``surface.py``.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -147,7 +148,20 @@ def _same_crs(a: str, b: str) -> bool | None:
             sa, sb = osr.SpatialReference(), osr.SpatialReference()
             sa.ImportFromWkt(a)
             sb.ImportFromWkt(b)
-            return bool(sa.IsSame(sb))
+            if sa.IsSame(sb):
+                return True
+            # Same rule as the pyproj branch below: a structural mismatch
+            # alone (WKT1 against WKT2, differing names) is not a different
+            # CRS. Call them different only when both resolve to EPSG codes
+            # and the codes differ.
+            codes = []
+            for srs in (sa, sb):
+                with contextlib.suppress(Exception):
+                    srs.AutoIdentifyEPSG()
+                codes.append(srs.GetAuthorityCode(None))
+            if all(codes):
+                return codes[0] == codes[1]
+            return None
         from pyproj import CRS as pyproj_CRS
 
         ca, cb = pyproj_CRS.from_wkt(a), pyproj_CRS.from_wkt(b)
