@@ -344,7 +344,7 @@ class TestComputeMaxTilePixels:
         solweig_pixels = compute_max_tile_pixels(context="solweig")
         svf_pixels = compute_max_tile_pixels(context="svf")
 
-        assert solweig_pixels == int(budget * headroom) // 360  # _TIMESTEP_GPU_BPP
+        assert solweig_pixels == int(budget * headroom) // 660  # _TIMESTEP_GPU_BPP
         assert svf_pixels == int(budget * headroom) // 384  # _SVF_GPU_BPP
 
     def test_no_gpu_memory_budget_uses_conservative_fallback(self, monkeypatch):
@@ -364,11 +364,11 @@ class TestComputeMaxTilePixels:
         solweig_pixels = compute_max_tile_pixels(context="solweig")
         svf_pixels = compute_max_tile_pixels(context="svf")
 
-        assert solweig_pixels == int(gpu_budget * headroom) // 360
+        assert solweig_pixels == int(gpu_budget * headroom) // 660
         assert svf_pixels == int(gpu_budget * headroom) // 384
 
     def test_svf_and_solweig_use_different_bpp(self, monkeypatch):
-        """SVF (384 B/px) should produce smaller tiles than solweig (360 B/px)."""
+        """The timestep contexts (660 B/px) need smaller tiles than SVF (384 B/px)."""
         budget = 4_000_000_000
         headroom = compute_max_tile_pixels.__globals__["_GPU_HEADROOM"]
 
@@ -384,8 +384,8 @@ class TestComputeMaxTilePixels:
         solweig_pixels = compute_max_tile_pixels(context="solweig")
 
         assert svf_pixels == int(budget * headroom) // 384
-        assert solweig_pixels == int(budget * headroom) // 360
-        assert svf_pixels < solweig_pixels
+        assert solweig_pixels == int(budget * headroom) // 660
+        assert solweig_pixels < svf_pixels
 
     def test_available_ram_takes_precedence_over_total(self, monkeypatch):
         """When available RAM < total, tiles should be sized to available."""

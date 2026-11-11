@@ -82,14 +82,22 @@ _RAM_FRACTION = _parse_env_float("SOLWEIG_RAM_FRACTION", 0.50)
 # else a sane heuristic); Python divides that budget by these BPP values
 # to determine tile sizes.
 #
-# Timestep context ("solweig"): shadow + GVF run together
+# Timestep context ("solweig"): the shadow, GVF and anisotropic-sky contexts
+# keep their buffers resident at the same time.
 #   Shadow (shadow_gpu.rs allocate_buffers):
 #     17 f32 storage + 10× staging = 27 × 4 = 108, ~120 with overhead
 #   GVF (gvf_gpu.rs ensure_buffers_locked, 18 azimuths):
 #     lup/albshadow/sunwall (12) + blocking_distance 18×4 (72)
-#     + facesh 18×4 (72) + outputs 10×4 (40) + staging 10×4 (40) = 236
-#   Combined: 120 + 236 = 356, rounded to 360
-_TIMESTEP_GPU_BPP = 360
+#     + facesh 18×4 (72) + outputs 10×4 (40) + staging 10×4 (40)
+#     + precompute inputs 4×4 (16) + albnosh 5×4 (20)
+#     + precompute readback staging 20 + 72 + 72 (164) = 436
+#   Anisotropic sky (aniso_gpu.rs ensure_buffers_locked, 153 patches):
+#     3 bitpacked shadow matrices × 20 (60) + asvf (4) + lup (4) + valid (1)
+#     + 4 outputs (16) + staging (16) = 101, ~104 with alignment
+#   Combined: 120 + 436 + 104 = 660
+# The value was 360 up to 0.1.0b101: it predated the GVF precompute buffers
+# (b92) and never counted the anisotropic sky, which is on by default.
+_TIMESTEP_GPU_BPP = 660
 #
 # SVF context: shadow + SVF accumulation + bitpack
 #   shadow (108) + svf_data 15× (60) + svf_staging (60)

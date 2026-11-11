@@ -743,70 +743,120 @@ class TestTiledMemoryRegression:
     """
 
     def test_no_full_raster_output_arrays_in_tiled_timeseries(self, tmp_path):
-        """Peak memory during tiled timeseries must NOT grow with raster size.
+        """A timestep of the tiled loop must allocate tile-sized arrays only.
 
-        Strategy: run the tiled timeseries with a mock _calculate_single that
-        returns tile-shaped results.  Track allocations with tracemalloc.
-        Compare peak allocation of a 200x200 raster (4 tiles) vs a 400x400
-        raster (16 tiles).  Peak should be proportional to tile size, not
-        raster size.
+        The loop in ``_calculate_timeseries`` runs tiles in the outer loop and
+        timesteps in the inner loop. Each inner iteration starts with a call to
+        ``_calculate_single`` and ends with a call to ``progress_callback``.
+        The test hooks both and reads the tracemalloc peak between them, so
+        each reading covers one timestep of one tile. The whole-run summary
+        grids (12 summary fields plus 3 UTCI-threshold grids, float32,
+        60 bytes per raster pixel) are allocated before the first hook fires
+        and are therefore part of the baseline of every reading.
+
+        Budget for one timestep: 6 float32 arrays of the tile's full shape
+        (24 bytes per tile pixel). The stub returns two (tmrt, shadow), the
+        accumulator computes one UTCI grid, and the rest is boolean masks and
+        scratch. The measured value is 16 bytes per tile pixel.
+
+        A float32 array of the full raster is 4 bytes per raster pixel. With a
+        1024 x 1024 raster and 256 px tiles that is 4.2 MB against a budget of
+        2.0 MB, so one such array in any timestep fails the test.
         """
         import tracemalloc
+        from unittest.mock import patch
 
-        def _run_tiled(size):
-            dsm = np.ones((size, size), dtype=np.float32) * 5.0
-            dsm[size // 4 : size // 4 + 10, size // 4 : size // 4 + 10] = 10.0
-            surface = SurfaceData(dsm=dsm, pixel_size=1.0, svf=make_mock_svf((size, size)))
+        rows = cols = 1024
+        tile_size = 256
+        float32_tile_arrays_per_timestep = 6
+        n_steps = len(_STUB_WEATHER_PAIR)
+        full_raster_float32_bytes = rows * cols * 4
 
-            import unittest.mock
+        dsm = np.ones((rows, cols), dtype=np.float32) * 5.0
+        dsm[rows // 4 : rows // 4 + 10, cols // 4 : cols // 4 + 10] = 10.0
+        surface = SurfaceData(dsm=dsm, pixel_size=1.0, svf=make_mock_svf((rows, cols)))
 
-            tracemalloc.start()
-            snapshot_before = tracemalloc.take_snapshot()
+        tile_shapes: list[tuple[int, int]] = []
+        timestep_peaks: list[int] = []  # _calculate_single entry -> progress_callback
+        same_tile_gaps: list[int] = []  # progress_callback -> next _calculate_single, same tile
+        current_at_callback: list[int] = []
+        window_start = 0
 
-            with unittest.mock.patch("solweig.api._calculate_single", _stub_calculate):
+        def _close_window() -> int:
+            """Return the peak above the window's starting level and open a new window."""
+            nonlocal window_start
+            current, peak = tracemalloc.get_traced_memory()
+            grown = peak - window_start
+            tracemalloc.reset_peak()
+            window_start = current
+            return grown
+
+        def _recording_stub(**kwargs):
+            grown = _close_window()
+            # The first call of each tile follows that tile's setup (and the
+            # previous tile's finalize), which is tile-sized but not per-timestep.
+            if len(tile_shapes) % n_steps != 0:
+                same_tile_gaps.append(grown)
+            tile_shapes.append(kwargs["surface"].dsm.shape)
+            return _stub_calculate(**kwargs)
+
+        def _progress(_done: int, _total: int) -> None:
+            timestep_peaks.append(_close_window())
+            current_at_callback.append(window_start)
+
+        tracemalloc.start()
+        try:
+            with patch("solweig.api._calculate_single", _recording_stub):
                 _calculate_timeseries(
                     surface=surface,
                     weather_series=_STUB_WEATHER_PAIR,
                     location=_STUB_LOCATION,
-                    output_dir=tmp_path / f"mem_{size}",
+                    output_dir=tmp_path / "mem",
+                    tile_size=tile_size,
+                    max_shadow_distance_m=16.0,  # 16 px overlap, so tiles carry a buffer
+                    progress_callback=_progress,
                 )
-
-            snapshot_after = tracemalloc.take_snapshot()
+        finally:
             tracemalloc.stop()
 
-            # Sum allocated bytes from tiling.py and summary.py
-            stats = snapshot_after.compare_to(snapshot_before, "filename")
-            tiling_bytes = sum(
-                s.size_diff
-                for s in stats
-                if ("tiling.py" in str(s.traceback) or "summary.py" in str(s.traceback)) and s.size_diff > 0
-            )
-            return tiling_bytes
+        # The run went through the tiled path: several tiles, each smaller than the raster.
+        n_tiles = len(tile_shapes) // n_steps
+        assert len(tile_shapes) == n_tiles * n_steps == len(timestep_peaks)
+        assert n_tiles >= 4, f"expected a multi-tile run, got {n_tiles} tile(s)"
+        max_tile_pixels = max(r * c for r, c in tile_shapes)
+        budget = float32_tile_arrays_per_timestep * 4 * max_tile_pixels
 
-        small_bytes = _run_tiled(200)
-        large_bytes = _run_tiled(400)
-
-        # 400x400 is 4x the pixels of 200x200.  If the old code allocated
-        # full-raster arrays per timestep, large_bytes would be ~4x small_bytes.
-        # With the fix, both should be similar (proportional to tile size).
-        # Allow a generous 2.5x ratio to account for accumulator resizing —
-        # the key assertion is that it's NOT ~4x.
-        #
-        # The ratio only means something above a noise floor. When neither run
-        # retains anything in these modules the counts are a few dozen bytes of
-        # interpreter bookkeeping, and their ratio is arbitrary (32 B against
-        # 1 B reads as 32x). One retained full-raster float32 array at 400x400
-        # is 640 KB, so anything under a quarter of that cannot be one.
-        noise_floor_bytes = 400 * 400 * 4 // 4
-        if large_bytes < noise_floor_bytes:
-            return
-        ratio = large_bytes / max(small_bytes, 1)
-        assert ratio < 2.5, (
-            f"Memory scaled {ratio:.1f}x when raster size quadrupled. "
-            f"Expected <2.5x (small={small_bytes / 1024:.0f}KB, "
-            f"large={large_bytes / 1024:.0f}KB). "
-            f"This suggests full-raster arrays are still being allocated."
+        # The budget must sit clearly below one full-raster float32 array,
+        # otherwise the assertions below could not see such an array.
+        assert 2 * budget <= full_raster_float32_bytes, (
+            f"tile budget {budget} B is too close to a full-raster float32 array "
+            f"({full_raster_float32_bytes} B); use a larger raster or smaller tiles"
         )
+
+        worst = max(timestep_peaks)
+        assert worst <= budget, (
+            f"A timestep of the tiled loop allocated {worst} B above its starting level. "
+            f"Budget is {budget} B ({float32_tile_arrays_per_timestep} float32 arrays of the "
+            f"largest tile, {max_tile_pixels} px); a full-raster float32 array is "
+            f"{full_raster_float32_bytes} B. Full-raster arrays are being allocated per timestep."
+        )
+
+        # Nothing sizeable is allocated between the end of one timestep and
+        # the start of the next within a tile.
+        worst_gap = max(same_tile_gaps)
+        assert worst_gap <= budget, (
+            f"{worst_gap} B allocated between two timesteps of the same tile (budget {budget} B)."
+        )
+
+        # Within a tile, memory held at the end of a timestep does not grow
+        # from one timestep to the next (no full-raster array retained per step).
+        for tile_idx in range(n_tiles):
+            held = current_at_callback[tile_idx * n_steps : (tile_idx + 1) * n_steps]
+            growth = max(held) - held[0]
+            assert growth <= budget, (
+                f"Tile {tile_idx}: memory held after a timestep grew by {growth} B across "
+                f"the tile's timesteps (budget {budget} B)."
+            )
 
     def test_memmap_threshold_activates(self, tmp_path):
         """Verify memmap is used when pixel count exceeds the threshold."""
