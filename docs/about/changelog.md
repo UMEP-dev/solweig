@@ -1,5 +1,21 @@
 # Release notes
 
+## 0.1.0b99 — 2026-11-11
+
+No change for Python or QGIS users, and no numerical change. The Rust core
+gains a public interface for other Rust projects (issue 14).
+
+- **`rustalgos::api`.** The crate's one public module re-exports the
+  entry points that other Rust code may call: `calculate_shadows_rust`,
+  `calculate_svf_inner`, `utci_single`, `compute_timestep_rust` and
+  `precompute_gvf_geometry_cpu`, with their input and result types. Changes
+  to anything in this module will be listed here as breaking.
+- **`compute_timestep_rust`.** The per-timestep model (shadows, ground
+  temperature, ground view factors, radiation, Tmrt) is now a plain Rust
+  function taking `ndarray` views. The Python `compute_timestep` borrows the
+  numpy arrays and calls it. The code was moved without modification.
+- The crate is also built as an `rlib`.
+
 ## 0.1.0b98 — 2026-11-10
 
 Robustness release. The model is unchanged and the validation numbers are
