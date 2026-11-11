@@ -1,4 +1,3 @@
-use core::f32;
 use ndarray::{s, Array2, Array3, ArrayView2, Zip};
 use numpy::{IntoPyArray, PyArray2, PyArray3, PyReadonlyArray2};
 use pyo3::prelude::*;
