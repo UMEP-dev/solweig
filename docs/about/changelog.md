@@ -1,5 +1,39 @@
 # Release notes
 
+## 0.1.0b103 — 2026-11-11
+
+No change to the model: validation numbers are identical to b100.
+
+- **Plugin: minimum wall height, corrected.** The fix in b101 replaced the
+  wall cache but not the copy the calculation loads, so the option still had
+  no effect in b101 and b102. Both copies are now replaced. Runs that left
+  the option at 1 m are unchanged.
+- **Per-timestep GeoTIFFs are compressed.** Lossless DEFLATE with the
+  floating-point predictor; values read back bit-identical. Measured on the
+  Bilbao tutorial and the three validation sites: shadow 0.2 to 0.5 bytes
+  per pixel and the other fields 1.5 to 3.3, against 4.0 before. Seven
+  outputs together are 44 % smaller. Writing seven 1200 × 1200 outputs takes
+  about 120 ms per timestep against 45 ms. Tile sizes that are not a
+  multiple of 16 are written uncompressed, as before.
+- **A run that will not fit on disk does not start.** Before anything is
+  computed, the estimated size of the outputs is compared with the free
+  space at `output_dir`. If it does not fit, `ConfigurationError` is raised
+  with both numbers. The estimate assumes no compression gain for the
+  temperature and radiation fields (4 bytes per pixel per file) and 1 byte
+  per pixel for shadow. The run header logs the file count and the estimate.
+- **`SurfaceData.prepare()` warm start.** A repeated call on unchanged
+  inputs rebuilt everything unless `pixel_size` was passed: the saved
+  fingerprint recorded the resolved pixel size and the check compared the
+  requested one. It now takes the fast path.
+- **Backend separation.** On the GDAL backend the test session blocks
+  imports of rasterio, pyproj and shapely, and a new test runs the same
+  raster I/O, surface preparation and model runs on both backends and
+  requires identical results.
+- **Not yet checked inside QGIS.** QGIS 4.2 does not start on macOS 27.2 at
+  present (a Qt regression, QGIS issue 67981), so the plugin could not be
+  run in the application for this release. The raster layer was checked
+  against the GDAL 3.12.4 that ships with QGIS 4.2.
+
 ## 0.1.0b102 — 2026-11-11
 
 Two memory fixes for large rasters. No change to the model: validation
