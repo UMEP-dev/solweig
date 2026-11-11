@@ -100,6 +100,73 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
+  test-other-os:
+    name: Test on ${{ matrix.os }} (informational)
+    # The wheels are published for macOS and Windows, but every other job
+    # runs on Linux. This job runs the fast suite on the other two. It does
+    # not block yet (added 2026-11): make it required once it has been green
+    # for a few releases. The hosted runners have no usable GPU, so the CPU
+    # path is forced to keep the result independent of the runner image.
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install dependencies
+        run: uv sync --group test
+
+      - name: Build Rust extension
+        run: uv run maturin develop --release
+
+      - name: Run tests (excluding slow)
+        run: uv run python -m pytest tests/ -m "not slow" -v --tb=short
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          SOLWEIG_NO_GPU: "1"
+
+  rust-tests:
+    name: Rust unit tests
+    # On macOS because the crate enables pyo3's `extension-module`, which
+    # leaves the Python symbols unresolved: a test binary links there
+    # (dynamic lookup) and fails to link on Linux.
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Run cargo test
+        run: cargo test --manifest-path rust/Cargo.toml --lib
+
   test-qgis-compat:
     name: Test QGIS compatibility (NumPy 1.26)
     runs-on: ubuntu-latest

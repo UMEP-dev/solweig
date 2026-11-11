@@ -126,11 +126,46 @@ jobs:
         with:
           name: wheels-sdist
           path: dist
+  smoke:
+    # Install each native wheel into a clean environment and run one small
+    # calculation, so a wheel that does not import is not published.
+    name: Smoke-test wheel (${{ matrix.platform.runner }})
+    runs-on: ${{ matrix.platform.runner }}
+    needs: [linux, windows, macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - runner: ubuntu-22.04
+            artifact: wheels-linux-x86_64
+          - runner: windows-latest
+            artifact: wheels-windows-x64
+          - runner: macos-15
+            artifact: wheels-macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/wheel_smoke.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.platform.artifact }}
+          path: dist
+      - name: Install the wheel
+        shell: bash
+        run: python -m pip install dist/*.whl
+      - name: Run one small calculation
+        run: python scripts/wheel_smoke.py
+        env:
+          SOLWEIG_NO_GPU: "1"
   release:
     name: Release
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
-    needs: [linux, musllinux, windows, macos, sdist]
+    needs: [linux, musllinux, windows, macos, sdist, smoke]
     permissions:
       # Use to sign the release artifacts
       id-token: write

@@ -186,12 +186,16 @@ Plus: **benchmark tests** (`tests/benchmarks/`) for performance and memory regre
 | **lint** | `ruff check` + `ruff format --check` |
 | **typecheck** | `ty check` on pysrc/, tests/, demos/, scripts/, qgis_plugin/ |
 | **test** | Matrix: Python 3.11, 3.12, 3.13 — excludes slow tests |
+| **test-other-os** | Fast suite on macOS and Windows with `SOLWEIG_NO_GPU=1`. Informational (`continue-on-error`) since 2026-11; make it required once it has stayed green |
+| **rust-tests** | `cargo test --lib` on macOS (pyo3 `extension-module` test binaries do not link on Linux) |
 | **test-qgis-compat** | GDAL backend, NumPy 1.26, `UMEP_USE_GDAL=1` |
 | **validation** | 3 real-world sites (Kronenhuset, Gustav Adolfs, GVC) |
 | **benchmarks** | Memory regression gates only (`-m "not gpu_perf_gate"`, bytes-per-pixel ceiling). Timing-based perf gates are local-only via `poe test_gpu_perf_gate` (moved off CI in 6457f32). |
 | **test-spec** | Scientific parity gates (vs reference UMEP implementation) |
 | **test-slow** | Runs the slow-marked top-level test files |
 | **audit** | Informational (`continue-on-error: true`), uploads AUDIT.md artifact |
+
+The publish workflow has a `smoke` job between the wheel builds and `release`: it installs the Linux x86_64, Windows and macOS wheels into a clean Python 3.12 and runs `scripts/wheel_smoke.py` (one small calculation). A failure there blocks the release.
 
 Build must be `--release` — `conftest.py` gates on `RELEASE_BUILD` flag.
 
