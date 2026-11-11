@@ -139,7 +139,7 @@ def calculate_core_fused(
     from .rustalgos import pipeline
 
     # Ensure derived weather fields are computed (sun position, radiation split)
-    if not weather._derived_computed:
+    if weather.needs_derived(location):
         weather.compute_derived(location)
 
     # === Precompute (stays in Python) ===

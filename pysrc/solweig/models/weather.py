@@ -101,6 +101,8 @@ class Weather:
     altmax: float = field(default=45.0, init=False)  # Maximum sun altitude for the day
 
     _derived_computed: bool = field(default=False, init=False, repr=False)
+    # Location the derived values were computed for (see needs_derived).
+    _derived_location_key: tuple | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         if not 0 <= self.rh <= 100:
@@ -117,6 +119,23 @@ class Weather:
             raise ValueError(f"measured_direct_rad must be >= 0, got {self.measured_direct_rad}")
         if self.measured_diffuse_rad is not None and self.measured_diffuse_rad < 0:
             raise ValueError(f"measured_diffuse_rad must be >= 0, got {self.measured_diffuse_rad}")
+
+    @staticmethod
+    def _location_key(location: Location) -> tuple:
+        return (location.latitude, location.longitude, location.altitude, location.utc_offset)
+
+    def needs_derived(self, location: Location) -> bool:
+        """Whether :meth:`compute_derived` must run for ``location``.
+
+        True before the first computation, and again when the sun position
+        and radiation split were computed for a different location: reusing
+        a weather series after correcting ``utc_offset`` would otherwise keep
+        the old sun positions.
+        """
+        if not self._derived_computed:
+            return True
+        key = self._derived_location_key
+        return key is not None and key != self._location_key(location)
 
     def compute_derived(self, location: Location) -> None:
         """
@@ -265,6 +284,7 @@ class Weather:
             self.clearness_index = 1.0
 
         self._derived_computed = True
+        self._derived_location_key = self._location_key(location)
 
     @property
     def is_daytime(self) -> bool:
@@ -442,9 +462,24 @@ class Weather:
             hour_mask = df_filtered.index.hour.isin(hours_set)
             df_filtered = df_filtered[hour_mask]
 
+        # Missing values are replaced below (20 °C, 50 %, 0 W/m², 1 m/s,
+        # 1013.25 hPa). Say how many, since a gap in the forcing changes the
+        # result for those timesteps.
+        filled_columns = (
+            ("air temperature", "temp_air"),
+            ("relative humidity", "relative_humidity"),
+            ("global radiation", "ghi"),
+            ("wind speed", "wind_speed"),
+            ("pressure", "atmospheric_pressure"),
+        )
+        filled = dict.fromkeys((label for label, _ in filled_columns), 0)
+
         # Create Weather objects
         weather_list = []
         for timestamp, row in df_filtered.iterrows():
+            for label, column in filled_columns:
+                if np.isnan(row[column]):
+                    filled[label] += 1
             # Create Weather object with available data
             # EPW has dni/dhi which we can use as measured values
             w = cls(
@@ -460,6 +495,14 @@ class Weather:
                 measured_diffuse_rad=float(row["dhi"]) if not np.isnan(row["dhi"]) else None,
             )
             weather_list.append(w)
+
+        filled = {label: n for label, n in filled.items() if n}
+        if filled:
+            detail = ", ".join(f"{label}: {n}" for label, n in filled.items())
+            logger.warning(
+                f"EPW file has missing values in {len(weather_list)} selected timesteps ({detail}). "
+                "They are replaced with defaults (20 °C, 50 %, 0 W/m², 1 m/s, 1013.25 hPa)."
+            )
 
         if weather_list:
             logger.info(

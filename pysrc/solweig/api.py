@@ -346,7 +346,7 @@ def _calculate_single(
             logger.debug(f"Explicit params override config: {', '.join(overrides)}")
 
     # Compute derived weather values (sun position, radiation split)
-    if not weather._derived_computed:
+    if weather.needs_derived(location):
         weather.compute_derived(location)
 
     # Fill NaN in surface layers (idempotent — skipped if already done)

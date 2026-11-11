@@ -27,6 +27,9 @@ from .summary import GridAccumulator, TimeseriesSummary
 
 logger = get_logger(__name__)
 
+# Names accepted in ``outputs`` (per-timestep GeoTIFFs).
+_PER_TIMESTEP_OUTPUTS = frozenset({"tmrt", "shadow", "kdown", "kup", "ldown", "lup", "utci", "pet"})
+
 
 def _warn_if_summary_hours_overcount(weather_series: list, timestep_hours: float) -> None:
     """Warn when the hour totals in the summary will not mean what they say.
@@ -122,7 +125,7 @@ def _precompute_weather(weather_series: list, location: Location) -> None:
 
     # Step 3: Compute derived values (now fast since altmax is cached)
     for weather in weather_series:
-        if not weather._derived_computed:
+        if weather.needs_derived(location):
             weather.compute_derived(location)
 
     # Step 4: Carry forward clearness index at night.
@@ -320,6 +323,15 @@ def _calculate_timeseries(
         use_ground_scheme = bool(getattr(config, "use_ground_scheme", None)) if config else False
     if use_outgoing_longwave is None:
         use_outgoing_longwave = bool(getattr(config, "use_outgoing_longwave", None)) if config else False
+    unknown_outputs = sorted(set(outputs or []) - _PER_TIMESTEP_OUTPUTS)
+    if unknown_outputs:
+        from .errors import ConfigurationError
+
+        raise ConfigurationError(
+            parameter="outputs",
+            reason=(f"unknown output name(s) {unknown_outputs}; choose from {sorted(_PER_TIMESTEP_OUTPUTS)}"),
+        )
+
     if use_ground_scheme != use_outgoing_longwave:
         from .errors import ConfigurationError
 
