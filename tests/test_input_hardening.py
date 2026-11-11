@@ -107,3 +107,34 @@ def test_complete_epw_is_silent(tmp_path, warnings):
     path = _write_epw(tmp_path / "ok.epw", [_row(1), _row(2)])
     Weather.from_epw(str(path))
     assert warnings == []
+
+
+# ── anisotropic sky falling back to isotropic ──────────────────────────────
+
+
+def test_default_anisotropic_without_shadow_matrices_is_recorded_as_isotropic(tmp_path, monkeypatch):
+    """The sky model is anisotropic by default but needs shadow matrices."""
+    import json
+
+    from solweig import timeseries
+
+    messages: list[str] = []
+    monkeypatch.setattr(timeseries.logger, "warning", messages.append)
+    location = Location(latitude=57.7, longitude=12.0, utc_offset=1)
+
+    calculate(_surface(), [_weather()], location, output_dir=tmp_path)
+
+    metadata = json.loads((tmp_path / "run_metadata.json").read_text())
+    assert metadata["parameters"]["use_anisotropic_sky"] is False
+    assert any("isotropic sky" in m for m in messages)
+
+
+def test_explicit_isotropic_does_not_warn(tmp_path, monkeypatch):
+    from solweig import timeseries
+
+    messages: list[str] = []
+    monkeypatch.setattr(timeseries.logger, "warning", messages.append)
+    location = Location(latitude=57.7, longitude=12.0, utc_offset=1)
+
+    calculate(_surface(), [_weather()], location, output_dir=tmp_path, use_anisotropic_sky=False)
+    assert not any("isotropic sky" in m for m in messages)

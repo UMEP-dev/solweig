@@ -11,10 +11,13 @@ Example::
     import solweig
     from datetime import datetime
 
+    surface = solweig.SurfaceData(dsm=my_dsm_array, pixel_size=1.0)
+    surface.compute_svf()  # sky view factors and shadow matrices
+
     summary = solweig.calculate(
-        surface=solweig.SurfaceData(dsm=my_dsm_array),
+        surface=surface,
         weather=[solweig.Weather(datetime=datetime(2025, 7, 15, 12, 0), ta=25.0, rh=50.0, global_rad=800.0)],
-        location=solweig.Location(latitude=57.7, longitude=12.0),
+        location=solweig.Location(latitude=57.7, longitude=12.0, utc_offset=2),
         output_dir="output/",
     )
     print(f"Tmrt: {summary.tmrt_mean.mean():.1f} C")
@@ -418,7 +421,9 @@ def calculate(
     Args:
         surface: Prepared surface data from :meth:`SurfaceData.prepare`.
         weather: One or more Weather objects. A single Weather is auto-wrapped.
-        location: Geographic location. If None, extracted from surface CRS.
+        location: Geographic location. If None, latitude and longitude are
+            taken from the surface CRS and the UTC offset is assumed to be 0,
+            which puts the sun in the wrong place anywhere else. Pass it.
         config: Model settings. Explicit keyword args override config values.
         human: Human body parameters (posture, absorption, etc.).
         precomputed: Alternative source for SVF/shadow matrices (advanced).
@@ -463,10 +468,12 @@ def calculate(
 
         surface = solweig.SurfaceData.prepare(dsm="dsm.tif", working_dir="cache/")
         weather = solweig.Weather.from_epw("weather.epw")
+        location = solweig.Location.from_epw("weather.epw")  # includes the UTC offset
 
         summary = solweig.calculate(
             surface=surface,
             weather=weather,
+            location=location,
             output_dir="output/",
         )
     """

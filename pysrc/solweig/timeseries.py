@@ -309,6 +309,21 @@ def _calculate_timeseries(
         use_anisotropic_sky if (anisotropic_requested_explicitly or use_anisotropic_sky is False) else None
     )
 
+    # The anisotropic sky needs shadow matrices. When it is on only by default
+    # and none are available, the pipeline runs the isotropic sky instead; say
+    # so and record what actually ran. (An explicit request without matrices
+    # raises MissingPrecomputedData further down.)
+    has_shadow_matrices = surface.shadow_matrices is not None or (
+        precomputed is not None and precomputed.shadow_matrices is not None
+    )
+    anisotropic_effective = bool(use_anisotropic_sky) and has_shadow_matrices
+    if use_anisotropic_sky and not has_shadow_matrices and not anisotropic_requested_explicitly:
+        logger.warning(
+            "Anisotropic sky is on by default but the surface has no shadow matrices, "
+            "so this run uses the isotropic sky. Use SurfaceData.prepare() or compute_svf() "
+            "to get them, or pass use_anisotropic_sky=False to silence this message."
+        )
+
     ignored_runtime_names = [name for name, value in ignored_tile_runtime.items() if value is not None]
     if ignored_runtime_names:
         logger.warning(
@@ -818,7 +833,7 @@ def _calculate_timeseries(
             human=human,
             physics=physics,
             materials=materials,
-            use_anisotropic_sky=use_anisotropic_sky,
+            use_anisotropic_sky=anisotropic_effective,
             conifer=conifer,
             output_dir=output_dir,
             outputs=outputs,
