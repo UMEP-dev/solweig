@@ -1,5 +1,28 @@
 # Release notes
 
+## 0.1.0b102 — 2026-11-11
+
+Two memory fixes for large rasters. No change to the model: validation
+numbers are identical to b100.
+
+- **Preview images.** Every GeoTIFF is saved with a 512 px preview PNG. The
+  preview was colour-mapped at the raster's full resolution before being
+  shrunk, which took about 83 bytes per pixel in temporary arrays for each
+  file, with up to eight summary grids written at once. The raster is now
+  thinned first. The end-of-run peak on a 2048 × 2048 test drops from 2.15 GB
+  to 0.53 GB and no longer grows with raster size. Rasters under 2048 px on
+  the long side give the same preview as before.
+- **GPU tile size.** Automatic tiling assumed 360 bytes of GPU memory per
+  pixel. The buffers actually held come to about 660: the estimate predated
+  the ground view factor precompute buffers (b92) and did not count the
+  anisotropic sky. Where GPU memory is the limit, tiles are now about a
+  quarter smaller in side length, so a run no longer asks for more than the
+  GPU has. Results can differ at the level of floating-point rounding when
+  the tile size changes; set `tile_size` for reproducible large runs.
+- The test that guards the tiled loop against per-timestep full-raster
+  allocations now exercises the tiled path and measures the peak. The
+  previous version ran untiled and could not fail.
+
 ## 0.1.0b101 — 2026-11-11
 
 Two fixes for the QGIS plugin and two for the met-file loader. No change to

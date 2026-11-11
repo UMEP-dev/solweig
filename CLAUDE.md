@@ -245,6 +245,9 @@ Conventional commits: `<type>: <description> (<version>)`
 - Every slot of `surface._cache` needs a key covering all inputs of the cached computation; use `cache.get_or_compute`. The full-grid GVF geometry slot was unkeyed until b100 and returned the first call's geometry after a posture change.
 - Building mask without land cover (b100): `detect_building_mask` uses `dsm - dem >= 2` when the surface has a DEM (the reference rule) and otherwise 2 m above the 10th-percentile DSM height away from walls. The 25 m wall dilation it had before marked the ground around every building as building. The no-land-cover ground albedo default is 0.20 (`Cobble_stone_2014a`), as in the runner.
 - `tiling.py` rejects tiles whose core is under 32 px (`_MIN_WORKABLE_CORE`); `surface_loading.warn_if_crs_differs` warns when an input raster's CRS differs from the DSM's (EPSG comparison, silent when undecidable).
+- `tiling._TIMESTEP_GPU_BPP` (660 since b102) is the sum of every buffer the shadow, GVF and anisotropic-sky GPU contexts keep resident; its comment lists them. A new or resized GPU buffer in `rust/src/gpu/*.rs` must be added there, or auto-sized tiles overrun GPU memory.
+- `io.save_raster` writes a preview PNG for every float raster. `io_preview._generate_preview_png` thins the array before colour-mapping (b102); do not add full-resolution temporaries there (`tests/test_io_preview.py`).
+- A memory test must measure the peak (`tracemalloc.reset_peak` / `get_traced_memory`), not a before/after snapshot diff, and must show it fails on an injected allocation. The pre-b102 tiled memory test ran untiled and returned early every time.
 - Time A/B builds only on an otherwise idle machine; a background job (including a sub-agent) skews per-timestep timings by tens of percent.
 - `scripts/validate_ground_scheme.py` produces the 2026a scheme table in `VALIDATION.md` (baseline against scheme at the three sites). Rerun it when the scheme path changes.
 
