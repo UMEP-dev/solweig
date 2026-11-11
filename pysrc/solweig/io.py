@@ -557,6 +557,16 @@ def load_raster(
     return rast_arr, trf_arr, crs_wkt, no_data_val
 
 
+_OUTPUT_BLOCK_SIZE = 256  # TIFF tile side of the compressed per-timestep outputs
+_OUTPUT_ZLEVEL = 1  # applies to blocks written at creation only (see below)
+# A GeoTIFF does not record its compression level, and GDAL (3.10) has no way
+# to set it for a file reopened in update mode: windowed writes compress at
+# the default level 6, single-threaded, which measured 160 ms per 1.44 Mpx
+# raster. Compressing the blocks on all cores brings that to 15 ms (4 ms
+# uncompressed). The option has no effect on uncompressed files.
+_GTIFF_UPDATE_OPTIONS = {"NUM_THREADS": "ALL_CPUS"}
+
+
 def create_empty_raster(
     path_str: str | Path,
     rows: int,
@@ -566,17 +576,43 @@ def create_empty_raster(
     dtype=np.float32,
     nodata: float = -9999,
     bands: int = 1,
+    compress: bool = True,
+    block_size: int | None = None,
 ):
     """
     Create an empty GeoTIFF file initialized with nodata.
+
+    Float rasters are created tiled (256 px blocks) with lossless DEFLATE
+    compression and the floating-point predictor, as a sparse file: blocks
+    that are never written read back as nodata. Values read back are
+    bit-identical to what was written. Pass ``compress=False`` for the plain
+    striped layout, filled with nodata, that was used up to 0.1.0b102.
+
+    ``block_size`` (a multiple of 16) should divide the side of the windows
+    that will be written. A block written twice leaves its first copy in the
+    file as dead space; see ``output_async.output_block_size``.
     """
     path = check_path(path_str, make_dir=True)
+    compress = compress and np.issubdtype(np.dtype(dtype), np.floating)
+    block = block_size or _OUTPUT_BLOCK_SIZE
 
     if GDAL_ENV is False:
         trf = Affine.from_gdal(*transform)
         crs = None
         if crs_wkt:
             crs = pyproj.CRS(crs_wkt)
+
+        creation: dict = {}
+        if compress:
+            creation = {
+                "tiled": True,
+                "blockxsize": block,
+                "blockysize": block,
+                "compress": "DEFLATE",
+                "predictor": 3,
+                "zlevel": _OUTPUT_ZLEVEL,
+                "sparse_ok": True,
+            }
 
         with rasterio.open(
             path,
@@ -589,7 +625,13 @@ def create_empty_raster(
             crs=crs,
             transform=trf,
             nodata=nodata,
+            **creation,
         ) as dst:
+            if compress:
+                # Sparse file: blocks not yet written read back as nodata, so
+                # no fill pass is needed (and no fill blocks are left behind
+                # as dead space when the data replaces them).
+                return
             chunk_h = min(256, rows)
             chunk_w = min(256, cols)
             fill_block = np.full((chunk_h, chunk_w), nodata, dtype=dtype)
@@ -613,14 +655,28 @@ def create_empty_raster(
         elif dtype == np.uint8:
             gdal_type = gdal.GDT_Byte
 
-        ds = driver.Create(str(path), cols, rows, bands, gdal_type)
+        options = (
+            [
+                "TILED=YES",
+                f"BLOCKXSIZE={block}",
+                f"BLOCKYSIZE={block}",
+                "COMPRESS=DEFLATE",
+                "PREDICTOR=3",
+                f"ZLEVEL={_OUTPUT_ZLEVEL}",
+                "SPARSE_OK=TRUE",
+            ]
+            if compress
+            else []
+        )
+        ds = driver.Create(str(path), cols, rows, bands, gdal_type, options)
         ds.SetGeoTransform(transform)
         if crs_wkt:
             ds.SetProjection(crs_wkt)
         for b in range(1, bands + 1):
             band = ds.GetRasterBand(b)
             band.SetNoDataValue(nodata)
-            band.Fill(nodata)
+            if not compress:  # a sparse file reads unwritten blocks as nodata
+                band.Fill(nodata)
         ds = None
 
 
@@ -635,7 +691,7 @@ def write_raster_window(path_str: str | Path, data: np.ndarray, window: tuple[sl
     if GDAL_ENV is False:
         from rasterio.windows import Window
 
-        with rasterio.open(path, "r+") as dst:
+        with rasterio.open(path, "r+", **_GTIFF_UPDATE_OPTIONS) as dst:
             win = Window(
                 col_slice.start,  # type: ignore[too-many-positional-arguments]
                 row_slice.start,
@@ -644,7 +700,7 @@ def write_raster_window(path_str: str | Path, data: np.ndarray, window: tuple[sl
             )
             dst.write(data, band, window=win)
     else:
-        ds = gdal.Open(str(path), gdal.GA_Update)
+        ds = gdal.OpenEx(str(path), gdal.GA_Update, open_options=[f"{k}={v}" for k, v in _GTIFF_UPDATE_OPTIONS.items()])
         if ds is None:
             raise OSError(f"Could not open {path} for update")
 

@@ -152,7 +152,17 @@ if TYPE_CHECKING:
     )
 
 
-_OUTPUT_BYTES_PER_PIXEL = 4  # per-timestep GeoTIFFs are uncompressed float32 (measured 4.01 B/px)
+# Disk bytes per pixel of one per-timestep GeoTIFF (float32, DEFLATE with the
+# floating-point predictor), as assumed by the check that refuses a run that
+# will not fit. Measured at the three validation sites and on the Bilbao
+# tutorial: shadow 0.2 to 0.5 on average (largest file 0.66), the other fields
+# 1.5 to 3.3 (largest file 3.63). The check must not let a run start that then
+# fills the disk, so it assumes no gain for the continuous fields (4.0 is the
+# uncompressed size, and a noisy field can reach it) and 1.0 for shadow.
+_SHADOW_BYTES_PER_PIXEL = 1.0
+_OUTPUT_BYTES_PER_PIXEL = 4.0
+# Summary grids, written once at the end of the run (measured 47 to 58 B/px).
+_SUMMARY_BYTES_PER_PIXEL = 60
 
 
 def _format_bytes(n: float) -> str:
@@ -163,21 +173,30 @@ def _format_bytes(n: float) -> str:
     return f"{n:.1f} TB"
 
 
-def _report_output_disk_use(output_path: Path, outputs: list[str] | None, n_steps: int, rows: int, cols: int) -> int:
-    """Log the disk space the per-timestep GeoTIFFs will take and warn if it exceeds the free space.
+def _check_output_disk_space(output_path: Path, outputs: list[str] | None, n_steps: int, rows: int, cols: int) -> int:
+    """Estimate the disk space the run will write and refuse to start if it does not fit.
 
-    One file per requested output per timestep, 4 bytes per pixel each. A
-    long series on a large raster can reach hundreds of gigabytes, and the
-    run would otherwise fail partway through when the disk fills.
+    One compressed GeoTIFF per requested output per timestep, plus the summary
+    grids. A long series on a large raster can reach hundreds of gigabytes,
+    and the files are created as the run proceeds, so without this check the
+    run stops partway through when the disk fills.
 
     Returns:
-        The estimate in bytes (0 when no per-timestep output is requested).
+        The estimate in bytes.
+
+    Raises:
+        ConfigurationError: The estimate exceeds the free space at ``output_path``.
     """
-    if not outputs:
-        return 0
-    n_files = len(set(outputs)) * n_steps
-    estimate = n_files * rows * cols * _OUTPUT_BYTES_PER_PIXEL
-    logger.info(f"  Per-timestep outputs: {n_files} GeoTIFFs, about {_format_bytes(estimate)} on disk")
+    pixels = rows * cols
+    names = set(outputs or ())
+    per_step = sum(_SHADOW_BYTES_PER_PIXEL if name == "shadow" else _OUTPUT_BYTES_PER_PIXEL for name in names)
+    timestep_bytes = int(per_step * pixels * n_steps)
+    estimate = timestep_bytes + _SUMMARY_BYTES_PER_PIXEL * pixels
+    if names:
+        logger.info(
+            f"  Per-timestep outputs: {len(names) * n_steps} GeoTIFFs, up to about "
+            f"{_format_bytes(timestep_bytes)} on disk"
+        )
     try:
         import shutil
 
@@ -185,11 +204,17 @@ def _report_output_disk_use(output_path: Path, outputs: list[str] | None, n_step
     except OSError:
         return estimate
     if estimate > free:
-        logger.warning(
-            f"The per-timestep outputs need about {_format_bytes(estimate)} "
-            f"({len(set(outputs))} output(s) x {n_steps} timesteps) and {output_path} has "
-            f"{_format_bytes(free)} free. The run will stop when the disk is full. Save fewer outputs, "
-            "run a shorter period, or leave `outputs` empty to write the summary grids only."
+        from .errors import ConfigurationError
+
+        raise ConfigurationError(
+            parameter="outputs" if names else "output_dir",
+            reason=(
+                f"the run is estimated to write up to {_format_bytes(estimate)} "
+                f"({len(names)} per-timestep output(s) x {n_steps} timesteps on a {cols}x{rows} raster, "
+                f"plus the summary grids) and {output_path} has {_format_bytes(free)} free. "
+                "Nothing was computed. Free disk space, choose another output_dir, save fewer outputs, "
+                "or run a shorter period. Leaving `outputs` empty writes the summary grids only."
+            ),
         )
     return estimate
 
@@ -486,7 +511,7 @@ def _calculate_timeseries(
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    _report_output_disk_use(output_path, outputs, n_steps, rows, cols)
+    _check_output_disk_space(output_path, outputs, n_steps, rows, cols)
 
     # Determine which arrays the Rust compute needs to return.
     requested_outputs: set[str] = {"tmrt", "shadow"}
@@ -581,6 +606,7 @@ def _calculate_timeseries(
             cols=cols,
             transform=_writer_transform,
             crs_wkt=_writer_crs,
+            tile_size=adjusted_tile_size if n_tiles > 1 else None,
         )
         _tiled_writer.precreate_timesteps([w.datetime for w in weather_series], _writer_output_names)
 

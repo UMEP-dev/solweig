@@ -153,6 +153,34 @@ def _write_tile_windows(
         io.write_raster_window(path_str=path, data=data, window=window)
 
 
+def output_block_size(tile_size: int | None) -> int | None:
+    """Compressed-block side for per-timestep GeoTIFFs written tile by tile.
+
+    A block that straddles two computation tiles is written twice, and the
+    first, half-empty copy stays in the file as dead space. Measured on a
+    1200 px raster with 256 px blocks: 2.63 bytes per pixel when the tiles
+    align with the blocks, 3.52 with 700 px tiles and 4.19 with 300 px tiles
+    (uncompressed is 4.01). So the block side is chosen to divide the tile
+    side where it can.
+
+    Returns:
+        The block side in pixels, or None when the file should be written
+        uncompressed (small tiles whose side is not a multiple of 16, the
+        TIFF block granularity).
+    """
+    if tile_size is None:  # one write covers the raster
+        return 256
+    for block in (512, 256, 128):
+        if tile_size % block == 0:
+            return block
+    if tile_size % 16 == 0 and tile_size <= 1024:
+        return tile_size
+    if tile_size >= 2048:
+        # At most a quarter of the blocks straddle a tile edge: about 10 percent dead space.
+        return 256
+    return None
+
+
 class TiledGeoTiffWriter:
     """Writes per-timestep GeoTIFFs tile-by-tile using windowed writes.
 
@@ -170,11 +198,14 @@ class TiledGeoTiffWriter:
         *,
         transform: list[float] | None = None,
         crs_wkt: str = "",
+        tile_size: int | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.rows = rows
         self.cols = cols
+        # Compressed-block size matched to the tile grid (None: write uncompressed).
+        self.block_size = output_block_size(tile_size)
         self.transform = transform if transform is not None else [0.0, 1.0, 0.0, 0.0, 0.0, -1.0]
         self.crs_wkt = crs_wkt
         self._open_files: dict[str, Path] = {}
@@ -210,6 +241,8 @@ class TiledGeoTiffWriter:
                 crs_wkt=self.crs_wkt,
                 dtype=np.float32,
                 nodata=np.nan,
+                compress=self.block_size is not None,
+                block_size=self.block_size,
             )
             self._open_files[name] = filepath
 
@@ -250,6 +283,8 @@ class TiledGeoTiffWriter:
                     crs_wkt=self.crs_wkt,
                     dtype=np.float32,
                     nodata=np.nan,
+                    compress=self.block_size is not None,
+                    block_size=self.block_size,
                 )
                 self._all_files[(ts_str, name)] = filepath
                 self._final_files[(ts_str, name)] = finalpath
