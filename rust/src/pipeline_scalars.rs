@@ -100,6 +100,9 @@ impl WeatherScalars {
 #[pyclass]
 #[derive(Clone)]
 pub struct HumanScalars {
+    /// Height the ground view factor is evaluated at (m): the posture's
+    /// centre of gravity (UMEP `Posture.*.height`, 1.1 standing, 0.75
+    /// sitting), not the stature.
     #[pyo3(get, set)]
     pub height: f32,
     #[pyo3(get, set)]

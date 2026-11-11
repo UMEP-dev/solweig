@@ -10,7 +10,10 @@ GVF is computed by integrating visible ground and wall surfaces across 18 azimut
 
 ### Integration Distances
 
-Two distance scales are used, based on person height. They are metric
+Two distance scales are used, based on the height of the body's centre of
+gravity for the posture (UMEP `Posture.*.height`: 1.1 m standing, 0.75 m
+sitting; `HumanParams.posture_height`). This is not the stature, which only
+PET uses. They are metric
 distances (Smidt et al. source-area model), converted to pixels by dividing
 by the pixel size (matching UMEP's `round(metres × scale)` with
 `scale = 1/pixel_size`); the far-field march is clamped to the raster extent:

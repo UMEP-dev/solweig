@@ -109,6 +109,52 @@ def test_complete_epw_is_silent(tmp_path, warnings):
     assert warnings == []
 
 
+# ── ground view factor height ──────────────────────────────────────────────
+
+
+def _walled_tmrt(tmp_path, name, human):
+    from solweig.physics.wallalgorithms import filter1Goodwin_as_aspect_v3, findwalls
+
+    dsm = np.zeros((40, 40), dtype=np.float32)
+    dsm[15:25, 15:25] = 12.0
+    walls = findwalls(dsm, 1.0)
+    surface = SurfaceData(
+        dsm=dsm,
+        pixel_size=1.0,
+        svf=make_mock_svf(dsm.shape),
+        wall_height=walls,
+        wall_aspect=filter1Goodwin_as_aspect_v3(walls, 1.0, dsm),
+    )
+    weather = Weather(datetime=datetime(2024, 7, 15, 13, 0), ta=25.0, rh=50.0, global_rad=700.0)
+    location = Location(latitude=57.7, longitude=12.0, utc_offset=1)
+    summary = calculate(
+        surface, [weather], location, output_dir=tmp_path / name, human=human, use_anisotropic_sky=False
+    )
+    return summary.tmrt_mean
+
+
+def test_posture_height_is_the_centre_of_gravity():
+    from solweig import HumanParams
+
+    assert HumanParams(posture="standing").posture_height == pytest.approx(1.1)
+    assert HumanParams(posture="sitting").posture_height == pytest.approx(0.75)
+    assert HumanParams(height=1.95).posture_height == pytest.approx(1.1)
+
+
+def test_stature_does_not_change_tmrt(tmp_path):
+    """The ground view factor is evaluated at the posture height, as in UMEP.
+
+    Up to 0.1.0b99 it was given the stature, so a taller person changed Tmrt
+    beside walls (first/second search heights 2 and 35 px at 1.75 m against
+    1 and 22 px at the standing posture height).
+    """
+    from solweig import HumanParams
+
+    short = _walled_tmrt(tmp_path, "short", HumanParams(height=1.50))
+    tall = _walled_tmrt(tmp_path, "tall", HumanParams(height=2.00))
+    np.testing.assert_array_equal(short, tall)
+
+
 # ── anisotropic sky falling back to isotropic ──────────────────────────────
 
 

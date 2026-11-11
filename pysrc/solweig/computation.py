@@ -358,8 +358,10 @@ def calculate_core_fused(
         patch_option=0,  # Set below if anisotropic
     )
 
+    # The pipeline uses this height only for the ground view factor, which UMEP
+    # evaluates at the posture's centre of gravity, not at the stature.
     hs = pipeline.HumanScalars(
-        height=float(human.height),
+        height=float(human.posture_height),
         abs_k=float(human.abs_k),
         abs_l=float(human.abs_l),
         is_standing=human.posture == "standing",
@@ -418,7 +420,7 @@ def calculate_core_fused(
                 c0,
                 c1,
                 float(pixel_size),
-                float(human.height),
+                float(human.posture_height),
                 float(albedo_wall),
             )
             gvf_cache = cache.get_or_compute(
@@ -430,7 +432,7 @@ def calculate_core_fused(
                     as_float32(wall_ht[crop_slice]),
                     as_float32(alb_grid[crop_slice]),
                     float(pixel_size),
-                    float(human.height),
+                    float(human.posture_height),
                     float(albedo_wall),
                 ),
             )
@@ -445,7 +447,7 @@ def calculate_core_fused(
                     as_float32(wall_ht),
                     as_float32(alb_grid),
                     float(pixel_size),
-                    float(human.height),
+                    float(human.posture_height),
                     float(albedo_wall),
                 )
                 cache.gvf_geometry_cache = gvf_cache
@@ -789,7 +791,7 @@ def warm_gvf_geometry(surface, human, materials, pixel_size: float) -> None:
             as_float32(wall_ht),
             as_float32(alb_grid),
             float(pixel_size),
-            float(human.height),
+            float(human.posture_height),
             0.20,  # must match the albedo_wall default in calculate_core_fused
         )
     except Exception:

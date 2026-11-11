@@ -234,7 +234,7 @@ The default person is standing, 75 kg, 1.75 m tall, 35 years old. These values c
 result = solweig.calculate(
     surface, weather=[weather], location=location,
     human=solweig.HumanParams(
-        posture="sitting",   # or "standing" (default)
+        posture="sitting",   # or "standing" (default); affects Tmrt
         abs_k=0.7,           # Shortwave absorption (0–1)
         abs_l=0.97,          # Longwave absorption (0–1)
         weight=65,           # kg (affects PET only)
@@ -243,6 +243,9 @@ result = solweig.calculate(
     output_dir="output/",
 )
 ```
+
+Posture also sets the height at which ground-reflected and ground-emitted
+radiation is evaluated: 1.1 m standing, 0.75 m sitting.
 
 ## Anisotropic Sky Model
 

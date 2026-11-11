@@ -267,7 +267,9 @@ class HumanParams:
     Human body parameters for thermal comfort calculations.
 
     These parameters affect how radiation is absorbed by a person.
-    Default values represent a standard reference person.
+    Default values represent a standard reference person. ``posture`` also
+    sets the height at which ground-reflected and ground-emitted radiation is
+    evaluated (:attr:`posture_height`).
 
     Attributes:
         posture: Body posture ("standing" or "sitting"). Default "standing".
@@ -315,3 +317,15 @@ class HumanParams:
             raise ValueError(f"activity must be >= 0, got {self.activity}")
         if self.clothing < 0:
             raise ValueError(f"clothing must be >= 0, got {self.clothing}")
+
+    @property
+    def posture_height(self) -> float:
+        """Height of the centre of gravity for the posture (m): 1.1 standing, 0.75 sitting.
+
+        The ground view factor is evaluated at this height, as in UMEP
+        (``Posture.*.height``). ``height`` is the stature and is used by PET
+        only.
+        """
+        from ..constants import POSTURE_HEIGHT_SITTING, POSTURE_HEIGHT_STANDING
+
+        return POSTURE_HEIGHT_STANDING if self.posture == "standing" else POSTURE_HEIGHT_SITTING

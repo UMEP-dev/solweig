@@ -50,6 +50,12 @@ F_UP_SITTING = 1.0 / 6.0  # View factor to sky/ground (1/6 per side)
 F_SIDE_SITTING = 1.0 / 6.0  # View factor from each of 4 cardinal directions (1/6 per side)
 F_CYL_SITTING = 0.20  # Cylindric projection factor for sitting posture
 
+# Height of the body's centre of gravity (m), by posture. This is the height
+# the ground view factor is evaluated at (UMEP `Posture.*.height`); it is not
+# the person's stature, which only PET uses.
+POSTURE_HEIGHT_STANDING = 1.1
+POSTURE_HEIGHT_SITTING = 0.75
+
 
 # =============================================================================
 # Default Physical Parameters
