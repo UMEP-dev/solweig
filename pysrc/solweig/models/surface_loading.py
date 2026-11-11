@@ -136,39 +136,88 @@ def load_and_validate_dsm(dsm: str | Path, pixel_size: float | None) -> tuple:
 # ── 2. Optional terrain raster loading ─────────────────────────────────────
 
 
+def _same_crs(a: str, b: str) -> bool | None:
+    """Whether two CRS WKT strings describe the same system; None if it cannot be decided."""
+    if a == b:
+        return True
+    try:
+        if GDAL_ENV:
+            from osgeo import osr
+
+            sa, sb = osr.SpatialReference(), osr.SpatialReference()
+            sa.ImportFromWkt(a)
+            sb.ImportFromWkt(b)
+            return bool(sa.IsSame(sb))
+        from pyproj import CRS as pyproj_CRS
+
+        ca, cb = pyproj_CRS.from_wkt(a), pyproj_CRS.from_wkt(b)
+        if ca.equals(cb, ignore_axis_order=True):
+            return True
+        # The same CRS written by two tools often fails a structural
+        # comparison (WKT1 against WKT2, differing names). Only call them
+        # different when both resolve to EPSG codes and the codes differ.
+        ea, eb = ca.to_epsg(), cb.to_epsg()
+        if ea is not None and eb is not None:
+            return ea == eb
+        return None
+    except Exception:
+        return None
+
+
+def warn_if_crs_differs(name: str, layer_crs: str | None, dsm_crs: str | None) -> None:
+    """Warn when a layer's coordinate system differs from the DSM's.
+
+    Layers are aligned to the DSM grid by their coordinates, with no
+    reprojection, so a layer in another CRS lands in the wrong place (or in
+    the wrong units). A layer with no CRS is assumed to share the DSM's.
+    """
+    if not layer_crs or not dsm_crs:
+        return
+    if _same_crs(str(layer_crs), str(dsm_crs)) is False:
+        logger.warning(
+            f"  ⚠ {name} is in a different coordinate system from the DSM. Layers are aligned by their "
+            "coordinates without reprojection, so it will be misplaced. Reproject it to the DSM's CRS first."
+        )
+
+
 def load_terrain_rasters(
     cdsm: str | Path | None,
     dem: str | Path | None,
     tdsm: str | Path | None,
     land_cover: str | Path | None,
     trunk_ratio: float,
+    dsm_crs: str | None = None,
 ) -> dict:
     """Load optional terrain rasters (CDSM, DEM, TDSM, land_cover).
 
     Each input may be ``None``; missing rasters become ``None`` entries
     in the returned dict. ``trunk_ratio`` is only used for logging
-    (the TDSM is auto-generated from CDSM downstream).
+    (the TDSM is auto-generated from CDSM downstream). ``dsm_crs`` is the
+    DSM's CRS; a layer in a different one is reported.
     """
     from .. import io
 
     result: dict = {}
 
     if cdsm is not None:
-        result["cdsm_arr"], result["cdsm_transform"], _, _ = io.load_raster(str(cdsm))
+        result["cdsm_arr"], result["cdsm_transform"], layer_crs, _ = io.load_raster(str(cdsm))
         logger.info("  ✓ Canopy DSM (CDSM) provided")
+        warn_if_crs_differs("cdsm", layer_crs, dsm_crs)
     else:
         result["cdsm_arr"], result["cdsm_transform"] = None, None
         logger.info("  → No vegetation data - simulation without trees/vegetation")
 
     if dem is not None:
-        result["dem_arr"], result["dem_transform"], _, _ = io.load_raster(str(dem))
+        result["dem_arr"], result["dem_transform"], layer_crs, _ = io.load_raster(str(dem))
         logger.info("  ✓ Ground elevation (DEM) provided")
+        warn_if_crs_differs("dem", layer_crs, dsm_crs)
     else:
         result["dem_arr"], result["dem_transform"] = None, None
 
     if tdsm is not None:
-        result["tdsm_arr"], result["tdsm_transform"], _, _ = io.load_raster(str(tdsm))
+        result["tdsm_arr"], result["tdsm_transform"], layer_crs, _ = io.load_raster(str(tdsm))
         logger.info("  ✓ Trunk DSM (TDSM) provided")
+        warn_if_crs_differs("tdsm", layer_crs, dsm_crs)
     elif result["cdsm_arr"] is not None:
         result["tdsm_arr"], result["tdsm_transform"] = None, None
         logger.info(f"  → No TDSM provided - will auto-generate from CDSM (ratio={trunk_ratio})")
@@ -176,8 +225,9 @@ def load_terrain_rasters(
         result["tdsm_arr"], result["tdsm_transform"] = None, None
 
     if land_cover is not None:
-        result["land_cover_arr"], result["land_cover_transform"], _, _ = io.load_raster(str(land_cover))
+        result["land_cover_arr"], result["land_cover_transform"], layer_crs, _ = io.load_raster(str(land_cover))
         logger.info("  ✓ Land cover provided (albedo/emissivity derived from classification)")
+        warn_if_crs_differs("land_cover", layer_crs, dsm_crs)
     else:
         result["land_cover_arr"], result["land_cover_transform"] = None, None
 
@@ -686,8 +736,9 @@ def load_align_layers_sequential(
         p = terrain_paths.get(name)
         if p is None:
             continue
-        arr, transform, _, _ = io.load_raster(str(p))
+        arr, transform, layer_crs, _ = io.load_raster(str(p))
         logger.info(log_by_name[name])
+        warn_if_crs_differs(name, layer_crs, dsm_crs)
         if _needs_resample(arr.shape, transform):
             arr, _ = resample_to_grid(
                 arr, transform, target_bbox, pixel_size, method=method_by_name[name], src_crs=dsm_crs

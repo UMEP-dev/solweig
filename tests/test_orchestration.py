@@ -466,6 +466,16 @@ class TestValidateTileSize:
         assert adjusted == max(1, max_core)
         assert warning is not None
 
+    def test_buffer_that_leaves_no_core_is_rejected(self):
+        """A buffer nearly as large as the tile limit used to give core=1: one tile per pixel."""
+        from solweig.errors import ConfigurationError
+
+        max_full = compute_max_tile_side(context="solweig")
+        with pytest.raises(ConfigurationError) as excinfo:
+            validate_tile_size(800, buffer_pixels=max_full // 2, pixel_size=0.5)
+        assert excinfo.value.parameter == "max_shadow_distance_m"
+        assert "coarser pixel size" in str(excinfo.value)
+
     def test_exact_minimum(self):
         adjusted, warning = validate_tile_size(MIN_TILE_SIZE, buffer_pixels=10, pixel_size=1.0)
         assert adjusted == MIN_TILE_SIZE

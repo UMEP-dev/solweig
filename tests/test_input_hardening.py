@@ -109,6 +109,32 @@ def test_complete_epw_is_silent(tmp_path, warnings):
     assert warnings == []
 
 
+# ── layers in another coordinate system ────────────────────────────────────
+
+
+def test_layer_in_a_different_crs_is_reported(monkeypatch):
+    """Layers are aligned by coordinates without reprojection, so a CRS mismatch misplaces them."""
+    pyproj = pytest.importorskip("pyproj")
+    from solweig.models import surface_loading
+
+    monkeypatch.setattr(surface_loading, "GDAL_ENV", False)
+    messages: list[str] = []
+    monkeypatch.setattr(surface_loading.logger, "warning", messages.append)
+
+    sweref99_tm = pyproj.CRS.from_epsg(3006).to_wkt()
+    sweref99_1200 = pyproj.CRS.from_epsg(3007).to_wkt()
+    same_crs_other_text = pyproj.CRS.from_epsg(3006).to_wkt(version="WKT1_GDAL")
+
+    surface_loading.warn_if_crs_differs("cdsm", sweref99_tm, sweref99_tm)
+    surface_loading.warn_if_crs_differs("cdsm", same_crs_other_text, sweref99_tm)
+    surface_loading.warn_if_crs_differs("cdsm", None, sweref99_tm)
+    assert messages == []
+
+    surface_loading.warn_if_crs_differs("cdsm", sweref99_1200, sweref99_tm)
+    assert len(messages) == 1
+    assert "cdsm" in messages[0] and "different coordinate system" in messages[0]
+
+
 # ── ground view factor height ──────────────────────────────────────────────
 
 

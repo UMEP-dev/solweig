@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 # =============================================================================
 
 MIN_TILE_SIZE = 256  # Minimum tile size in pixels
+_MIN_WORKABLE_CORE = 32  # Below this the shadow buffer dominates every tile; see validate_tile_size
 _FALLBACK_MAX_TILE_SIZE = 2500  # Used when GPU + RAM detection both fail
 MAX_BUFFER_M = 1000.0  # Default maximum buffer / shadow distance in meters
 
@@ -615,9 +616,21 @@ def validate_tile_size(
 
     # Enforce maximum: full tile (core + 2*buffer) must fit resource limit
     max_core = max_full - 2 * buffer_pixels
-    if max_core < 1:
-        warning = f"Buffer {buffer_pixels}px too large for resource limit ({max_full}px). Using minimum feasible core=1"
-        return 1, warning
+    if max_core < _MIN_WORKABLE_CORE:
+        # The shadow buffer leaves (almost) no room for a core. Tiling would
+        # produce about one tile per pixel, each recomputing the whole buffer,
+        # and the run would not finish. Stop with the ways out.
+        from .errors import ConfigurationError
+
+        raise ConfigurationError(
+            parameter="max_shadow_distance_m",
+            reason=(
+                f"the shadow buffer ({buffer_pixels} px on each side at {pixel_size:g} m pixels) does not fit "
+                f"in the largest tile this machine can process ({max_full} px), leaving a core of "
+                f"{max(max_core, 0)} px. Lower max_shadow_distance_m, use a coarser pixel size, "
+                "or run on a machine with more memory"
+            ),
+        )
 
     # Enforce minimum core size (prefer MIN_TILE_SIZE, but allow smaller when overlap is large)
     min_core = MIN_TILE_SIZE if max_core >= MIN_TILE_SIZE else 1

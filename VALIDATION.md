@@ -85,13 +85,13 @@ CSVs are untouched. Details and the evidence are in
 
 - The POI is in shade for almost the entire day, with one short sunlit
   window in the mid-afternoon. The observations show two sunlit hours (15
-  and 16 h); the model shows one (15 h), where it overshoots Tmrt by 16 °C
-  and K↓ by 100 W/m², and is already back in shade at 16 h (−11 °C). The
+  and 16 h); the model shows one (15 h), where it overshoots Tmrt by 16.5 °C
+  and K↓ by 100 W/m², and is already back in shade at 16 h (−12 °C). The
   modelled window is therefore about an hour short of the observed one; the
-  shadow boundary leaves the POI early. Outside those two hours the model
-  sits +0.3 to +4.3 °C above the observations. This single transition
-  drives most of the 6.5 °C RMSE.
-- The L↓ panel shows a steady +17 to +26 W/m² offset across every hour. The
+  shadow boundary leaves the POI early. In the shaded hours before it (7 to
+  14 h) the model sits +1.6 to +4.2 °C above the observations. This single
+  transition drives most of the 6.5 °C RMSE.
+- The L↓ panel shows a steady +17 to +26 W/m² offset from 8 h onward. The
   cool-wall bias is systematic and independent of sun position (see Known
   limitations).
 
@@ -118,9 +118,9 @@ CSVs are untouched. Details and the evidence are in
   through the middle of the day (bias +2.4 °C, RMSE 4.9 °C) and the evening
   shade transition at 19 h is again modelled early (−9 °C).
 - 2006-08-01 (clear summer): RMSE 3.3 °C, R² 0.97. The one-hour K↓ dip at
-  13 h (modelled 470 vs 770 W/m² observed) is a modelled shade pass that the
+  13 h (modelled 460 vs 770 W/m² observed) is a modelled shade pass that the
   observations do not show; it drives the day's K↓ RMSE to 90 W/m² and a
-  −6.5 °C Tmrt difference for that hour. Before b96 this day showed a
+  −6.4 °C Tmrt difference for that hour. Before b96 this day showed a
   600 W/m² K↓ "spike" that was attributed to cloud; it was the met-file
   clock offset.
 
@@ -142,12 +142,13 @@ CSVs are untouched. Details and the evidence are in
 - 2010-07-07: RMSE 4.0 °C, bias +0.5 °C. The POI goes into shade late in
   the morning; the model keeps it sunlit one hour longer (11 h: modelled
   54 °C vs 42 °C observed) and then follows the observations closely.
-- 2010-07-10: only 7 hours, all in shade; modelled Tmrt sits about 3 to
-  4.5 °C above observed throughout (bias +3.3 °C, no abrupt divergence; the L↓
+- 2010-07-10: only 7 hours, all in shade; modelled Tmrt matches at 12 h
+  and sits +3.4 to +4.4 °C above observed from 13 h on (bias +3.3 °C, no
+  abrupt divergence; the L↓
   cool-wall bias and K↑ both contribute).
 - 2010-07-12: RMSE 6.9 °C, bias +3.6 °C. The model keeps the POI sunlit
   through 10 and 11 h where the observations show it already shaded,
-  raising Tmrt by 10 to 13 °C in those two hours, and stays +3 to +8 °C
+  raising Tmrt by 10 to 13 °C in those two hours, and stays +3 to +7 °C
   warm in the shade that follows. This is the dominant driver of the day's
   bias.
 - The Site 1 measurement station sits at the edge of a dense tree canopy in

@@ -880,6 +880,7 @@ class SurfaceData:
                 cast("str | Path | None", tdsm),
                 cast("str | Path | None", land_cover),
                 trunk_ratio,
+                dsm_crs=dsm_crs,
             )
 
         # Load preprocessing data (walls, SVF). ``working_path`` was
