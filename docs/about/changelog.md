@@ -1,5 +1,31 @@
 # Release notes
 
+## 0.1.0b101 — 2026-11-11
+
+Two fixes for the QGIS plugin and two for the met-file loader. No change to
+the model: validation numbers are identical to b100.
+
+- **Plugin: minimum wall height.** The advanced option of the surface
+  preparation step had no effect. Walls for a custom limit were computed
+  and then dropped, and the calculation read the walls found with the
+  default 1 m limit. The saved wall rasters are now replaced. Runs that left
+  the option at 1 m are unchanged.
+- **Plugin: sub-hourly UMEP met files.** Every record is now a timestep, as
+  in UMEP. The plugin previously kept only the on-the-hour records of, for
+  example, a 10-minute file. A new advanced option, "run only the
+  on-the-hour records", restores that for faster runs.
+- **`Weather.from_umep_met(resample_hourly=True)`** logs a warning when it
+  drops sub-hourly rows. The rows it keeps are single records, not hourly
+  means. Hourly files stamped off the hour (for example `imin = 30`) are
+  now kept; the default used to drop every row of such a file.
+- The land-cover property cache is keyed on the content of the materials
+  instead of the object's address.
+- The CPU-only Rust build (`default-features = false`) compiles without
+  warnings.
+- CI: the fast test suite also runs on macOS and Windows, the Rust unit
+  tests run, and each built wheel is installed and used for one small
+  calculation before a release is published.
+
 ## 0.1.0b100 — 2026-11-11
 
 Five corrections to the ground view factor and its inputs, found by a new

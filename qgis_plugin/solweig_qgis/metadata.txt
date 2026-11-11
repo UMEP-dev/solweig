@@ -3,7 +3,7 @@ name=SOLWEIG
 qgisMinimumVersion=4.0
 qgisMaximumVersion=4.99
 description=Calculate Mean Radiant Temperature & UTCI thermal comfort using the SOLWEIG model.
-version=0.1.0-beta100
+version=0.1.0-beta101
 author=SOLWEIG Development Team
 email=gareth.simons@ucl.ac.uk
 
@@ -45,6 +45,10 @@ experimental=True
 deprecated=False
 
 changelog=
+    0.1.0-beta101
+    - "Minimum wall height" (advanced option of the surface preparation step) had no effect: the calculation still used walls found with the default 1 m limit. It now changes the walls that are saved and used. Runs that left the option at 1 m are unchanged.
+    - UMEP/SUEWS met files with sub-hourly records (for example every 10 minutes): every record is now a timestep, as in UMEP. Earlier versions kept only the on-the-hour records. The new advanced option "run only the on-the-hour records" restores that behaviour for faster runs. Hourly files are unchanged.
+    - Hourly met files whose records are stamped off the hour (for example at minute 30) are now read; they previously gave "no valid timesteps".
     0.1.0-beta100
     - Raster edge: ground-reflected and ground-emitted radiation was too low within about 22 m of the edge of the raster (up to 2.6 degrees C in mean radiant temperature on a small test scene). Fixed to match UMEP. Results further from the edge are unchanged.
     - Runs without a land-cover layer: ground within 25 m of a building was treated as building when computing ground radiation, and the default ground albedo was 0.15 instead of UMEP's 0.20. Both fixed. Daytime mean radiant temperature in such runs rises by about 0.5 to 1 degree C on average. Runs with a land-cover layer are not affected.

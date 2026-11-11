@@ -609,6 +609,7 @@ def add_umep_met_parameters(algorithm: QgsProcessingAlgorithm) -> None:
 
     Parameters added:
         UMEP_MET_FILE: Path to UMEP/SUEWS met file
+        UMEP_HOURLY_ONLY: For a sub-hourly file, run only the on-the-hour records
     """
     algorithm.addParameter(
         QgsProcessingParameterFile(
@@ -618,6 +619,15 @@ def add_umep_met_parameters(algorithm: QgsProcessingAlgorithm) -> None:
             optional=True,
         )
     )
+    # Off by default: every record is a timestep, as in UMEP. Up to
+    # 0.1.0b100 the plugin always kept only the on-the-hour records.
+    hourly_only = QgsProcessingParameterBoolean(
+        "UMEP_HOURLY_ONLY",
+        algorithm.tr("Sub-hourly met file: run only the on-the-hour records (faster; values are not hourly means)"),
+        defaultValue=False,
+    )
+    hourly_only.setFlags(hourly_only.flags() | QgsProcessingParameterDefinition.Flag.FlagAdvanced)
+    algorithm.addParameter(hourly_only)
 
 
 def add_date_filter_parameters(algorithm: QgsProcessingAlgorithm) -> None:

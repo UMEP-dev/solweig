@@ -30,9 +30,33 @@ with preserve_solweig_modules():
         load_prepared_surface,
         load_raster_from_layer,
         load_weather_from_epw,
+        load_weather_from_umep_met,
     )
 
 uninstall_osgeo()  # Clean up immediately after imports to avoid polluting other tests
+
+
+def test_umep_met_runs_every_record_unless_hourly_only(tmp_path):
+    """A 10-minute file gives 10-minute timesteps by default, as in UMEP.
+
+    Up to 0.1.0b100 the plugin always kept only the on-the-hour records.
+    """
+    header = "%iy id it imin Q* QH QE Qs Qf Wind RH Td press rain Kdn snow ldown fcld wuh xsmd lai_hr Kdiff Kdir Wd\n"
+    rows = [
+        f"2024 180 {hour} {minute} -999 -999 -999 -999 -999 2 50 20 101.3 0 400 0 -999 0 0 0 0 100 500 180\n"
+        for hour in (10, 11)
+        for minute in (0, 10, 20, 30, 40, 50)
+    ]
+    met = tmp_path / "met_10min.txt"
+    met.write_text(header + "".join(rows))
+
+    every = load_weather_from_umep_met(str(met), None, None, None, MagicMock())
+    assert len(every) == 12
+    assert every[0].timestep_minutes == 10.0
+
+    hourly = load_weather_from_umep_met(str(met), None, None, None, MagicMock(), hourly_only=True)
+    assert [w.datetime.minute for w in hourly] == [0, 0]
+    assert hourly[0].timestep_minutes == 60.0
 
 
 # ---------------------------------------------------------------------------

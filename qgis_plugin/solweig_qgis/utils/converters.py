@@ -511,6 +511,7 @@ def load_weather_from_umep_met(
     end_dt: Any | None,
     hours_filter: str | None,
     feedback: QgsProcessingFeedback,
+    hourly_only: bool = False,
 ) -> list:  # Returns list[solweig.Weather]
     """
     Load weather data from a UMEP/SUEWS meteorological forcing file.
@@ -521,6 +522,8 @@ def load_weather_from_umep_met(
         end_dt: End datetime (inclusive), or None for full range.
         hours_filter: Comma-separated hours to include (e.g., "9,10,11,12").
         feedback: Processing feedback.
+        hourly_only: For a sub-hourly file, keep only the on-the-hour
+            records. The default runs every record, as UMEP does.
 
     Returns:
         List of solweig.Weather objects.
@@ -549,7 +552,7 @@ def load_weather_from_umep_met(
     try:
         weather_series = solweig.Weather.from_umep_met(
             paths=[met_path],
-            resample_hourly=True,
+            resample_hourly=hourly_only,
             start=start_dt,
             end=end_dt,
         )
@@ -575,7 +578,8 @@ def load_weather_from_umep_met(
                 f"The data contains hours from {met_start} to {met_end}."
             )
 
-    feedback.pushInfo(f"Loaded {len(weather_series)} timesteps from UMEP met")
+    step = weather_series[0].timestep_minutes
+    feedback.pushInfo(f"Loaded {len(weather_series)} timesteps from UMEP met ({step:g}-minute records)")
     feedback.pushInfo(f"Period: {weather_series[0].datetime} to {weather_series[-1].datetime}")
 
     return weather_series

@@ -394,6 +394,7 @@ GeoTIFF files organised into subfolders of the output directory:
                 end_dt=end_dt,
                 hours_filter=hours_filter,
                 feedback=feedback,
+                hourly_only=self.parameterAsBool(parameters, "UMEP_HOURLY_ONLY", context),
             )
             if not weather_series:
                 raise QgsProcessingException("No timesteps found in UMEP met file")

@@ -59,6 +59,7 @@ Load raster layers, align them to a common grid, compute wall heights, wall aspe
 | **Height modes** | Relative (to ground) or absolute for each input |
 | **Extent** | Custom processing area (optional — defaults to DSM extent) |
 | **Pixel size** | Output resolution in metres (0 = native DSM resolution) |
+| **Minimum wall height** | Advanced. Height difference from which a DSM step counts as a wall (default 1 m) |
 | **Vegetation settings** | Transmissivity, leaf-on/off dates, conifer flag |
 | **Land cover materials** | Albedo and emissivity per surface class |
 
@@ -114,6 +115,8 @@ Run Tmrt and optional thermal comfort calculations using a prepared surface dire
 | UMEP met file | Load a timeseries from a UMEP meteorological file |
 
 **Date filtering** (EPW and UMEP modes): optional start/end dates and hour-of-day filter (e.g. `9,10,11,12,13,14,15,16,17` for daytime only).
+
+**Sub-hourly UMEP met files:** every record is one timestep, so a 10-minute file gives six timesteps per hour. The advanced option *run only the on-the-hour records* keeps one record per hour for a faster run. Those records are single measurements, not hourly means.
 
 **Key options:**
 
