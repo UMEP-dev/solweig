@@ -322,6 +322,16 @@ sessions should know about.
    uv run poe qgis_check                # compares with the rasterio backend, prints every step
    ```
 
+   **Blocked since 2026-11-11:** QGIS 4.2.0 and 4.2.3 crash on every launch
+   on macOS 27.2 (Qt 6.11 regression QTBUG-147602 in `QImage::toCGImage`;
+   QGIS issues 67981, 67982, 68050; fixed in Qt 6.11.2). The check cannot
+   run on Gareth's Mac until QGIS ships a build on a fixed Qt. The script
+   has never completed a run, so expect to fix it on first use. Until then
+   the evidence for the GDAL path is the CI job `test-qgis-compat` (import
+   fence and `tests/test_backend_parity.py`) and
+   `temp/gdal_backend_check.py`, which runs the raster layer on the QGIS
+   bundle's GDAL with the bundled Python.
+
    Give him the commands with `uv run` in front: `maturin` and `poe` are not
    on his shell's PATH. QGIS opens, works for about a minute and quits.
    `poe qgis_check` must end
