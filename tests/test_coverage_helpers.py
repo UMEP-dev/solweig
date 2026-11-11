@@ -537,6 +537,26 @@ def test_umep_met_resample_hourly_filters_subhour_rows(tmp_path):
     assert len(sub) == 12
 
 
+def test_umep_met_reports_dropped_subhour_rows(tmp_path, caplog):
+    p = tmp_path / "met.txt"
+    rows = [_make_umep_row(2024, 1, h, m, ta=10.0) for h in range(2) for m in (0, 10, 20, 30, 40, 50)]
+    _write_umep_file(p, rows)
+    with caplog.at_level("WARNING"):
+        Weather.from_umep_met(p)
+    assert "kept the 2 on-the-hour rows of 12" in caplog.text
+
+
+def test_umep_met_hourly_rows_off_the_hour_are_kept(tmp_path, caplog):
+    """Hourly data stamped at imin=30 used to be dropped entirely by the default."""
+    p = tmp_path / "met.txt"
+    _write_umep_file(p, [_make_umep_row(2024, 1, h, 30, ta=10.0) for h in range(4)])
+    with caplog.at_level("WARNING"):
+        weathers = Weather.from_umep_met(p)
+    assert [w.datetime.minute for w in weathers] == [30, 30, 30, 30]
+    assert weathers[0].timestep_minutes == 60.0
+    assert "sub-hourly" not in caplog.text
+
+
 def test_umep_met_skips_missing_data_rows(tmp_path):
     """Rows with ta=-999 / rh=-999 / kdn=-999 are filtered out."""
     p = tmp_path / "met.txt"

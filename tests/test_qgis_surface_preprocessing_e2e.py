@@ -249,3 +249,70 @@ def test_surface_preprocessing_warm_run_uses_cache(algo, feedback, tmp_path):
     assert warm_elapsed < cold_elapsed, (
         f"Warm run ({warm_elapsed:.2f}s) should be faster than cold run ({cold_elapsed:.2f}s)"
     )
+
+
+def _run_with_wall_limit(output_dir: Path, dsm_path: Path, wall_limit: float) -> np.ndarray:
+    """Run the algorithm and return the wall-height raster it left on disk."""
+    algo = SurfacePreprocessingAlgorithm()
+    fb = MagicMock()
+    fb.isCanceled.return_value = False
+    params = {
+        "DSM": _build_mock_raster_layer(str(dsm_path)),
+        "CDSM": None,
+        "DEM": None,
+        "TDSM": None,
+        "LAND_COVER": None,
+        "PIXEL_SIZE": 0.0,
+        "WALL_LIMIT": wall_limit,
+        "DSM_HEIGHT_MODE": 1,
+        "CDSM_HEIGHT_MODE": 0,
+        "TDSM_HEIGHT_MODE": 0,
+        "MIN_OBJECT_HEIGHT": 1.0,
+        "TRANSMISSIVITY": 0.03,
+        "TRANSMISSIVITY_LEAFOFF": 0.5,
+        "LEAF_START": 97,
+        "LEAF_END": 300,
+        "EXTENT": _MockExtent(),
+        "OUTPUT_DIR": str(output_dir),
+    }
+    algo.parameterAsRasterLayer = lambda p, name, ctx: p.get(name)
+    algo.parameterAsDouble = lambda p, name, ctx: float(p.get(name, 0.0))
+    algo.parameterAsEnum = lambda p, name, ctx: int(p.get(name, 0))
+    algo.parameterAsString = lambda p, name, ctx: str(p.get(name, ""))
+    algo.parameterAsExtent = lambda p, name, ctx: p.get(name, _MockExtent())
+    algo.parameterAsFile = lambda p, name, ctx: p.get(name, "") or ""
+    algo.parameterAsMatrix = lambda p, name, ctx: p.get(name, [])
+    algo.processAlgorithm(params, MagicMock(), fb)
+    (wall_file,) = (output_dir / "walls").glob("px*/wall_hts.tif")
+    with rasterio.open(wall_file) as src:
+        return src.read(1)
+
+
+@pytest.mark.slow
+def test_custom_wall_limit_reaches_the_saved_walls(tmp_path):
+    """WALL_LIMIT must change the walls the calculation will read, in both directions.
+
+    Up to 0.1.0b100 the custom walls were computed in memory and dropped: the
+    directory kept the 1.0 m walls written by ``SurfaceData.prepare()``.
+    """
+    dsm_path = tmp_path / "dsm.tif"
+    _write_synthetic_dsm(dsm_path)
+    output_dir = tmp_path / "prepared"
+    block_a = (slice(5, 15), slice(5, 15))  # 15 m block and its rim
+    block_b = (slice(17, 26), slice(17, 27))  # 8 m block and its rim
+
+    default = _run_with_wall_limit(output_dir, dsm_path, 1.0)
+    assert default[block_a].max() > 10.0
+    assert default[block_b].max() > 5.0
+    assert not list((output_dir / "walls").glob("px*/wall_limit.txt"))
+
+    # A 10 m limit keeps the 15 m block and drops the 8 m block.
+    custom = _run_with_wall_limit(output_dir, dsm_path, 10.0)
+    assert custom[block_a].max() > 10.0
+    assert custom[block_b].max() == 0.0
+    assert list((output_dir / "walls").glob("px*/wall_limit.txt"))
+
+    # Back to the default on the same directory: the 1.0 m walls return.
+    restored = _run_with_wall_limit(output_dir, dsm_path, 1.0)
+    np.testing.assert_array_equal(restored, default)
+    assert not list((output_dir / "walls").glob("px*/wall_limit.txt"))

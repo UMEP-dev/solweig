@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from pathlib import Path
 
 from qgis.core import (
     QgsProcessingContext,
@@ -336,17 +337,40 @@ Run "SOLWEIG Calculation" with the prepared surface directory.
         feedback.pushInfo(f"Prepared grid: {surface.dsm.shape[1]}x{surface.dsm.shape[0]} pixels")
         feedback.pushInfo(f"Output pixel size: {pixel_size:.2f} m")
 
-        if wall_limit != 1.0:
+        # SurfaceData.prepare() computes walls with a 1.0 m limit and has already
+        # written them to walls/. A custom limit is applied here, and the
+        # rasters on disk are replaced: the calculation reads walls from the
+        # directory, so walls changed only in memory would have no effect
+        # (the case up to 0.1.0b100). The marker file records that the
+        # directory holds custom walls, so that a later run with the default
+        # limit puts the 1.0 m walls back.
+        from solweig.geospatial import pixel_size_tag
+
+        walls_dir = Path(output_dir) / "walls" / pixel_size_tag(pixel_size)
+        limit_marker = walls_dir / "wall_limit.txt"
+        if wall_limit != 1.0 or limit_marker.exists():
+            from solweig import io as solweig_io
             from solweig.geospatial import wallalgorithms as wa
 
             feedback.pushInfo(
-                f"Recomputing walls with custom minimum height {wall_limit:.1f} m "
-                "(core SurfaceData.prepare() uses 1.0 m)"
+                f"Recomputing walls with minimum height {wall_limit:.1f} m (core SurfaceData.prepare() uses 1.0 m)"
             )
             walls = wa.findwalls(surface.dsm, wall_limit)
             dirwalls = wa.filter1Goodwin_as_aspect_v3(walls, 1.0 / pixel_size, surface.dsm, feedback=feedback)
             surface.wall_height = walls
             surface.wall_aspect = dirwalls
+
+            walls_dir.mkdir(parents=True, exist_ok=True)
+            geotransform = surface.geotransform or [0, pixel_size, 0, 0, 0, -pixel_size]
+            crs = surface.crs or ""
+            solweig_io.save_raster(str(walls_dir / "wall_hts.tif"), walls, geotransform, crs, ensure_float32=True)
+            solweig_io.save_raster(
+                str(walls_dir / "wall_aspects.tif"), dirwalls, geotransform, crs, ensure_float32=True
+            )
+            if wall_limit != 1.0:
+                limit_marker.write_text(f"{wall_limit}\n")
+            else:
+                limit_marker.unlink()
 
         if feedback.isCanceled():
             return {}

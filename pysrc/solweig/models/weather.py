@@ -535,8 +535,10 @@ class Weather:
         Args:
             paths: Path(s) to UMEP met file(s). Multiple files are
                 concatenated (e.g., one per month).
-            resample_hourly: If True, keep only on-the-hour rows (imin=0).
-                Default True since SOLWEIG works best with hourly data.
+            resample_hourly: If True, keep only on-the-hour rows (imin=0)
+                and log a warning when that drops sub-hourly rows. The rows
+                are subsampled, not averaged. A file with no on-the-hour row
+                is kept as it is. If False, every row is a timestep.
             start: Start date filter as "YYYY-MM-DD" or datetime. Optional.
             end: End date filter (inclusive) as "YYYY-MM-DD" or datetime. Optional.
 
@@ -596,7 +598,23 @@ class Weather:
 
         # Filter hourly if requested
         if resample_hourly:
-            rows = [r for r in rows if r["minute"] == 0]
+            on_the_hour = [r for r in rows if r["minute"] == 0]
+            if on_the_hour and len(on_the_hour) < len(rows):
+                # Sub-hourly file. The rows kept are the records stamped on the
+                # hour, not hourly means: a 10-minute record at 12:00 covers
+                # 11:50 to 12:00, while the model places the sun at 11:30 for
+                # an hourly step.
+                logger.warning(
+                    f"UMEP met file has sub-hourly records: kept the {len(on_the_hour)} on-the-hour rows of "
+                    f"{len(rows)} and dropped the rest. The kept values are single records, not hourly means. "
+                    "Pass resample_hourly=False to run every record."
+                )
+                rows = on_the_hour
+            elif on_the_hour:
+                rows = on_the_hour
+            # else: no row is stamped on the hour (e.g. hourly data at imin=30).
+            # Dropping them all would leave nothing, so the rows are kept as
+            # they are and the timestep is detected below.
 
         # Auto-detect timestep from consecutive rows (default 60 min).
         # When resample_hourly=False the data may still be hourly but with
