@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+pub mod api;
 mod emissivity_models;
 #[cfg(feature = "gpu")]
 mod gpu;
@@ -13,6 +14,7 @@ mod perez;
 mod pet;
 mod pipeline;
 mod pipeline_bundles;
+mod pipeline_inputs;
 mod pipeline_radiation;
 mod pipeline_scalars;
 mod shadowing;

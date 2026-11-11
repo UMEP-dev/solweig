@@ -41,20 +41,23 @@ fn next_cache_id() -> u64 {
 }
 
 /// Full GVF geometry cache for all 18 azimuths.
-pub(crate) struct GvfGeometryCache {
+///
+/// Opaque outside the crate: build one per surface with
+/// [`precompute_gvf_geometry_cpu`] and pass it to every timestep.
+pub struct GvfGeometryCache {
     /// Identifies this cache to the GPU context, which holds one cache's
     /// geometry at a time and must not serve it to another surface of the
     /// same shape.
-    pub id: u64,
-    pub azimuths: Vec<AzimuthGeometry>,
-    pub first: f32,
-    pub second: f32,
+    pub(crate) id: u64,
+    pub(crate) azimuths: Vec<AzimuthGeometry>,
+    pub(crate) first: f32,
+    pub(crate) second: f32,
     /// Cached gvfalbnosh outputs (purely geometric): center, E, S, W, N.
-    pub cached_albnosh: Array2<f32>,
-    pub cached_albnosh_e: Array2<f32>,
-    pub cached_albnosh_s: Array2<f32>,
-    pub cached_albnosh_w: Array2<f32>,
-    pub cached_albnosh_n: Array2<f32>,
+    pub(crate) cached_albnosh: Array2<f32>,
+    pub(crate) cached_albnosh_e: Array2<f32>,
+    pub(crate) cached_albnosh_s: Array2<f32>,
+    pub(crate) cached_albnosh_w: Array2<f32>,
+    pub(crate) cached_albnosh_n: Array2<f32>,
 }
 
 /// Compute (dx, dy) shift for a given azimuth and step index.
@@ -263,7 +266,7 @@ fn precompute_azimuth_geometry(
 /// This runs the building ray-trace once and caches the results.
 /// Subsequent timesteps skip the geometry and only compute thermal quantities.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn precompute_gvf_geometry_cpu(
+pub fn precompute_gvf_geometry_cpu(
     buildings: ArrayView2<f32>,
     wall_aspect: ArrayView2<f32>,
     wall_ht: ArrayView2<f32>,

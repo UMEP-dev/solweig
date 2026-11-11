@@ -327,7 +327,7 @@ fn prepare_bushes(vegdem: ArrayView2<f32>, vegdem2: ArrayView2<f32>) -> Array2<f
 // --- Main Calculation Function ---
 // Calculate SVF with 153 patches (equivalent to Python's svfForProcessing153)
 // Internal implementation that supports an optional progress counter
-fn calculate_svf_inner(
+pub fn calculate_svf_inner(
     dsm_owned: Array2<f32>,
     vegdem_owned: Array2<f32>,
     vegdem2_owned: Array2<f32>,
