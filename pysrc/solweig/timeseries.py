@@ -152,6 +152,48 @@ if TYPE_CHECKING:
     )
 
 
+_OUTPUT_BYTES_PER_PIXEL = 4  # per-timestep GeoTIFFs are uncompressed float32 (measured 4.01 B/px)
+
+
+def _format_bytes(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024.0:
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024.0
+    return f"{n:.1f} TB"
+
+
+def _report_output_disk_use(output_path: Path, outputs: list[str] | None, n_steps: int, rows: int, cols: int) -> int:
+    """Log the disk space the per-timestep GeoTIFFs will take and warn if it exceeds the free space.
+
+    One file per requested output per timestep, 4 bytes per pixel each. A
+    long series on a large raster can reach hundreds of gigabytes, and the
+    run would otherwise fail partway through when the disk fills.
+
+    Returns:
+        The estimate in bytes (0 when no per-timestep output is requested).
+    """
+    if not outputs:
+        return 0
+    n_files = len(set(outputs)) * n_steps
+    estimate = n_files * rows * cols * _OUTPUT_BYTES_PER_PIXEL
+    logger.info(f"  Per-timestep outputs: {n_files} GeoTIFFs, about {_format_bytes(estimate)} on disk")
+    try:
+        import shutil
+
+        free = shutil.disk_usage(output_path).free
+    except OSError:
+        return estimate
+    if estimate > free:
+        logger.warning(
+            f"The per-timestep outputs need about {_format_bytes(estimate)} "
+            f"({len(set(outputs))} output(s) x {n_steps} timesteps) and {output_path} has "
+            f"{_format_bytes(free)} free. The run will stop when the disk is full. Save fewer outputs, "
+            "run a shorter period, or leave `outputs` empty to write the summary grids only."
+        )
+    return estimate
+
+
 def _calculate_timeseries(
     surface: SurfaceData,
     weather_series: list[Weather],
@@ -444,6 +486,7 @@ def _calculate_timeseries(
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+    _report_output_disk_use(output_path, outputs, n_steps, rows, cols)
 
     # Determine which arrays the Rust compute needs to return.
     requested_outputs: set[str] = {"tmrt", "shadow"}
