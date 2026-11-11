@@ -108,6 +108,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         // Per-azimuth accumulators (matches sun_on_surface_cached)
         var tempbub: f32 = 0.0;
+        var cur_lup: f32 = 0.0;
+        var cur_alb: f32 = 0.0;
+        var cur_wallsun: f32 = 0.0;
         var wsLupsh: f32 = 0.0;
         var wsalbsh: f32 = 0.0;
         var wsLwall: f32 = 0.0;
@@ -126,27 +129,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             let src_row = row_i + shift.x;
             let src_col = col_i + shift.y;
 
-            // Accumulate shifted thermal terms (only within blocking distance
-            // and when the source pixel is in bounds)
+            // Refresh the shifted values while the source pixel is in bounds.
+            // Out of bounds they keep the last value (EDGE CLAMP, do NOT skip):
+            // sunonsurface_2018a never clears its shift buffers, and
+            // gvf_precompute.wgsl builds blocking_distance the same way.
             if (src_row >= 0 && src_row < rows_i &&
                 src_col >= 0 && src_col < cols_i) {
                 let src_idx = pixel_idx(u32(src_row), u32(src_col));
+                cur_lup = lup[src_idx];
+                cur_alb = albshadow[src_idx];
+                cur_wallsun = sunwall_mask[src_idx];
+            }
 
-                if (n < bd) {
-                    wsLupsh += lup[src_idx];
-                    wsalbsh += albshadow[src_idx];
-                }
-
-                // Wall-sun latch: activates when within blocking distance
-                // and either already latched or current pixel has sun on wall
-                if (n < bd && (tempbub + sunwall_mask[src_idx]) > 0.0) {
+            if (n < bd) {
+                wsLupsh += cur_lup;
+                wsalbsh += cur_alb;
+                // Wall-sun latch
+                if ((tempbub + cur_wallsun) > 0.0) {
                     tempbub = 1.0;
                 }
             }
 
-            // Wall accumulators update every step using current latch state
-            // (not gated by bounds — matches CPU behavior where zip covers
-            // the full array but tempbub only changes in the overlap region)
+            // Wall accumulators update every step using the current latch state
             wsLwall += tempbub * params.lwall;
             wsalbwall += tempbub * params.wall_albedo;
             wswall += tempbub;

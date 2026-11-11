@@ -2,8 +2,30 @@
 
 ## 0.1.0b100 — 2026-11-11
 
-One small change to results, and four input checks.
+Five corrections to the ground view factor and its inputs, found by a new
+end-to-end comparison with the reference implementation, and six input
+checks. Of the five, only the height change moves the scores at the
+validation sites.
 
+- **Raster edge.** Ground-reflected shortwave and ground-emitted longwave
+  were too low within the ground view factor's search range of the raster
+  edge (22 m for a standing person). Steps of the search that left the
+  raster were dropped; the reference keeps the last value seen. On a 40 m
+  test scene Kup and Lup were up to 24 W/m² low and Tmrt up to 2.6 °C low.
+  Pixels further from the edge are unchanged.
+- **Posture change on one surface.** A second `calculate()` on the same
+  `SurfaceData` with a different posture reused the ground view factor
+  geometry of the first. It is now rebuilt.
+- **Building mask without a land-cover grid.** Ground within 25 m of a wall
+  was treated as building by the ground view factor. The mask is now every
+  pixel 2 m or more above the DEM, as in the reference. Without a DEM, the
+  10th-percentile DSM height away from walls stands in for ground level.
+- **Ground albedo without a land-cover grid** is 0.20 (cobblestone), as in
+  the reference. It was 0.15.
+- Together the last two raise daytime Tmrt by 0.5 to 1.0 °C on average when
+  the validation sites are run without their land-cover grids, and bring
+  those runs to within 0.2 °C RMSE of the runs with land cover. Runs with a
+  land-cover grid are not affected by either.
 - **Ground view factor height.** Ground-reflected shortwave and
   ground-emitted longwave are now evaluated at the height of the body's
   centre of gravity for the posture (1.1 m standing, 0.75 m sitting), as in
@@ -22,6 +44,15 @@ One small change to results, and four input checks.
 - **Isotropic fallback.** The anisotropic sky is the default but needs
   shadow matrices. A run without them logs that it used the isotropic sky,
   and `run_metadata.json` records what ran.
+- **Tiles too small to work** (core under 32 pixels) raise
+  `ConfigurationError` instead of running very slowly.
+- **CRS mismatch.** A warning is logged when an input raster's CRS differs
+  from the DSM's.
+
+One difference from the reference runner is kept on purpose. Without a
+land-cover grid the runner uses a ground `Tstart` of +3.41 and with one it
+uses −3.41 for the same material. This package uses −3.41 on both paths.
+The inconsistency has been reported upstream.
 
 ## 0.1.0b99 — 2026-11-11
 

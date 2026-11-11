@@ -25,6 +25,19 @@ _OUT_LUP = 1 << 4
 _OUT_ALL = _OUT_SHADOW | _OUT_KDOWN | _OUT_KUP | _OUT_LDOWN | _OUT_LUP
 
 
+def _gvf_full_grid_key(buildings, wall_asp, wall_ht, alb_grid, pixel_size, posture_height, albedo_wall):
+    """Key of the full-grid GVF geometry cache: every input of ``precompute_gvf_cache``."""
+    return (
+        _arr_key(buildings),
+        _arr_key(wall_asp),
+        _arr_key(wall_ht),
+        _arr_key(alb_grid),
+        float(pixel_size),
+        float(posture_height),
+        float(albedo_wall),
+    )
+
+
 def _arr_key(arr):
     """Cache key for `arr` that catches in-place mutations cheaply.
 
@@ -383,11 +396,17 @@ def calculate_core_fused(
     )
 
     # Buildings mask for GVF (computed from DSM/land_cover/walls)
-    buildings_key = (_arr_key(geom.dsm), _arr_key(optical.land_cover), _arr_key(wall_ht), float(pixel_size))
+    buildings_key = (
+        _arr_key(geom.dsm),
+        _arr_key(optical.land_cover),
+        _arr_key(wall_ht),
+        _arr_key(geom.dem),
+        float(pixel_size),
+    )
     buildings = cache.get_or_compute(
         "buildings_mask_cache",
         buildings_key,
-        lambda: detect_building_mask(geom.dsm, optical.land_cover, wall_ht, pixel_size),
+        lambda: detect_building_mask(geom.dsm, optical.land_cover, wall_ht, pixel_size, dem=geom.dem),
     )
 
     if optical.has_land_cover:
@@ -437,11 +456,15 @@ def calculate_core_fused(
                 ),
             )
         else:
-            # Full-grid case: cache slot value is the gvf_cache directly (no
-            # key needed — it's invariant across timesteps for the full grid).
-            gvf_cache = cache.gvf_geometry_cache
-            if gvf_cache is None:
-                gvf_cache = pipeline.precompute_gvf_cache(
+            # Full-grid case. Keyed like the cropped slot: the geometry depends
+            # on the posture height and the albedos, which can change between
+            # calls on the same surface.
+            gvf_cache = cache.get_or_compute(
+                "gvf_geometry_cache",
+                _gvf_full_grid_key(
+                    buildings, wall_asp, wall_ht, alb_grid, pixel_size, human.posture_height, albedo_wall
+                ),
+                lambda: pipeline.precompute_gvf_cache(
                     as_float32(buildings),
                     as_float32(wall_asp),
                     as_float32(wall_ht),
@@ -449,8 +472,8 @@ def calculate_core_fused(
                     float(pixel_size),
                     float(human.posture_height),
                     float(albedo_wall),
-                )
-                cache.gvf_geometry_cache = gvf_cache
+                ),
+            )
 
     # Anisotropic sky: Perez luminance, steradians, ASVF, and esky are now
     # computed inside the Rust pipeline (no Python round-trip). We only need
@@ -768,11 +791,17 @@ def warm_gvf_geometry(surface, human, materials, pixel_size: float) -> None:
         return
 
     try:
-        buildings_key = (_arr_key(geom.dsm), _arr_key(optical.land_cover), _arr_key(wall_ht), float(pixel_size))
+        buildings_key = (
+            _arr_key(geom.dsm),
+            _arr_key(optical.land_cover),
+            _arr_key(wall_ht),
+            _arr_key(geom.dem),
+            float(pixel_size),
+        )
         buildings = cache.get_or_compute(
             "buildings_mask_cache",
             buildings_key,
-            lambda: detect_building_mask(geom.dsm, optical.land_cover, wall_ht, pixel_size),
+            lambda: detect_building_mask(geom.dsm, optical.land_cover, wall_ht, pixel_size, dem=geom.dem),
         )
         lc_props_key = (
             _arr_key(optical.land_cover),
@@ -785,14 +814,19 @@ def warm_gvf_geometry(surface, human, materials, pixel_size: float) -> None:
             lc_props_key,
             lambda: surface.get_land_cover_properties(materials),
         )[0]
-        cache.gvf_geometry_cache = pipeline.precompute_gvf_cache(
-            as_float32(buildings),
-            as_float32(wall_asp),
-            as_float32(wall_ht),
-            as_float32(alb_grid),
-            float(pixel_size),
-            float(human.posture_height),
-            0.20,  # must match the albedo_wall default in calculate_core_fused
+        albedo_wall = 0.20  # must match the albedo_wall default in calculate_core_fused
+        cache.get_or_compute(
+            "gvf_geometry_cache",
+            _gvf_full_grid_key(buildings, wall_asp, wall_ht, alb_grid, pixel_size, human.posture_height, albedo_wall),
+            lambda: pipeline.precompute_gvf_cache(
+                as_float32(buildings),
+                as_float32(wall_asp),
+                as_float32(wall_ht),
+                as_float32(alb_grid),
+                float(pixel_size),
+                float(human.posture_height),
+                albedo_wall,
+            ),
         )
     except Exception:
         pass

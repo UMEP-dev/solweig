@@ -1939,7 +1939,9 @@ class SurfaceData:
         """
         if self.land_cover is None:
             # Use provided grids or defaults
-            alb = self.albedo if self.albedo is not None else np.full_like(self.dsm, 0.15)
+            # 0.20 is UMEP's value without a land-cover grid (Cobble_stone_2014a,
+            # the same as class 0 below); it was 0.15 up to 0.1.0b99.
+            alb = self.albedo if self.albedo is not None else np.full_like(self.dsm, 0.20)
             emis = self.emissivity if self.emissivity is not None else np.full_like(self.dsm, 0.95)
             tgk = np.full_like(self.dsm, 0.37)  # Default TgK (cobblestone)
             tstart = np.full_like(self.dsm, -3.41)  # Default Tstart (cobblestone)

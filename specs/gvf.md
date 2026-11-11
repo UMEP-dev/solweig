@@ -82,13 +82,21 @@ This determines whether wall-temperature terms (heated walls) or ambient-tempera
 
 The ray-tracing geometry (building blocking distances, wall influence masks) can be precomputed once and reused across timesteps. The cached path (`sun_on_surface_cached`) skips the expensive ray-marching and only recomputes the thermal-dependent outputs (`gvf_lup`, `gvfalb`). The purely geometric output (`gvfalbnosh`) is taken directly from the cache.
 
+### Raster Edge
+
+When a search step falls outside the raster, the pixel keeps the building, shadow, Lup and albedo values of the last step that was inside it. This is the behaviour of `sunonsurface_2018a`, whose shift buffers are not cleared between steps. It amounts to assuming that the surface continues unchanged beyond the edge. The uncached path, the cached path and both GPU shaders follow it. Dropping the out-of-raster steps instead lowers Lup and Kup within `second` pixels of the edge.
+
+### Building Mask
+
+With a land-cover grid, class 2 is building. Without one, a pixel is a building when the DSM is 2 m or more above the DEM, as in the reference runner. Without a DEM, ground level is taken as the 10th-percentile DSM height away from walls, which assumes level terrain.
+
 ## Inputs
 
 | Input | Type | Description |
 | --- | --- | --- |
 | wallsun | 2D array (f32) | Sunlit wall height from shadow calculation |
 | walls | 2D array (f32) | Wall height grid |
-| buildings | 2D array (f32) | Building mask (1.0 = building, 0.0 = ground) |
+| buildings | 2D array (f32) | Building mask (0.0 = building, 1.0 = ground) |
 | shadow | 2D array (f32) | Combined shadow mask (0.0-1.0) |
 | dirwalls | 2D array (f32) | Wall aspect (orientation) in degrees |
 | tg | 2D array (f32) | Ground temperature deviation from air temp (°C) |

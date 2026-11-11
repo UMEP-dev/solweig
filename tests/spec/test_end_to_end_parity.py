@@ -31,26 +31,34 @@ converts Tmrt with 273.2 and this package with 273.15 (documented in
 ``specs/tmrt.md``, "Some legacy implementations used -273.2"); the 0.05 degC
 offset is removed from the reference before comparing.
 
-Findings recorded here as strict xfails (measured 2026-11-11, 0.1.0b100):
+Differences this test found on its first runs, all on the path without a
+land-cover grid, and fixed in 0.1.0b100:
 
-1. Ground albedo without a land-cover grid: 0.15 in
-   ``SurfaceData.get_land_cover_properties``, 0.20 (``Cobble_stone_2014a``) in
-   the reference runner. Kup is 25 percent lower.
-2. ``Tstart`` without a land-cover grid: -3.41 in the package, +3.41 in the
+- Ground albedo defaulted to 0.15; the reference runner uses 0.20
+  (``Cobble_stone_2014a``).
+- ``detect_building_mask`` dilated the wall pixels by 25 m, so the ground view
+  factor treated every pixel within 25 m of a wall as a building. The reference
+  runner uses ``dsm - dem >= 2``.
+- The per-timestep ground view factor dropped the ray steps that leave the
+  raster. The reference keeps the last value seen (its shift buffers are never
+  cleared). Lup and Kup were up to 24 W/m2 low on this grid.
+- The full-grid ground view factor geometry was cached without a key, so a
+  second call on the same surface with another posture reused the first
+  posture's geometry.
+
+Differences that remain, recorded as strict xfails (measured 2026-11-11):
+
+1. ``Tstart`` without a land-cover grid: -3.41 in the package, +3.41 in the
    reference runner, which subtracts the parameter (``Knight - param``) on this
    path only (its land-cover path, ``Tgmaps_v1``, uses the parameter as is).
-   Sunlit Lup is about 35 W/m2 lower.
-3. Building mask without a land-cover grid: ``detect_building_mask`` dilates
-   the wall pixels by 25 m, so every pixel within 25 m of a wall is treated as
-   a building by the ground view factor (the whole of this grid). The
-   reference runner uses ``dsm - dem >= 2``.
-4. Sitting posture: the Rust pipeline switches to the box model
+   Sunlit Lup is about 35 W/m2 lower. Raised upstream; not ported.
+2. Sitting posture: the Rust pipeline switches to the box model
    (``cyl = human.is_standing``); in the reference runner ``cyl`` is a setting
    independent of the posture.
 
-``test_rest_of_the_chain_matches_with_the_known_inputs_aligned`` gives the
-reference the package's values for findings 1 to 3 and shows that nothing else
-differs for the standing posture.
+``test_rest_of_the_chain_matches_with_tstart_aligned`` gives the reference the
+package's ``Tstart`` and shows that nothing else differs for the standing
+posture.
 """
 
 from __future__ import annotations
@@ -332,7 +340,7 @@ def _reference_inputs(posture: str) -> dict:
 
 
 def _package_ground_inputs() -> dict[str, np.ndarray]:
-    """The three inputs of findings 1 to 3, as ``calculate_core_fused`` derives them."""
+    """Ground albedo, ``Tstart`` and building mask, as ``calculate_core_fused`` derives them."""
     surface, _, _ = _scene()
     alb, _, _, tstart, _ = surface.get_land_cover_properties(None)
     buildings = detect_building_mask(surface.dsm, None, surface.wall_height, PIXEL_SIZE)
@@ -347,12 +355,11 @@ def _package_ground_inputs() -> dict[str, np.ndarray]:
 def _reference_side(posture: str, aligned: bool = False) -> dict[str, np.ndarray]:
     """One timestep through the reference function.
 
-    ``aligned`` replaces the ground albedo, ``Tstart`` and the building mask
-    with the package's values, to test everything else.
+    ``aligned`` replaces ``Tstart`` with the package's value, to test everything else.
     """
     args = _reference_inputs(posture)
     if aligned:
-        args.update(_package_ground_inputs())
+        args["Tstart"] = _package_ground_inputs()["Tstart"]
     with np.errstate(divide="ignore", invalid="ignore"):  # gvf_2018a divides by zero wall heights
         out = reference.Solweig_2025a_calc(*args.values())
     tmrt, kdown, kup, ldown, lup = out[0:5]
@@ -392,22 +399,18 @@ def _cases(known: dict[tuple[str, str], str]) -> list:
     return cases
 
 
-ALBEDO = "ground albedo 0.15 (package) against 0.20 (runner)"
 TSTART = "Tstart -3.41 (package) against +3.41 (runner)"
-MASK = "building mask covers the whole grid (package) against the 100 block pixels (runner)"
 BOX = "sitting posture runs the box model (package) against cyl=1 (runner)"
 
 AS_RUNNER = {
-    ("standing", "kup"): f"max 40.81, mean 32.21 W/m2: {ALBEDO}; {MASK}",
-    ("standing", "lup"): f"max 41.64, mean 34.86 W/m2: {TSTART}; {MASK}",
-    ("standing", "tmrt"): f"max 5.36, mean 3.70 degC: {ALBEDO}; {TSTART}; {MASK}",
-    ("sitting", "kup"): f"max 39.22, mean 32.22 W/m2: {ALBEDO}; {MASK}",
-    ("sitting", "lup"): f"max 39.96, mean 35.15 W/m2: {TSTART}; {MASK}",
-    ("sitting", "tmrt"): f"max 5.05, mean 4.15 degC: {ALBEDO}; {TSTART}; {MASK}; {BOX}",
+    ("standing", "lup"): f"max 39.32, mean 35.49 W/m2: {TSTART}",
+    ("standing", "tmrt"): f"max 2.44, mean 2.25 degC: {TSTART}",
+    ("sitting", "lup"): f"max 39.53, mean 35.73 W/m2: {TSTART}",
+    ("sitting", "tmrt"): f"max 2.95, mean 2.72 degC: {TSTART}; {BOX}",
 }
 
 ALIGNED = {
-    ("sitting", "tmrt"): f"max 0.56, mean 0.52 degC with the ground inputs aligned (0.0001 with cyl=0): {BOX}",
+    ("sitting", "tmrt"): f"max 0.58, mean 0.51 degC with Tstart aligned: {BOX}",
 }
 
 
@@ -426,12 +429,11 @@ def test_one_timestep_matches_the_reference(posture, name):
 
 
 @pytest.mark.parametrize(("posture", "name"), _cases(ALIGNED))
-def test_rest_of_the_chain_matches_with_the_known_inputs_aligned(posture, name):
-    """Same comparison with the package's ground albedo, Tstart and building mask on both sides."""
+def test_rest_of_the_chain_matches_with_tstart_aligned(posture, name):
+    """Same comparison with the package's Tstart on both sides."""
     _assert_within(posture, name, aligned=True)
 
 
-@pytest.mark.xfail(strict=True, reason="0.15 in SurfaceData.get_land_cover_properties, 0.20 in the runner")
 def test_default_ground_albedo_is_the_runner_value():
     runner = _reference_inputs("standing")["alb_grid"]
     np.testing.assert_allclose(_package_ground_inputs()["alb_grid"], runner, atol=1e-6)
@@ -443,7 +445,78 @@ def test_default_tstart_is_the_runner_value():
     np.testing.assert_allclose(_package_ground_inputs()["Tstart"], runner, atol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="1500 of 1600 px differ: walls dilated by 25 m against dsm - dem >= 2")
 def test_building_mask_is_the_runner_mask():
+    """Without a DEM (10th-percentile ground level) and with the DEM the runner uses."""
+    surface, _, _ = _scene()
     runner = _reference_inputs("standing")["buildings"]
     np.testing.assert_array_equal(_package_ground_inputs()["buildings"], runner)
+    with_dem = detect_building_mask(surface.dsm, None, surface.wall_height, PIXEL_SIZE, dem=np.zeros_like(surface.dsm))
+    np.testing.assert_array_equal(with_dem, runner)
+
+
+def test_building_mask_follows_the_dem_on_a_slope():
+    """Ground that rises more than 2 m across the raster is not a building when a DEM is given."""
+    dem = np.tile(np.linspace(0.0, 20.0, SHAPE[1], dtype=np.float32), (SHAPE[0], 1))
+    dsm = dem.copy()
+    dsm[BUILDING] += BUILDING_HEIGHT
+    walls = findwalls(dsm, PIXEL_SIZE)
+    mask = detect_building_mask(dsm, None, walls, PIXEL_SIZE, dem=dem)
+    expected = np.ones(SHAPE, dtype=np.float32)
+    expected[BUILDING] = 0.0
+    np.testing.assert_array_equal(mask, expected)
+
+
+def test_posture_change_on_one_surface_rebuilds_the_gvf_geometry():
+    """Sitting after standing on the same surface equals sitting on a fresh surface."""
+    surface, weather, location = _scene()
+
+    def run(surf):
+        state = ThermalState.initial(surf.shape)
+        state.timestep_dec = TIMESTEP_DEC
+        solweig.disable_gpu()
+        try:
+            result = _calculate_single(
+                surface=surf,
+                location=location,
+                weather=weather,
+                human=HumanParams(posture="sitting"),
+                use_anisotropic_sky=False,
+                state=state,
+                return_state_copy=False,
+                _requested_outputs={"kup", "lup"},
+            )
+        finally:
+            solweig.enable_gpu()
+        return np.asarray(result.kup).copy(), np.asarray(result.lup).copy()
+
+    _package_side("standing")  # leaves the standing geometry on the shared surface
+    reused = run(surface)
+    fresh_surface = SurfaceData(
+        dsm=_dsm(), pixel_size=PIXEL_SIZE, wall_height=surface.wall_height, wall_aspect=surface.wall_aspect
+    )
+    fresh_surface.svf = surface.svf
+    fresh = run(fresh_surface)
+    np.testing.assert_array_equal(reused[0], fresh[0])
+    np.testing.assert_array_equal(reused[1], fresh[1])
+
+
+@pytest.mark.skipif(not solweig.is_gpu_available(), reason="needs a GPU")
+@pytest.mark.parametrize("name", ["kup", "lup"])
+def test_gpu_ground_view_factor_matches_at_the_raster_edge(name):
+    """The GPU thermal accumulation keeps the last in-bounds value, like the CPU path."""
+    surface, weather, location = _scene()
+    state = ThermalState.initial(surface.shape)
+    state.timestep_dec = TIMESTEP_DEC
+    result = _calculate_single(
+        surface=surface,
+        location=location,
+        weather=weather,
+        human=HumanParams(posture="standing"),
+        use_anisotropic_sky=False,
+        state=state,
+        return_state_copy=False,
+        _requested_outputs={name},
+    )
+    gpu = np.asarray(getattr(result, name), dtype=np.float64)
+    diff = np.abs(gpu - _reference_side("standing", aligned=True)[name])[_ground_mask()]
+    assert diff.max() <= ATOL[name], f"{name} on the GPU: max abs diff {diff.max():.4f}"
