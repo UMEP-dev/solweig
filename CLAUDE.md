@@ -313,39 +313,31 @@ sessions should know about.
    QGIS plugin (`qgis_plugin/`), raster I/O (`io.py`, `output_async.py`,
    `_compat.py`, `surface_loading.py`, `utils.py`) or anything branching on
    `GDAL_ENV`. The test suite mocks QGIS, so this is the only check against
-   the real application. Gareth runs it from his own Terminal (it cannot be
-   started from an agent session: on macOS the QGIS app crashes at startup
-   there, and its command-line Python refuses to load a locally built
-   extension):
+   the real application. The maintainer runs it from a normal terminal. An
+   agent session must not start the QGIS app, and the bundle's command-line
+   Python refuses to load a locally built extension:
 
    ```bash
    uv run maturin develop --release     # only if Rust changed since the last build
-   /Applications/QGIS-final-4_2_0.app/Contents/MacOS/QGIS-final-4_2_0 --noplugins --code scripts/qgis_release_check.py
+   <QGIS app>/Contents/MacOS/<QGIS binary> --noplugins --code scripts/qgis_release_check.py
    uv run poe qgis_check                # compares with the rasterio backend, prints every step
    ```
 
-   **Update 2026-11-17:** the 4.3 nightly (`/Applications/QGIS-master-f8bc9f2.app`)
-   launches on macOS 27.2 and the 4.2.0 bundle named in the commands above is
-   no longer installed; substitute the nightly's path. The official 4.2.3
-   still crashes (QGIS issue 67981, fix expected in 4.4.0). A pass on the
-   nightly is provisional until 4.4.0.
+   Give the commands with `uv run` in front. QGIS opens, works for about a
+   minute and quits. `poe qgis_check` must end with `ALL OK` and report the
+   version being released. Ask the maintainer to run it; do not tag a release
+   in scope without it. For releases out of scope, say so in the hand-over
+   ("QGIS check not needed: no plugin or raster I/O change").
 
-   **Blocked since 2026-11-11:** QGIS 4.2.0 and 4.2.3 crash on every launch
-   on macOS 27.2 (Qt 6.11 regression QTBUG-147602 in `QImage::toCGImage`;
-   QGIS issues 67981, 67982, 68050; fixed in Qt 6.11.2). The check cannot
-   run on Gareth's Mac until QGIS ships a build on a fixed Qt. The script
-   has never completed a run, so expect to fix it on first use. Until then
-   the evidence for the GDAL path is the CI job `test-qgis-compat` (import
-   fence and `tests/test_backend_parity.py`) and
+   **macOS 27.2 status (2026-11-17):** QGIS 4.2.0 and 4.2.3 crash on every
+   launch (Qt 6.11 regression QTBUG-147602 in `QImage::toCGImage`; QGIS
+   issues 67981, 67982, 68050; fixed in Qt 6.11.2, expected in QGIS 4.4.0).
+   The 4.3 nightly launches; a pass on it is provisional until 4.4.0. The
+   script has never completed a run, so expect to fix it on first use. Until
+   it has, the evidence for the GDAL path is the CI job `test-qgis-compat`
+   (import fence and `tests/test_backend_parity.py`) and
    `temp/gdal_backend_check.py`, which runs the raster layer on the QGIS
    bundle's GDAL with the bundled Python.
-
-   Give him the commands with `uv run` in front: `maturin` and `poe` are not
-   on his shell's PATH. QGIS opens, works for about a minute and quits.
-   `poe qgis_check` must end
-   with `ALL OK` and report the version being released. Ask Gareth to run it;
-   do not tag a release in scope without it. For releases out of scope, say so
-   in the hand-over ("QGIS check not needed: no plugin or raster I/O change").
 
 Added 2026-07-07 after a b90 release went out with the VALIDATION.md
 summary header still reading b89 and an "(Unreleased.)" marker in the
