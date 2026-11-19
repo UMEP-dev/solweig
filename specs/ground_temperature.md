@@ -229,7 +229,9 @@ G  = a1·Rn + a2·(Rn − Rn_past) + a3
 with per-class OHM coefficients `a1..a3` (`a1` seasonally modulated by a
 latitude-signed sinusoid). Integration is a 2nd-order Runge-Kutta step;
 at shadow transitions (|shadow − shadow_past| > 0.5) the change in `G` is
-clamped to `|a1·ΔRn|` to damp flux spikes. Water pixels (class 7) replace
+clamped to `|a1·ΔRn|` to damp flux spikes. `shadow_past` starts at zero
+on the first timestep, as in the reference runner, so a run that begins at
+night has no transition on its first step. Water pixels (class 7) replace
 the OHM step with a 1 m slab energy balance including a latent heat term.
 The slab increment is evaluated at the RK2-updated temperature and added to
 the previous-step temperature.

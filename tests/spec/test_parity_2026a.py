@@ -477,6 +477,65 @@ def test_initiate_ground_scheme_matches_upstream(latitude, day):
     assert lc[6, 6] == 101.0
 
 
+def test_previous_shadow_starts_at_zero_as_in_the_reference_runner():
+    """The carried ``shadow_past`` starts as zeros.
+
+    ``Solweig_run.py`` creates ``shadow = np.zeros_like(dsm)`` before the time
+    loop and passes it as ``shadow_past`` on the first timestep. The value is
+    not returned by ``initiate_groundScheme``, so the comparison above does
+    not cover it.
+    """
+    lc = np.zeros((8, 8), dtype=np.float32)
+    state = initiate_ground_scheme(lc, load_params(), 200, [15.0, 14.0, 16.0], 57.7)
+    assert state.shadow_past.shape == lc.shape
+    assert not state.shadow_past.any()
+
+
+def test_the_starting_previous_shadow_changes_a_first_step_at_night():
+    """Why the starting value matters: it decides whether step one is a shadow transition.
+
+    At night the shadow grid is zero. With ``shadow_past`` at zero the
+    reference applies no heat-flux damping on the first step; with ones it
+    does, and the surface temperature differs.
+    """
+    shape = (6, 6)
+    lc = np.zeros(shape, dtype=np.float64)
+    with open(_MATERIALS_JSON) as fh:
+        params_dict = json.load(fh)
+
+    def first_night_step(shadow_past_value: float) -> np.ndarray:
+        tg, tm, rn, rn_past, g, cap, diff, a1, a2, a3 = initiate_groundScheme(
+            lc.copy(), params_dict, 200, np.array([15.0, 14.0, 16.0]), {"latitude": 57.7, "longitude": 12.0}
+        )
+        tg_new, _, _, _ = surfaceTemperature_calc(
+            np.zeros(shape),  # Kdown
+            np.full(shape, 320.0),  # Ldown
+            rn,
+            rn_past,
+            g,
+            tg,
+            tm,
+            np.full(shape, 0.2),
+            np.full(shape, 0.95),
+            cap,
+            diff,
+            lc.copy(),
+            a1,
+            a2,
+            a3,
+            3600,
+            70.0,
+            np.zeros(shape),  # shadow at night
+            np.full(shape, shadow_past_value),
+        )
+        return np.asarray(tg_new, dtype=np.float64)
+
+    as_runner = first_night_step(0.0)
+    sunlit_start = first_night_step(1.0)
+    assert np.isfinite(as_runner).all()
+    assert np.abs(as_runner - sunlit_start).max() > 0.1
+
+
 def test_initiate_ground_scheme_rejects_unparameterized_class():
     """A land-cover class without OHM coefficients raises a structured error."""
     from solweig.errors import InvalidSurfaceData

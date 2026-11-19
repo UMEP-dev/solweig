@@ -356,11 +356,29 @@ Consequences:
   model. POI Tmrt bias of the reference, scheme off / on (°C): Kronenhuset
   +1.9 / +9.9; Gustav Adolfs +0.5 / +2.5, +2.3 / +4.1, +1.9 / +4.5; GVC
   +0.4 / +3.7, +3.3 / +7.4, +3.5 / +6.2. The port is within 0.2 °C of
-  these on every site-day. The largest hourly difference is 0.8 °C, in
-  the first night hours with the scheme on, where the port's Lup is 5 to
-  8 W/m² higher; the cause is not known. Averaged over the seven days,
-  the reference with the scheme on is 1.2 °C above the scheme-off run in
-  sunlit hours, 5.7 °C in shaded daytime hours and 7.1 °C at night.
+  these on every site-day. Averaged over the seven days, the reference
+  with the scheme on is 1.2 °C above the scheme-off run in sunlit hours,
+  5.7 °C in shaded daytime hours and 7.1 °C at night.
+- That check found one difference in the port, corrected the same day.
+  The scheme damps the ground heat flux where the shadow changed since
+  the previous timestep. The reference runner starts the previous-shadow
+  grid at zero; the port started it at one. On a run that begins at night
+  the port therefore damped the first step and the reference did not, and
+  the port's Lup was 5 to 8 W/m² higher for the first hours (at most
+  0.8 °C in Tmrt, gone by morning). With the grid started at zero the
+  port's Lup is within 1.1 W/m² of the reference at every hour of every
+  site-day with the scheme on, and Tmrt within 0.5 °C. The scheme column
+  of the table above moves by at most 0.1 °C (Gustav Adolfs 2006-07-26
+  4.8 / +4.2, 2006-08-01 6.0 / +4.6, GVC 2010-07-07 5.6 / +3.7); Lup
+  biases under the scheme move by at most 0.7 W/m². The two scheme
+  goldens were regenerated: their series starts at 03:00, Tmrt at 04:00
+  falls by up to 1.4 °C and the change is under 0.02 °C by 21:00. The
+  check is kept as `scripts/reference_site_run.py` and
+  `scripts/compare_with_reference.py`.
+- One difference from the reference is left in place. The initial
+  deep-soil temperature uses the mean air temperature of the first
+  simulated day; the reference runner takes the mean over every row of
+  the met file. The two agree for a one-day run.
 
 ---
 

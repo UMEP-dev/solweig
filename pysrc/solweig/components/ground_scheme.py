@@ -40,9 +40,12 @@ class GroundSchemeState:
 
     ``tg``, ``tm``, ``rn``, ``rn_past``, ``g`` evolve per timestep through
     :func:`solweig.rustalgos.ground.surface_temperature_calc`; the parameter
-    grids are fixed for the run. ``shadow_past`` starts as ones (fully
-    sunlit) and is replaced with the previous timestep's shadow grid by the
-    caller.
+    grids are fixed for the run. ``shadow_past`` starts as zeros, as in the
+    reference runner (``shadow = np.zeros_like(dsm)`` in ``Solweig_run.py``),
+    and is replaced with the previous timestep's shadow grid by the caller.
+    The scheme damps the ground heat flux where ``|shadow - shadow_past| >
+    0.5``, so the starting value decides whether the first timestep counts
+    as a shadow transition: with zeros, a run that starts at night does not.
     """
 
     tg: NDArray[np.float32]
@@ -87,9 +90,12 @@ def initiate_ground_scheme(
             material codes >= 100 are remapped to roofs, matching upstream).
         materials: Loaded parameter namespace (:func:`solweig.load_params`).
         day_of_year: Day of year of the first timestep.
-        ta_series: Air temperatures (deg C) for the first simulated day;
-            upstream uses the first value and the daily mean for the initial
-            surface and deep-soil temperatures.
+        ta_series: Air temperatures (deg C). The first value sets the initial
+            surface temperature and the mean sets the initial deep-soil
+            temperature. The caller in ``timeseries.py`` passes the first
+            simulated day. The reference runner passes every row of the met
+            file, so on a run longer than one day its mean is taken over the
+            whole period; the two agree for a single day.
         latitude: Site latitude in degrees (drives the seasonal sinusoids
             and their hemisphere sign).
 
@@ -193,5 +199,5 @@ def initiate_ground_scheme(
         a2=a2_grid.astype(np.float32),
         a3=a3_grid.astype(np.float32),
         lc_grid=lc,
-        shadow_past=np.ones(shape, dtype=np.float32),
+        shadow_past=np.zeros(shape, dtype=np.float32),
     )
