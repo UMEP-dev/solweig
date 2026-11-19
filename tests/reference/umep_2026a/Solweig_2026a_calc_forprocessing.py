@@ -2,7 +2,7 @@
 #
 # Source:  https://github.com/UMEP-dev/umep-solweig
 # Path:    src/umep_solweig/functions/SOLWEIGpython/Solweig_2026a_calc_forprocessing.py
-# Commit:  ff5bc5c (main, fetched 2026-11-10)
+# Commit:  e4ce1f8 (main, fetched 2026-11-19)
 # License: GPL-3.0 (same as this repository and upstream UMEP)
 #
 # Kept verbatim (below this comment block) as the parity reference for the
@@ -411,18 +411,17 @@ def Solweig_2026a_calc(
                 / 2
             )  # 2015 a, based on max sun altitude
 
-            Tgdiff = Tgdiff * CI_TgG  # new estimation
-
-            # For Tg output in POIs
-            # TgTemp = Tgdiff * shadow + Ta
-            # _, timeadd, Tg = TsWaveDelay_2015a(
-            #     TgTemp, firstdaytime, timeadd, timestepdec, Tg
-            # )  # timeadd only here v2021a
-
+            Tgdiff = Tgdiff * CI_TgG  # new estimation            
             if landcover == 1:
-                Tg[Tg < 0] = (
+                Tgdiff[Tgdiff < 0] = (
                     0  # temporary for removing low Tg during morning 20130205
                 )
+
+            # For Tg output in POIs
+            TgTemp = Tgdiff * shadow + Ta
+            _, timeadd, Tg = TsWaveDelay_2015a(
+                TgTemp, firstdaytime, timeadd, timestepdec, Tg
+            )  # timeadd only here v2021a
 
         # Calculate the outgoing longwave radiation
         if outgoingLW == 1:
@@ -525,12 +524,6 @@ def Solweig_2026a_calc(
             LupN, timeaddnotused, Tgmap1N = TsWaveDelay_2015a(
                 gvfLupN, firstdaytime, timeadd, timestepdec, Tgmap1N
             )
-
-            # For Tg output in POIs
-            TgTemp = Tgdiff * shadow + Ta
-            _, timeadd, Tg = TsWaveDelay_2015a(
-                TgTemp, firstdaytime, timeadd, timestepdec, Tgdiff
-            )  # timeadd only here v2021a
 
         # # # # Kup # # # #
         Kup, KupE, KupS, KupW, KupN = Kup_veg_2015a(

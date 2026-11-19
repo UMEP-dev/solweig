@@ -27,6 +27,7 @@ from typing import Any
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))  # tests/validation imports ``tests.raster_helpers``
 sys.path.insert(0, str(REPO / "tests"))
 
 from validation.met_clock import load_site_met  # noqa: E402

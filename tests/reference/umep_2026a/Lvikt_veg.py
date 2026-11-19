@@ -2,7 +2,7 @@
 #
 # Source:  https://github.com/UMEP-dev/umep-solweig
 # Path:    src/umep_solweig/functions/SOLWEIGpython/Lvikt_veg.py
-# Commit:  ff5bc5c (main, fetched 2026-11-10)
+# Commit:  e4ce1f8 (main, fetched 2026-11-19)
 # License: GPL-3.0 (same as this repository and upstream UMEP)
 #
 # Kept verbatim (below this comment block) as the parity reference for the

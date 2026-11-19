@@ -348,6 +348,19 @@ Consequences:
   two exceptions are sunrise/sunset transition hours where the drivers'
   clearness-index handling legitimately differs). These numbers therefore
   characterise the upstream scheme as published, not the port.
+- Checked again on 2026-11-19 against umep-solweig e4ce1f8 (reference
+  files re-vendored at that commit; the scheme path is unchanged since
+  ff5bc5c). The reference `solweig_run` was run in Python at the three
+  sites with the inputs of `scripts/validate_ground_scheme.py`, its own
+  sky view factors and shadow matrices, anisotropic sky and the cylinder
+  model. POI Tmrt bias of the reference, scheme off / on (°C): Kronenhuset
+  +1.9 / +9.9; Gustav Adolfs +0.5 / +2.5, +2.3 / +4.1, +1.9 / +4.5; GVC
+  +0.4 / +3.7, +3.3 / +7.4, +3.5 / +6.2. The port is within 0.2 °C of
+  these on every site-day. The largest hourly difference is 0.8 °C, in
+  the first night hours with the scheme on, where the port's Lup is 5 to
+  8 W/m² higher; the cause is not known. Averaged over the seven days,
+  the reference with the scheme on is 1.2 °C above the scheme-off run in
+  sunlit hours, 5.7 °C in shaded daytime hours and 7.1 °C at night.
 
 ---
 
