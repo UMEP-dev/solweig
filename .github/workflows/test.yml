@@ -366,8 +366,10 @@ jobs:
       - name: Build Rust extension
         run: uv run maturin develop --release
 
-      - name: Verify UMEP availability for parity tests
-        run: uv run python -c "import umep"
+      - name: Verify the reference implementation is available for parity tests
+        # The end-to-end parity test skips when the reference is missing, so
+        # check here that it imports.
+        run: uv run python -c "from tests.reference_package import use_umep_solweig; use_umep_solweig(); import umep_solweig.functions.SOLWEIGpython.Solweig_2025a_calc_forprocessing"
 
       - name: Run scientific/spec suite (including slow — UMEP parity needs it)
         # Spec tests include UMEP parity, anisotropic pipeline E2E, and the

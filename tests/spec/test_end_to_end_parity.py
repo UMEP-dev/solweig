@@ -11,7 +11,7 @@ the surface had no vegetation (fixed in 0.1.0b97).
 Here one synthetic scene (40 x 40 px at 1 m, one 12 m block, no vegetation, no
 land-cover grid, isotropic sky, first daytime step of an hourly run) goes
 through ``solweig.api._calculate_single`` and through ``Solweig_2025a_calc``
-of the ``umep`` package. Every argument of the reference function is derived
+of umep-solweig (see ``tests/reference_package.py``). Every argument of the reference function is derived
 the way the reference runner (``Solweig_run.py`` next to it) derives it, from
 the parameter file bundled with this package, and not from this package's
 Python layer.
@@ -78,7 +78,9 @@ from solweig.models import ThermalState
 from solweig.physics.wallalgorithms import filter1Goodwin_as_aspect_v3, findwalls
 from solweig.timeseries import _precompute_weather
 
-reference = pytest.importorskip("umep.functions.SOLWEIGpython.Solweig_2025a_calc_forprocessing")
+from tests.reference_package import reference_module
+
+reference = reference_module("functions.SOLWEIGpython.Solweig_2025a_calc_forprocessing")
 
 SHAPE = (40, 40)
 PIXEL_SIZE = 1.0

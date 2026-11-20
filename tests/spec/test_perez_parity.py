@@ -9,10 +9,9 @@ import pytest
 from solweig.physics.patch_radiation import patch_steradians
 from solweig.rustalgos import pipeline
 
-umep_perez = pytest.importorskip(
-    "umep.util.SEBESOLWEIGCommonFiles.Perez_v3",
-    reason="UMEP package required for Perez parity tests",
-)
+from tests.reference_package import reference_module
+
+umep_perez = reference_module("util.SEBESOLWEIGCommonFiles.Perez_v3")
 Perez_v3 = umep_perez.Perez_v3
 
 # ── Test parameters: representative atmospheric conditions ──────────────────

@@ -12,20 +12,12 @@ Local modules tested:
 import numpy as np
 import pytest
 
-# ── UMEP imports (skip entire module if UMEP not installed) ──────────────────
+# ── Reference imports (skip entire module if umep-solweig is not installed) ──
+from tests.reference_package import reference_module  # noqa: E402
 
-umep_patches = pytest.importorskip(
-    "umep.util.SEBESOLWEIGCommonFiles.create_patches",
-    reason="UMEP package required for parity tests",
-)
-umep_patch_rad = pytest.importorskip(
-    "umep.functions.SOLWEIGpython.patch_radiation",
-    reason="UMEP package required for parity tests",
-)
-umep_perez = pytest.importorskip(
-    "umep.util.SEBESOLWEIGCommonFiles.Perez_v3",
-    reason="UMEP package required for parity tests",
-)
+umep_patches = reference_module("util.SEBESOLWEIGCommonFiles.create_patches")
+umep_patch_rad = reference_module("functions.SOLWEIGpython.patch_radiation")
+umep_perez = reference_module("util.SEBESOLWEIGCommonFiles.Perez_v3")
 
 from solweig.physics.create_patches import create_patches as local_create_patches  # noqa: E402
 from solweig.physics.patch_radiation import patch_steradians as local_patch_steradians  # noqa: E402

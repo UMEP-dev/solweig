@@ -84,15 +84,17 @@ uv run pytest tests/golden/ --cov=solweig.rustalgos
 
 ## Regenerating Fixtures
 
-The reference fixtures are generated with UMEP-dev/umep-solweig, read from a
-local checkout (no installation and no GDAL needed). Regenerate into a copy
-of `fixtures/` first and compare it with the stored set:
+The reference fixtures are generated with UMEP-dev/umep-solweig, which the
+`test` dependency group installs at the commit pinned in `pyproject.toml`
+(no GDAL needed). Regenerate into a copy of `fixtures/` first and compare it
+with the stored set:
 
 ```bash
-uv run python tests/golden/generate_fixtures.py --reference <umep-solweig checkout> --fixtures-dir <copy of fixtures/>
+uv run python tests/golden/generate_fixtures.py --fixtures-dir <copy of fixtures/>
 ```
 
-Without `--fixtures-dir` the script writes to `fixtures/`.
+Without `--fixtures-dir` the script writes to `fixtures/`. `--reference
+<umep-solweig checkout>` uses a local checkout instead of the installed copy.
 
 **Warning:** Regenerating fixtures will overwrite existing reference data.
 Only do this when intentionally updating the ground truth.

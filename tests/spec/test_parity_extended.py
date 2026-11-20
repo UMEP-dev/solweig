@@ -31,14 +31,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-umep_wallalgs = pytest.importorskip(
-    "umep.functions.wallalgorithms",
-    reason="UMEP package required for parity tests",
-)
-umep_lside = pytest.importorskip(
-    "umep.functions.SOLWEIGpython.Lside_veg_v2022a",
-    reason="UMEP package required for parity tests",
-)
+from tests.reference_package import reference_module
+
+umep_wallalgs = reference_module("functions.wallalgorithms")
+umep_lside = reference_module("functions.SOLWEIGpython.Lside_veg")  # holds Lside_veg_v2022a and v2026
 
 from solweig.physics import wallalgorithms as local_walls  # noqa: E402
 from solweig.rustalgos import vegetation as rust_vegetation  # noqa: E402
@@ -59,13 +55,13 @@ def _synthetic_dsm(rows: int = 16, cols: int = 16, *, rng_seed: int = 7) -> np.n
 
 
 class TestFindWallsParity:
-    """local wallalgorithms.findwalls must match umep.functions.wallalgorithms.findwalls."""
+    """local wallalgorithms.findwalls must match umep_solweig.functions.wallalgorithms.findwalls."""
 
     @pytest.mark.parametrize("walllimit", [0.5, 1.0, 2.0, 3.0])
     def test_findwalls_identical(self, walllimit):
         dsm = _synthetic_dsm()
         local = local_walls.findwalls(dsm, walllimit)
-        upstream = umep_wallalgs.findwalls(dsm, walllimit)
+        upstream = umep_wallalgs.findwalls(dsm, walllimit, None, 0)  # feedback, total: progress reporting only
         np.testing.assert_allclose(
             np.asarray(local, dtype=np.float32),
             np.asarray(upstream, dtype=np.float32),
@@ -108,9 +104,9 @@ class TestFilter1GoodwinAspectStructuralParity:
         """Both implementations must agree on WHICH pixels have a wall
         (non-zero aspect), even when the angles themselves disagree."""
         dsm = _synthetic_dsm()
-        walls = umep_wallalgs.findwalls(dsm, 1.0).astype(np.float32)
+        walls = umep_wallalgs.findwalls(dsm, 1.0, None, 0).astype(np.float32)
         local = np.asarray(local_walls.filter1Goodwin_as_aspect_v3(walls, 1.0, dsm))
-        upstream = np.asarray(umep_wallalgs.filter1Goodwin_as_aspect_v3(walls, 1.0, dsm))
+        upstream = np.asarray(umep_wallalgs.filter1Goodwin_as_aspect_v3(walls, 1.0, dsm, None, 0))
 
         np.testing.assert_array_equal(
             local != 0,

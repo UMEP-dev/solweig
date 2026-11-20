@@ -1,13 +1,12 @@
 """Parity gates against the vendored umep-solweig 2026a reference.
 
-The pip ``umep`` package (the usual parity reference) ships only the 2025a
-generation; the 2026a code lives in UMEP-dev/umep-solweig and is vendored
-verbatim under ``tests/reference/umep_2026a/`` with provenance.
+The 2026a code of UMEP-dev/umep-solweig is vendored verbatim under
+``tests/reference/umep_2026a/`` with provenance.
 
 Gates here pin the Rust ``lside_veg_v2026`` port to upstream's
 ``Lside_veg_v2026`` across a sweep of sun positions, clearness indices, and
 both longwave modes. The v2022a baseline keeps its own gate in
-``test_parity_extended.py`` against the pip package.
+``test_parity_extended.py``.
 """
 
 from __future__ import annotations

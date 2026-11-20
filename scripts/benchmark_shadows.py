@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from pathlib import Path
 
@@ -67,7 +68,11 @@ def time_fn(fn, repeats: int):
 
 
 def benchmark_umep(dsm, cdsm, tdsm, bush, wall_ht, wall_asp, scale, amaxvalue, pos, repeats):
-    from umep.util.SEBESOLWEIGCommonFiles.shadowingfunction_wallheight_23 import (
+    sys.path.insert(0, str(Path(__file__).parent.parent))  # for tests.reference_package
+    from tests.reference_package import use_umep_solweig
+
+    use_umep_solweig()
+    from umep_solweig.util.SEBESOLWEIGCommonFiles.shadowingfunction_wallheight_23 import (
         shadowingfunction_wallheight_23,
     )
 

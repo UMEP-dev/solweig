@@ -5,21 +5,21 @@ Generates the golden fixtures from the Athens demo inputs stored in
 ``fixtures/input_*.npy`` and ``fixtures/input_params.npz``.
 
 The reference fixtures (shadows, SVF, UTCI, PET, ground temperature delay)
-are computed with the reference implementation, UMEP-dev/umep-solweig, read
-from a local checkout. The remaining fixtures are regression baselines from
-the current Rust implementation.
+are computed with the reference implementation, UMEP-dev/umep-solweig. The
+remaining fixtures are regression baselines from the current Rust
+implementation.
 
-The checkout is used without installing it. Its package ``__init__`` imports
-the model runner, which needs GDAL, so the package is registered here as a
-bare module with the checkout's path and the functions are imported from
-their own modules. No GDAL is needed.
+The reference is the copy installed by the ``test`` dependency group, at the
+commit pinned in ``pyproject.toml``, or a local checkout given with
+``--reference``. It is imported through ``tests/reference_package.py``, which
+needs no GDAL.
 
 The input fixtures are fixed data. They were written once from the Athens
 demo rasters and this script does not rewrite them.
 
 Usage:
+    uv run python tests/golden/generate_fixtures.py --fixtures-dir <copy of fixtures/>
     uv run python tests/golden/generate_fixtures.py --reference <umep-solweig checkout>
-    uv run python tests/golden/generate_fixtures.py --reference <checkout> --fixtures-dir <copy of fixtures/>
 
 With ``--fixtures-dir`` the script reads the inputs from, and writes to, that
 directory, so a regenerated set can be compared with the stored one before
@@ -28,23 +28,15 @@ anything is replaced.
 
 import argparse
 import sys
-import types
 from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # for tests.reference_package
+from tests.reference_package import use_umep_solweig  # noqa: E402
+
 # Paths
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-
-
-def use_reference_checkout(checkout: Path) -> None:
-    """Make ``umep_solweig`` importable from a checkout without running its ``__init__``."""
-    package_dir = checkout / "src" / "umep_solweig"
-    if not (package_dir / "functions" / "svf_functions.py").exists():
-        raise SystemExit(f"{checkout} is not a umep-solweig checkout (no src/umep_solweig/functions)")
-    package = types.ModuleType("umep_solweig")
-    package.__path__ = [str(package_dir)]
-    sys.modules["umep_solweig"] = package
 
 
 def ensure_fixtures_dir():
@@ -1200,19 +1192,19 @@ def main():
     """Generate all golden fixtures using UMEP Python as ground truth."""
     global FIXTURES_DIR
     parser = argparse.ArgumentParser(description="Generate the golden fixtures.")
-    parser.add_argument("--reference", type=Path, required=True, help="umep-solweig checkout")
+    parser.add_argument("--reference", type=Path, help="umep-solweig checkout (default: the installed copy)")
     parser.add_argument(
         "--fixtures-dir", type=Path, default=FIXTURES_DIR, help="directory to read inputs from and write to"
     )
     args = parser.parse_args()
-    use_reference_checkout(args.reference)
+    reference_dir = use_umep_solweig(args.reference)
     FIXTURES_DIR = args.fixtures_dir
 
     print("=" * 60)
     print("Golden Fixture Generator")
     print("=" * 60)
     print()
-    print(f"Reference: umep-solweig checkout at {args.reference}")
+    print(f"Reference: umep-solweig at {reference_dir}")
     print("Shadow and SVF fixtures come from the reference. GVF and radiation")
     print("fixtures come from the current Rust implementation (regression).")
     print("=" * 60)

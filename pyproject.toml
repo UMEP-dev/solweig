@@ -79,7 +79,9 @@ test = [
     "pytest>=7.2.0",
     "pandas-stubs>=1.5.2.221213",
     "memory-profiler>=0.61.0",
-    "umep>=0.0.1a18",             # Cross-checking tests against reference implementation
+    # Reference implementation for the parity tests and the golden generator,
+    # at a pinned commit. Import it through tests/reference_package.py.
+    "umep-solweig @ git+https://github.com/UMEP-dev/umep-solweig@39ef951b1f8474a512f6ac7f9b270ca53b30acf5",
     "scipy>=1.13.0",              # Golden tests (ndimage)
 ]
 dev = [

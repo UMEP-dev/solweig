@@ -17,10 +17,9 @@ import pytest
 from solweig.constants import SBC
 from solweig.rustalgos import gvf as gvf_module
 
-umep_gvf = pytest.importorskip(
-    "umep.functions.SOLWEIGpython.gvf_2018a",
-    reason="UMEP reference implementation not installed",
-)
+from tests.reference_package import reference_module
+
+umep_gvf = reference_module("functions.SOLWEIGpython.gvf_2018a")
 
 
 @pytest.fixture(autouse=True, scope="module")
