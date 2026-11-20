@@ -18,13 +18,14 @@ a glance.
 
 ---
 
-## Summary — v0.1.0b103 (2026-11-11)
+## Summary — v0.1.0b104 (2026-11-20)
 
 b101 fixes two QGIS plugin options and the handling of sub-hourly met files,
 b102 reduces memory use when saving large rasters and corrects the GPU
 memory estimate used to size tiles, and b103 compresses the per-timestep
-outputs without loss and completes the plugin wall-height fix. None of them
-changes the model. The numbers below are those of b100.
+outputs without loss and completes the plugin wall-height fix. b104 corrects
+the first hours of a run with the opt-in 2026a ground scheme. None of them
+changes the default model. The numbers below are those of b100.
 
 b100 changes the height at which the ground view factor is evaluated. Up to
 b99 it was the person's stature (`HumanParams.height`, 1.75 m by default);
@@ -463,6 +464,7 @@ pytest tests/validation/test_poi_sweep_all_sites.py -v -s
 | 0.1.0b101 | 2026-11-11 |     3 |      3.3–6.9 °C | **No model change**; validation numbers identical to b100 (the validation runs load hourly met files with `resample_hourly=False` and do not use the plugin). QGIS plugin: a custom minimum wall height now reaches the saved wall rasters (it was computed and dropped); sub-hourly UMEP met files run every record by default, as in UMEP, where the plugin used to keep the on-the-hour records only. `Weather.from_umep_met(resample_hourly=True)` warns when it drops sub-hourly rows and keeps hourly rows stamped off the hour. The land-cover property cache is keyed on the content of the materials. CPU-only Rust build without warnings; CI gains macOS and Windows runs, `cargo test` and a wheel smoke test before release. |
 | 0.1.0b102 | 2026-11-11 |     3 |      3.3–6.9 °C | **No model change**; validation numbers identical to b100. Preview PNGs are built from a thinned raster instead of the full-resolution one (about 83 B/px of temporaries per saved file before; end-of-run peak on a 2048 × 2048 test 2.15 → 0.53 GB). The GPU bytes-per-pixel estimate used for automatic tile sizing is 660 instead of 360 (GVF precompute and anisotropic-sky buffers were not counted), so tiles are smaller where GPU memory is the limit; the validation rasters are far below any tile limit. The tiled-loop memory regression test now runs tiled and bounds the per-timestep peak. |
 | 0.1.0b103 | 2026-11-11 |     3 |      3.3–6.9 °C | **No model change**; validation numbers identical to b100. Per-timestep outputs are written as sparse tiled GeoTIFFs with DEFLATE and predictor 3 (values bit-identical on read-back; block side follows the tile side); a run is refused when its output estimate exceeds free disk space; the plugin wall limit now replaces `cleaned/wall_height` and `wall_aspect` as well as the wall cache (the b101 fix did not reach the calculation); the `prepare()` fingerprint records the requested pixel size, so the fast path hits. New backend import fence and backend parity test. The plugin was not run inside QGIS for this release (QGIS 4.2 does not start on macOS 27.2); the raster layer was checked on the GDAL 3.12.4 bundled with QGIS 4.2. |
+| 0.1.0b104 | 2026-11-20 |     3 |      3.3–6.9 °C | **Default model unchanged**; validation numbers identical to b100. Opt-in 2026a ground scheme: the previous-shadow grid starts at zero, as in the reference runner (it started at one). On a run that begins at night the port's Lup was 5 to 8 W/m² above the reference for the first hours (at most 0.8 °C in Tmrt). After the change, with the scheme on, Lup is within 1.1 W/m² and Tmrt within 0.5 °C of umep-solweig e4ce1f8 at every hour of the seven site-days, and the bias is within 0.2 °C on every site-day with the scheme on and off. The scheme column of the field comparison moves by at most 0.1 °C. Both scheme goldens regenerated (series starts at 03:00; Tmrt at 04:00 falls by up to 1.4 °C, under 0.02 °C by 21:00). Reference files re-vendored at e4ce1f8. The site comparison is kept as `scripts/reference_site_run.py` and `scripts/compare_with_reference.py`. QGIS check not needed: no plugin or raster I/O change. |
 
 ---
 

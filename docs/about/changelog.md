@@ -1,5 +1,27 @@
 # Release notes
 
+## 0.1.0b104 — 2026-11-20
+
+No change to the default model: validation numbers are identical to b100.
+Runs with `use_ground_scheme=True` change in their first hours.
+
+- **2026a ground scheme: first hours of a run.** The scheme damps the
+  ground heat flux where the shadow changed since the previous timestep.
+  The previous-shadow grid started at one; the reference runner starts it
+  at zero. On a run that begins at night, upward longwave was 5 to 8 W/m²
+  too high for the first hours (at most 0.8 °C in Tmrt). It now starts at
+  zero.
+- **Checked against the reference at the validation sites.** The reference
+  `solweig_run` (umep-solweig e4ce1f8) and this package were run on the
+  same inputs at the three sites. With the scheme on, Tmrt agrees within
+  0.5 °C and upward longwave within 1.1 W/m² at every hour. The Tmrt bias
+  against the measurements agrees within 0.2 °C on all seven site-days,
+  scheme on and off. The comparison is kept as
+  `scripts/reference_site_run.py` and `scripts/compare_with_reference.py`.
+- **Known difference.** The initial deep-soil temperature of the scheme
+  uses the mean air temperature of the first simulated day; the reference
+  runner uses the mean of the whole met file. One-day runs are unaffected.
+
 ## 0.1.0b103 — 2026-11-11
 
 No change to the model: validation numbers are identical to b100.
