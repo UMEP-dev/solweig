@@ -271,7 +271,7 @@ added the mean of the directional Lside to this term until umep-solweig
 - Implemented in `rust/src/ground_surface.rs` and wired into the fused
   pipeline (`rust/src/pipeline.rs`) via `GroundSchemeBundle`; state is
   carried by `solweig.components.ground_scheme.GroundSchemeState`.
-- Component parity against the vendored upstream reference is gated by
+- Component parity against the upstream reference (umep-solweig at a pinned commit) is gated by
   `tests/spec/test_parity_2026a.py`; the end-to-end path is pinned by
   `tests/golden/test_golden_ground_scheme.py`.
 - Not yet validated against field measurements; defaults stay off until a

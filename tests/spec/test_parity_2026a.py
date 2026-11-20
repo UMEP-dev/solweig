@@ -1,7 +1,8 @@
-"""Parity gates against the vendored umep-solweig 2026a reference.
+"""Parity gates against the umep-solweig 2026a reference.
 
-The 2026a code of UMEP-dev/umep-solweig is vendored verbatim under
-``tests/reference/umep_2026a/`` with provenance.
+The reference functions come from the installed umep-solweig, at the commit
+pinned in ``pyproject.toml`` (see ``tests/reference_package.py``). Up to
+2026-11-20 they were read from copies vendored under ``tests/reference/``.
 
 Gates here pin the Rust ``lside_veg_v2026`` port to upstream's
 ``Lside_veg_v2026`` across a sweep of sun positions, clearness indices, and
@@ -11,19 +12,15 @@ both longwave modes. The v2022a baseline keeps its own gate in
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 from solweig.constants import SBC
 from solweig.rustalgos import vegetation
 
-REFERENCE_DIR = Path(__file__).resolve().parent.parent / "reference"
-if str(REFERENCE_DIR) not in sys.path:
-    sys.path.insert(0, str(REFERENCE_DIR))
+from tests.reference_package import reference_module
 
-from umep_2026a.Lside_veg import Lside_veg_v2026  # noqa: E402
+Lside_veg_v2026 = reference_module("functions.SOLWEIGpython.Lside_veg").Lside_veg_v2026
+_ground_surface = reference_module("functions.SOLWEIGpython.ground_surface")
 
 RNG = np.random.default_rng(20260706)
 SHAPE = (24, 24)
@@ -118,7 +115,7 @@ def _run_rust(azimuth, altitude, ci, aniso):
 @pytest.mark.parametrize("altitude", [-5.0, 3.0, 35.0, 65.0])
 @pytest.mark.parametrize("ci", [0.4, 0.95])
 def test_lside_v2026_isotropic_matches_upstream(azimuth, altitude, ci):
-    """Rust v2026 isotropic Lside matches the vendored upstream reference."""
+    """Rust v2026 isotropic Lside matches the upstream reference."""
     expected = _run_upstream(azimuth, altitude, ci, aniso=False)
     got = _run_rust(azimuth, altitude, ci, aniso=False)
     for direction, e, g in zip("ESWN", expected, got, strict=True):
@@ -186,7 +183,8 @@ def test_v2026_iso_differs_from_v2022a_by_ground_and_lup_reflection():
 # ── Ground-surface scheme: surface temperature (force-restore/OHM/RK2) ──────
 
 from solweig.rustalgos import ground as rust_ground  # noqa: E402
-from umep_2026a.ground_surface import surfaceTemperature_calc  # noqa: E402
+
+surfaceTemperature_calc = _ground_surface.surfaceTemperature_calc
 
 
 def _ground_scene():
@@ -213,7 +211,7 @@ def _ground_scene():
 
 
 def test_surface_temperature_matches_upstream_over_chained_steps():
-    """Rust force-restore/OHM/RK2 step matches the vendored reference.
+    """Rust force-restore/OHM/RK2 step matches the upstream reference.
 
     Four chained hourly steps with varying forcing and a shadow flip (which
     exercises the ground-heat-flux damping mask) and water pixels (slab
@@ -303,7 +301,7 @@ def test_surface_temperature_matches_upstream_over_chained_steps():
 
 # ── Ground-surface scheme: outgoing longwave solid-angle march ──────────────
 
-from umep_2026a.ground_surface import outgoingLongwave_calc  # noqa: E402
+outgoingLongwave_calc = _ground_surface.outgoingLongwave_calc
 
 OUTGOING_FIELDS = [
     "gvf_lup",
@@ -330,7 +328,7 @@ OUTGOING_FIELDS = [
 
 @pytest.mark.parametrize("sizepx", [1.0, 2.0])
 def test_outgoing_longwave_matches_upstream(sizepx):
-    """Rust solid-angle march matches the vendored reference, all 19 outputs.
+    """Rust solid-angle march matches the upstream reference, all 19 outputs.
 
     Scene includes buildings (roof fallback), walls with a sunlit subset
     (wall emission + albedo terms), shadow structure, and mixed emissivity/
@@ -433,7 +431,8 @@ from pathlib import Path as _Path  # noqa: E402
 
 from solweig.components.ground_scheme import initiate_ground_scheme  # noqa: E402
 from solweig.loaders import load_params  # noqa: E402
-from umep_2026a.ground_surface import initiate_groundScheme  # noqa: E402
+
+initiate_groundScheme = _ground_surface.initiate_groundScheme
 
 _MATERIALS_JSON = _Path(__file__).resolve().parents[2] / "pysrc" / "solweig" / "data" / "default_materials.json"
 

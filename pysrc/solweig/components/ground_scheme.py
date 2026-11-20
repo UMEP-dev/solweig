@@ -5,7 +5,7 @@ force-restore/OHM surface temperature model
 (:func:`solweig.rustalgos.ground.surface_temperature_calc`) and the
 solid-angle outgoing longwave march. Ported from
 ``initiate_groundScheme`` in umep-solweig's ``ground_surface.py``
-(vendored at ``tests/reference/umep_2026a/``); parity gated by
+(installed for the tests at the commit pinned in ``pyproject.toml``); parity gated by
 ``tests/spec/test_parity_2026a.py``.
 
 The scheme is opt-in (``Settings.use_ground_scheme``) and requires a

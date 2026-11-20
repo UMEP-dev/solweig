@@ -67,7 +67,7 @@ Golden fixtures are generated from different sources depending on the algorithm:
 | Ground Temp | UMEP Python | TsWaveDelay exponential decay model |
 | Wall Temp | Rust (regression) | Numerical consistency checks |
 | Anisotropic Sky | Rust (regression) | Complex model with numerical consistency checks |
-| Ground Scheme (2026a) | Rust (regression) | Components parity-gated vs vendored upstream in `tests/spec/test_parity_2026a.py`; golden pins the fused composition |
+| Ground Scheme (2026a) | Rust (regression) | Components parity-gated vs upstream (umep-solweig) in `tests/spec/test_parity_2026a.py`; golden pins the fused composition |
 
 ## Running Tests
 

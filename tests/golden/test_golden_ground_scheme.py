@@ -5,7 +5,7 @@ temperature + solid-angle outgoing longwave march + Lside_veg_v2026) behind
 ``use_ground_scheme`` / ``use_outgoing_longwave``.
 
 Ground truth: Rust (regression baseline). The scheme's components are
-individually parity-gated against the vendored upstream reference in
+individually parity-gated against the upstream reference in
 ``tests/spec/test_parity_2026a.py``; these fixtures pin the end-to-end
 composition (ordering, state carry, flux assembly) so numerical drift in
 the opt-in path is caught the same way the baseline path is.
