@@ -1,30 +1,50 @@
 """
 Golden Fixture Generator
 
-Run this script once to generate golden fixtures from the Athens demo data.
-These fixtures serve as regression reference points during modernization.
+Generates the golden fixtures from the Athens demo inputs stored in
+``fixtures/input_*.npy`` and ``fixtures/input_params.npz``.
 
-IMPORTANT: These fixtures are generated using the **original UMEP Python module**
-as ground truth. This ensures we have a neutral reference that doesn't change
-during Rust modernization. The tests then verify that Rust matches UMEP Python.
+The reference fixtures (shadows, SVF, UTCI, PET, ground temperature delay)
+are computed with the reference implementation, UMEP-dev/umep-solweig, read
+from a local checkout. The remaining fixtures are regression baselines from
+the current Rust implementation.
+
+The checkout is used without installing it. Its package ``__init__`` imports
+the model runner, which needs GDAL, so the package is registered here as a
+bare module with the checkout's path and the functions are imported from
+their own modules. No GDAL is needed.
+
+The input fixtures are fixed data. They were written once from the Athens
+demo rasters and this script does not rewrite them.
 
 Usage:
-    uv run python tests/golden/generate_fixtures.py
+    uv run python tests/golden/generate_fixtures.py --reference <umep-solweig checkout>
+    uv run python tests/golden/generate_fixtures.py --reference <checkout> --fixtures-dir <copy of fixtures/>
+
+With ``--fixtures-dir`` the script reads the inputs from, and writes to, that
+directory, so a regenerated set can be compared with the stored one before
+anything is replaced.
 """
 
+import argparse
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
-from umep.functions.SOLWEIGpython.solweig_runner_core import SolweigRunCore
-from umep.functions.svf_functions import svfForProcessing153
-from umep.util.SEBESOLWEIGCommonFiles.shadowingfunction_wallheight_23 import (
-    shadowingfunction_wallheight_23,
-)
 
 # Paths
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-CONFIG_PATH = "tests/rustalgos/test_config_shadows.ini"
-PARAMS_PATH = "tests/rustalgos/test_params_solweig.json"
+
+
+def use_reference_checkout(checkout: Path) -> None:
+    """Make ``umep_solweig`` importable from a checkout without running its ``__init__``."""
+    package_dir = checkout / "src" / "umep_solweig"
+    if not (package_dir / "functions" / "svf_functions.py").exists():
+        raise SystemExit(f"{checkout} is not a umep-solweig checkout (no src/umep_solweig/functions)")
+    package = types.ModuleType("umep_solweig")
+    package.__path__ = [str(package_dir)]
+    sys.modules["umep_solweig"] = package
 
 
 def ensure_fixtures_dir():
@@ -34,23 +54,22 @@ def ensure_fixtures_dir():
 
 def generate_shadow_fixtures():
     """Generate golden fixtures for shadow calculations using UMEP Python."""
-    print("Generating shadow fixtures (using UMEP Python as ground truth)...")
-
-    # Load demo data using existing test infrastructure
-    SWC = SolweigRunCore(
-        config_path_str=CONFIG_PATH,
-        params_json_path=PARAMS_PATH,
+    from umep_solweig.util.SEBESOLWEIGCommonFiles.shadowingfunction_wallheight_23 import (
+        shadowingfunction_wallheight_23,
     )
 
-    dsm = SWC.raster_data.dsm.astype(np.float32)
-    assert SWC.raster_data.cdsm is not None
-    assert SWC.raster_data.tdsm is not None
-    assert SWC.raster_data.bush is not None
-    cdsm = SWC.raster_data.cdsm.astype(np.float32)
-    tdsm = SWC.raster_data.tdsm.astype(np.float32)
-    bush = SWC.raster_data.bush.astype(np.float32)
-    wall_ht = SWC.raster_data.wallheight.astype(np.float32)
-    wall_asp = (SWC.raster_data.wallaspect * np.pi / 180.0).astype(np.float32)
+    print("Generating shadow fixtures (using UMEP Python as ground truth)...")
+
+    dsm = np.load(FIXTURES_DIR / "input_dsm.npy").astype(np.float32)
+    cdsm = np.load(FIXTURES_DIR / "input_cdsm.npy").astype(np.float32)
+    tdsm = np.load(FIXTURES_DIR / "input_tdsm.npy").astype(np.float32)
+    bush = np.load(FIXTURES_DIR / "input_bush.npy").astype(np.float32)
+    wall_ht = np.load(FIXTURES_DIR / "input_wall_ht.npy").astype(np.float32)
+    # The stored aspect is in degrees; the shadow function takes radians.
+    wall_asp = (np.load(FIXTURES_DIR / "input_wall_asp.npy") * np.pi / 180.0).astype(np.float32)
+    params = dict(np.load(FIXTURES_DIR / "input_params.npz"))
+    scale = float(params["scale"])
+    amaxvalue = float(params["amaxvalue"])
 
     # Test with multiple sun positions
     sun_positions = [
@@ -79,8 +98,8 @@ def generate_shadow_fixtures():
             tdsm,
             pos["azimuth"],
             pos["altitude"],
-            SWC.raster_data.scale,
-            SWC.raster_data.amaxvalue,
+            scale,
+            amaxvalue,
             bush,
             wall_ht,
             wall_asp,
@@ -97,8 +116,8 @@ def generate_shadow_fixtures():
     np.savez(
         FIXTURES_DIR / "shadow_metadata.npz",
         dsm_shape=dsm.shape,
-        scale=SWC.raster_data.scale,
-        amaxvalue=SWC.raster_data.amaxvalue,
+        scale=scale,
+        amaxvalue=amaxvalue,
     )
 
     print("  Shadow fixtures saved.")
@@ -106,9 +125,10 @@ def generate_shadow_fixtures():
 
 def generate_svf_fixtures():
     """Generate golden fixtures for SVF calculations using UMEP Python."""
+    from umep_solweig.functions.svf_functions import svfForProcessing153
+
     print("Generating SVF fixtures (using UMEP Python as ground truth)...")
 
-    # Load from pre-saved input fixtures to avoid SolweigRunCore dependency
     dsm = np.load(FIXTURES_DIR / "input_dsm.npy").astype(np.float32)
     cdsm_abs = np.load(FIXTURES_DIR / "input_cdsm.npy").astype(np.float32)
     tdsm_abs = np.load(FIXTURES_DIR / "input_tdsm.npy").astype(np.float32)
@@ -116,7 +136,7 @@ def generate_svf_fixtures():
     scale = float(params["scale"])
     amaxvalue = float(params["amaxvalue"])
 
-    # IMPORTANT: The installed UMEP svfForProcessing153 expects RELATIVE vegetation
+    # IMPORTANT: The reference svfForProcessing153 expects RELATIVE vegetation
     # heights (height above ground), not absolute elevations. It internally adds DSM
     # to convert to absolute heights. Our input data has absolute heights, so we must
     # convert to relative before calling UMEP.
@@ -139,6 +159,10 @@ def generate_svf_fixtures():
         tdsm_rel,  # Relative trunk heights (UMEP expectation)
         scale,
         1,  # usevegdem (1 = True)
+        1.0 / scale,  # pixel_resolution, read by the wall scheme only
+        False,  # wallScheme
+        None,  # demlayer, read by the wall scheme only
+        None,  # feedback
     )
 
     # Save SVF components (mapping UMEP Python keys to fixture names)
@@ -160,36 +184,6 @@ def generate_svf_fixtures():
     print("  SVF fixtures saved.")
 
 
-def generate_input_fixtures():
-    """Save input data as fixtures for test isolation."""
-    print("Generating input fixtures...")
-
-    SWC = SolweigRunCore(
-        config_path_str=CONFIG_PATH,
-        params_json_path=PARAMS_PATH,
-    )
-
-    # Save input rasters
-    assert SWC.raster_data.cdsm is not None
-    assert SWC.raster_data.tdsm is not None
-    assert SWC.raster_data.bush is not None
-    np.save(FIXTURES_DIR / "input_dsm.npy", SWC.raster_data.dsm.astype(np.float32))
-    np.save(FIXTURES_DIR / "input_cdsm.npy", SWC.raster_data.cdsm.astype(np.float32))
-    np.save(FIXTURES_DIR / "input_tdsm.npy", SWC.raster_data.tdsm.astype(np.float32))
-    np.save(FIXTURES_DIR / "input_bush.npy", SWC.raster_data.bush.astype(np.float32))
-    np.save(FIXTURES_DIR / "input_wall_ht.npy", SWC.raster_data.wallheight.astype(np.float32))
-    np.save(FIXTURES_DIR / "input_wall_asp.npy", SWC.raster_data.wallaspect.astype(np.float32))
-
-    # Save scalar parameters
-    np.savez(
-        FIXTURES_DIR / "input_params.npz",
-        scale=SWC.raster_data.scale,
-        amaxvalue=SWC.raster_data.amaxvalue,
-    )
-
-    print("  Input fixtures saved.")
-
-
 def generate_gvf_fixtures():
     """
     Generate golden fixtures for GVF calculations using UMEP Python as ground truth.
@@ -197,7 +191,7 @@ def generate_gvf_fixtures():
     print("Generating GVF fixtures (using UMEP Python as ground truth)...")
 
     from scipy import ndimage
-    from umep.functions.SOLWEIGpython.gvf_2018a import gvf_2018a
+    from umep_solweig.functions.SOLWEIGpython.gvf_2018a import gvf_2018a
 
     SBC = 5.67e-8  # Stefan-Boltzmann constant
 
@@ -308,8 +302,8 @@ def generate_radiation_fixtures():
     """
     print("Generating radiation fixtures (using UMEP Python as ground truth)...")
 
-    from umep.functions.SOLWEIGpython.Kside_veg_v2022a import Kside_veg_v2022a
-    from umep.functions.SOLWEIGpython.Lside_veg_v2022a import Lside_veg_v2022a
+    from umep_solweig.functions.SOLWEIGpython.Kside_veg_v2022a import Kside_veg_v2022a
+    from umep_solweig.functions.SOLWEIGpython.Lside_veg import Lside_veg_v2022a
 
     SBC = 5.67e-8  # Stefan-Boltzmann constant
 
@@ -439,7 +433,7 @@ def generate_utci_fixtures():
     """
     print("Generating UTCI fixtures (using UMEP Python as ground truth)...")
 
-    from umep.functions.SOLWEIGpython.UTCI_calculations import utci_calculator
+    from umep_solweig.functions.SOLWEIGpython.UTCI_calculations import utci_calculator
 
     # Test cases: (ta, rh, tmrt, va10m, description)
     # Cover a range of realistic outdoor conditions
@@ -493,7 +487,7 @@ def generate_utci_fixtures():
     va_grid = va_grid.astype(np.float32)
 
     # Calculate UTCI grid using UMEP Python (scalar Ta and RH)
-    from umep.functions.SOLWEIGpython.UTCI_calculations import utci_calculator_grid
+    from umep_solweig.functions.SOLWEIGpython.UTCI_calculations import utci_calculator_grid
 
     class DummyFeedback:
         def isCanceled(self):
@@ -527,7 +521,7 @@ def generate_pet_fixtures():
     """
     print("Generating PET fixtures (using UMEP Python as ground truth)...")
 
-    from umep.functions.SOLWEIGpython.PET_calculations import _PET
+    from umep_solweig.functions.SOLWEIGpython.PET_calculations import _PET
 
     # Default person parameters (standard adult)
     # mbody, age, height, activity, clo, sex
@@ -579,7 +573,7 @@ def generate_pet_fixtures():
 
     # Grid test - use small subset due to slow PET calculation
     print("    Computing PET grid (small subset, this may take a moment)...")
-    from umep.functions.SOLWEIGpython.PET_calculations import PET_person, calculate_PET_grid
+    from umep_solweig.functions.SOLWEIGpython.PET_calculations import PET_person, calculate_PET_grid
 
     # Use existing UTCI grid inputs but crop to smaller size
     tmrt_full = np.load(FIXTURES_DIR / "utci_grid_tmrt.npy")
@@ -748,7 +742,7 @@ def generate_ground_temp_fixtures():
     """
     print("Generating ground temperature fixtures (using UMEP Python as ground truth)...")
 
-    from umep.functions.SOLWEIGpython.TsWaveDelay_2015a import TsWaveDelay_2015a
+    from umep_solweig.functions.SOLWEIGpython.TsWaveDelay_2015a import TsWaveDelay_2015a
 
     rows, cols = 20, 20
 
@@ -1204,22 +1198,26 @@ def generate_aniso_radiation_fixtures():
 
 def main():
     """Generate all golden fixtures using UMEP Python as ground truth."""
+    global FIXTURES_DIR
+    parser = argparse.ArgumentParser(description="Generate the golden fixtures.")
+    parser.add_argument("--reference", type=Path, required=True, help="umep-solweig checkout")
+    parser.add_argument(
+        "--fixtures-dir", type=Path, default=FIXTURES_DIR, help="directory to read inputs from and write to"
+    )
+    args = parser.parse_args()
+    use_reference_checkout(args.reference)
+    FIXTURES_DIR = args.fixtures_dir
+
     print("=" * 60)
     print("Golden Fixture Generator")
     print("=" * 60)
     print()
-    print("IMPORTANT: Shadow and SVF fixtures are generated using the original")
-    print("UMEP Python module as ground truth. GVF and radiation fixtures are")
-    print("generated from the current Rust implementation for regression testing.")
-    print()
-    print("The golden tests verify that implementations produce consistent,")
-    print("physically valid outputs.")
+    print(f"Reference: umep-solweig checkout at {args.reference}")
+    print("Shadow and SVF fixtures come from the reference. GVF and radiation")
+    print("fixtures come from the current Rust implementation (regression).")
     print("=" * 60)
 
     ensure_fixtures_dir()
-
-    # Generate input fixtures first (for test isolation)
-    generate_input_fixtures()
 
     # Generate algorithm output fixtures (using UMEP Python)
     generate_shadow_fixtures()

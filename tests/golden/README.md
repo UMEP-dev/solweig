@@ -84,14 +84,26 @@ uv run pytest tests/golden/ --cov=solweig.rustalgos
 
 ## Regenerating Fixtures
 
-Fixtures are generated from the reference implementations. To regenerate:
+The reference fixtures are generated with UMEP-dev/umep-solweig, read from a
+local checkout (no installation and no GDAL needed). Regenerate into a copy
+of `fixtures/` first and compare it with the stored set:
 
 ```bash
-uv run python tests/golden/generate_fixtures.py
+uv run python tests/golden/generate_fixtures.py --reference <umep-solweig checkout> --fixtures-dir <copy of fixtures/>
 ```
+
+Without `--fixtures-dir` the script writes to `fixtures/`.
 
 **Warning:** Regenerating fixtures will overwrite existing reference data.
 Only do this when intentionally updating the ground truth.
+
+The stored set was compared with a regeneration from umep-solweig 39ef951 on
+2026-11-20. Shadows and sky view factors agree within 1e-5, and every other
+fixture within 0.002 in its own unit, so the stored files were kept. The
+`input_*` files are fixed inputs and are not rewritten. The two anisotropic
+sections of the generator do not run at present (the shadow-matrix argument
+they build is no longer the type the Rust function takes); their stored
+fixtures are unchanged.
 
 ## Test Categories
 
