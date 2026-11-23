@@ -2602,7 +2602,7 @@ test = [
     { name = "pandas-stubs", specifier = ">=1.5.2.221213" },
     { name = "pytest", specifier = ">=7.2.0" },
     { name = "scipy", specifier = ">=1.13.0" },
-    { name = "umep-solweig", git = "https://github.com/UMEP-dev/umep-solweig?rev=39ef951b1f8474a512f6ac7f9b270ca53b30acf5" },
+    { name = "umep-solweig", git = "https://github.com/UMEP-dev/umep-solweig?rev=8b9c158e9a8311a88ff498941a35ff743f8d0971" },
 ]
 
 [[package]]
@@ -2783,8 +2783,8 @@ wheels = [
 
 [[package]]
 name = "umep-solweig"
-version = "2026.1.1.dev39"
-source = { git = "https://github.com/UMEP-dev/umep-solweig?rev=39ef951b1f8474a512f6ac7f9b270ca53b30acf5#39ef951b1f8474a512f6ac7f9b270ca53b30acf5" }
+version = "2026.1.1.dev41"
+source = { git = "https://github.com/UMEP-dev/umep-solweig?rev=8b9c158e9a8311a88ff498941a35ff743f8d0971#8b9c158e9a8311a88ff498941a35ff743f8d0971" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },

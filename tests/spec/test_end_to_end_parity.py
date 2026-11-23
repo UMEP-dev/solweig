@@ -46,19 +46,16 @@ land-cover grid, and fixed in 0.1.0b100:
   second call on the same surface with another posture reused the first
   posture's geometry.
 
-Differences that remain, recorded as strict xfails (measured 2026-11-11):
+One difference remains, recorded as a strict xfail (measured 2026-11-11):
 
-1. ``Tstart`` without a land-cover grid: -3.41 in the package, +3.41 in the
-   reference runner, which subtracts the parameter (``Knight - param``) on this
-   path only (its land-cover path, ``Tgmaps_v1``, uses the parameter as is).
-   Sunlit Lup is about 35 W/m2 lower. Raised upstream; not ported.
-2. Sitting posture: the Rust pipeline switches to the box model
-   (``cyl = human.is_standing``); in the reference runner ``cyl`` is a setting
-   independent of the posture.
+- Sitting posture: the Rust pipeline switches to the box model
+  (``cyl = human.is_standing``); in the reference runner ``cyl`` is a setting
+  independent of the posture.
 
-``test_rest_of_the_chain_matches_with_tstart_aligned`` gives the reference the
-package's ``Tstart`` and shows that nothing else differs for the standing
-posture.
+Until 2026-11-20 the reference runner gave ``Tstart`` the opposite sign on the
+path without a land-cover grid (+3.41 against -3.41 in the package and in the
+runner's own land-cover path), and this test recorded it as a second
+difference. The runner was corrected in umep-solweig 8b9c158.
 """
 
 from __future__ import annotations
@@ -231,7 +228,7 @@ def _reference_inputs(posture: str) -> dict:
 
     # l.481-492: ground and wall temperature parameters without a land-cover grid
     TgK = Knight + param["Ts_deg"]["Value"]["Cobble_stone_2014a"]
-    Tstart = Knight - param["Tstart"]["Value"]["Cobble_stone_2014a"]
+    Tstart = Knight + param["Tstart"]["Value"]["Cobble_stone_2014a"]
     TmaxLST = param["TmaxLST"]["Value"]["Cobble_stone_2014a"]
     alb_grid = Knight + param["Albedo"]["Effective"]["Value"]["Cobble_stone_2014a"]
     emis_grid = Knight + param["Emissivity"]["Value"]["Cobble_stone_2014a"]
@@ -354,14 +351,9 @@ def _package_ground_inputs() -> dict[str, np.ndarray]:
 
 
 @functools.cache
-def _reference_side(posture: str, aligned: bool = False) -> dict[str, np.ndarray]:
-    """One timestep through the reference function.
-
-    ``aligned`` replaces ``Tstart`` with the package's value, to test everything else.
-    """
+def _reference_side(posture: str) -> dict[str, np.ndarray]:
+    """One timestep through the reference function."""
     args = _reference_inputs(posture)
-    if aligned:
-        args["Tstart"] = _package_ground_inputs()["Tstart"]
     with np.errstate(divide="ignore", invalid="ignore"):  # gvf_2018a divides by zero wall heights
         out = reference.Solweig_2025a_calc(*args.values())
     tmrt, kdown, kup, ldown, lup = out[0:5]
@@ -375,14 +367,14 @@ def _reference_side(posture: str, aligned: bool = False) -> dict[str, np.ndarray
     }
 
 
-def _difference(posture: str, name: str, *, aligned: bool = False) -> np.ndarray:
+def _difference(posture: str, name: str) -> np.ndarray:
     package = _package_side(posture)[name]
-    ref = _reference_side(posture, aligned)[name]
+    ref = _reference_side(posture)[name]
     return np.abs(package - ref)[_ground_mask()]
 
 
-def _assert_within(posture: str, name: str, *, aligned: bool = False) -> None:
-    diff = _difference(posture, name, aligned=aligned)
+def _assert_within(posture: str, name: str) -> None:
+    diff = _difference(posture, name)
     assert np.all(np.isfinite(diff)), f"{name}: non-finite values over ground pixels"
     assert diff.max() <= ATOL[name], (
         f"{name} ({posture}): max abs diff {diff.max():.4f}, mean {diff.mean():.4f}, tolerance {ATOL[name]}"
@@ -401,18 +393,10 @@ def _cases(known: dict[tuple[str, str], str]) -> list:
     return cases
 
 
-TSTART = "Tstart -3.41 (package) against +3.41 (runner)"
 BOX = "sitting posture runs the box model (package) against cyl=1 (runner)"
 
 AS_RUNNER = {
-    ("standing", "lup"): f"max 39.32, mean 35.49 W/m2: {TSTART}",
-    ("standing", "tmrt"): f"max 2.44, mean 2.25 degC: {TSTART}",
-    ("sitting", "lup"): f"max 39.53, mean 35.73 W/m2: {TSTART}",
-    ("sitting", "tmrt"): f"max 2.95, mean 2.72 degC: {TSTART}; {BOX}",
-}
-
-ALIGNED = {
-    ("sitting", "tmrt"): f"max 0.58, mean 0.51 degC with Tstart aligned: {BOX}",
+    ("sitting", "tmrt"): f"max 0.58, mean 0.51 degC: {BOX}",
 }
 
 
@@ -430,18 +414,11 @@ def test_one_timestep_matches_the_reference(posture, name):
     _assert_within(posture, name)
 
 
-@pytest.mark.parametrize(("posture", "name"), _cases(ALIGNED))
-def test_rest_of_the_chain_matches_with_tstart_aligned(posture, name):
-    """Same comparison with the package's Tstart on both sides."""
-    _assert_within(posture, name, aligned=True)
-
-
 def test_default_ground_albedo_is_the_runner_value():
     runner = _reference_inputs("standing")["alb_grid"]
     np.testing.assert_allclose(_package_ground_inputs()["alb_grid"], runner, atol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="-3.41 in SurfaceData.get_land_cover_properties, +3.41 in the runner")
 def test_default_tstart_is_the_runner_value():
     runner = _reference_inputs("standing")["Tstart"]
     np.testing.assert_allclose(_package_ground_inputs()["Tstart"], runner, atol=1e-6)
@@ -520,5 +497,5 @@ def test_gpu_ground_view_factor_matches_at_the_raster_edge(name):
         _requested_outputs={name},
     )
     gpu = np.asarray(getattr(result, name), dtype=np.float64)
-    diff = np.abs(gpu - _reference_side("standing", aligned=True)[name])[_ground_mask()]
+    diff = np.abs(gpu - _reference_side("standing")[name])[_ground_mask()]
     assert diff.max() <= ATOL[name], f"{name} on the GPU: max abs diff {diff.max():.4f}"

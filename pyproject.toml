@@ -81,7 +81,7 @@ test = [
     "memory-profiler>=0.61.0",
     # Reference implementation for the parity tests and the golden generator,
     # at a pinned commit. Import it through tests/reference_package.py.
-    "umep-solweig @ git+https://github.com/UMEP-dev/umep-solweig@39ef951b1f8474a512f6ac7f9b270ca53b30acf5",
+    "umep-solweig @ git+https://github.com/UMEP-dev/umep-solweig@8b9c158e9a8311a88ff498941a35ff743f8d0971",
     "scipy>=1.13.0",              # Golden tests (ndimage)
 ]
 dev = [
